@@ -1,0 +1,79 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+// 기본 헤더
+#include "Characters/CharacterBase.h"
+#include "Components/CapsuleComponent.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Combat/Components/AttackComponent.h"
+#include "Combat/Components/HitReactionComponent.h"
+#include "Characters/Components/CharacterStatusComponent.h"
+#include "Interaction/Climb/Components/ClimbComponent.h"
+#include "Utils/CoreLog.h"
+
+// Sets default values
+ACharacterBase::ACharacterBase(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer)
+{
+ 	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	PrimaryActorTick.bCanEverTick = true;
+
+	AttackComponent = CreateDefaultSubobject<UAttackComponent>(TEXT("AttackComponent"));
+	AttackComponent->bAutoActivate = true;
+
+	HitReactionComponent = CreateDefaultSubobject<UHitReactionComponent>(TEXT("HitReactionComponent"));
+	HitReactionComponent->bAutoActivate = true;
+
+	CharacterStatusComponent = CreateDefaultSubobject<UCharacterStatusComponent>(TEXT("CharacterStatusComponent"));
+	CharacterStatusComponent->bAutoActivate = true;
+
+	ClimbComponent = CreateDefaultSubobject<UClimbComponent>(TEXT("ClimbComponent"));
+	ClimbComponent->bAutoActivate = true;
+
+	ClimbComponent->SetMinGripInterval(MinGripInterval);
+	ClimbComponent->SetMaxGripInterval(MaxGripInterval);
+	ClimbComponent->SetMinFirstGripHeight(MinFirstGripHeight);
+
+
+	GetCharacterMovement()->bEnablePhysicsInteraction = false;
+
+	TeamID = 0;
+	//GetCharacterMovement()->bPushForceOnCharacter = false;
+	//AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
+	//AIControllerClass = AAIController::StaticClass(); // 커스텀 컨트롤러가 있으면 그걸로
+}
+
+// Called when the game starts or when spawned
+void ACharacterBase::BeginPlay()
+{
+	Super::BeginPlay();
+	
+}
+
+// Called every frame
+void ACharacterBase::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+}
+
+void ACharacterBase::PostInitializeComponents()
+{
+	Super::PostInitializeComponents();
+}
+
+void ACharacterBase::SetCurLocomotionGait(ELocomotionGait NewGait)
+{
+	if (!GaitData.Find(NewGait)->bEnabled)
+	{
+		UE_LOG(Log_Check, Warning, TEXT("[CharacterBase] '%s' not found in GaitList"), *StaticEnum<ELocomotionGait>()->GetValueAsString(NewGait));
+		return;
+	}
+
+	UE_LOG(Log_Check, Log, TEXT("[CharacterBase] Character : %s LocomotionGait is Changed"), *GetName());
+
+	CurLocomotionGait = NewGait;
+
+	FGaitSetting NewGaitSetting = *GaitData.Find(CurLocomotionGait);
+
+	GetCharacterMovement()->MaxWalkSpeed = NewGaitSetting.MaxSpeed;
+}

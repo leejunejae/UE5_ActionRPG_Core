@@ -1,0 +1,17 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "BehaviorTree/BTTaskNode.h"
+#include "BTTask_ExecutePattern_Evasion.generated.h"
+
+/**
+ * 
+ */
+UCLASS()
+class UE5PROJECT_API UBTTask_ExecutePattern_Evasion : public UBTTaskNode
+{
+	GENERATED_BODY()
+	
+};
