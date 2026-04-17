@@ -16,15 +16,4 @@ class UE5PROJECT_API UFallenKnightAnimInstance : public UPlayerBaseAnimInstance
 
 public:
 	UFallenKnightAnimInstance();
-	//virtual void NativeInitializeAnimation() override;
-	//virtual void NativeUpdateAnimation(float DeltaSeconds) override;
-
-protected:
-	/*
-	void AnimNotify_NOT_CheckLadderStance();
-	void AnimNotify_NOT_EnableInputLock();
-	void AnimNotify_NOT_ClimbEnd();
-	void AnimNotify_NOT_ClimbStart();
-	void AnimNotify_NOT_ResetLadder();
-	*/
 };

@@ -157,31 +157,50 @@ void UCharacterBaseAnimInstance::AnimNotify_NOT_DisableRootLock()
 
 void UCharacterBaseAnimInstance::AnimNotify_NOT_ResetClimbState()
 {
-	UE_LOG(LogTemp, Warning, TEXT("ResetClimbState"));
 	Character->GetClimbComponent()->ResetClimbState();
 }
 
-void UCharacterBaseAnimInstance::SetIKPhaseAlpha_Implementation(FGameplayTag TargetIKPhase, float Weight)
+void UCharacterBaseAnimInstance::SetIKPhaseAlpha_Native(FGameplayTag TargetIKPhase, float Weight)
 {
-	if(!ensure(TargetIKPhase.MatchesTag(TAG_IK_Phase))) return;
+	if (!ensure(TargetIKPhase.MatchesTag(TAG_IK_Phase))) return;
 
 	IKPhase.FindOrAdd(TargetIKPhase) = FMath::Clamp(Weight, 0.0f, 1.0f);
 }
 
-float UCharacterBaseAnimInstance::GetIKPhaseAlpha_Implementation(FGameplayTag TargetIKPhase)
+float UCharacterBaseAnimInstance::GetIKPhaseAlpha_Native(FGameplayTag TargetIKPhase)
 {
 	return IKPhase.FindRef(TargetIKPhase);
 }
 
-void UCharacterBaseAnimInstance::SetIKLayerAlpha_Implementation(FGameplayTag TargetIKLayer, ELimbList Limb, float Weight)
+void UCharacterBaseAnimInstance::SetIKLayerAlpha_Native(FGameplayTag TargetIKLayer, ELimbList Limb, float Weight)
 {
 	if (!ensure(TargetIKLayer.MatchesTag(TAG_IK_Layer))) return;
 
 	IKLayer.FindOrAdd(TargetIKLayer).LimbWeights.FindOrAdd(Limb) = Weight;
-		//.Set(Limb, FMath::Clamp(Weight, 0.0f, 1.0f));
+	//.Set(Limb, FMath::Clamp(Weight, 0.0f, 1.0f));
+}
+
+float UCharacterBaseAnimInstance::GetIKLayerAlpha_Native(FGameplayTag TargetIKLayer, ELimbList Limb)
+{
+	return IKLayer.FindRef(TargetIKLayer).LimbWeights.FindRef(Limb);
+}
+
+void UCharacterBaseAnimInstance::SetIKPhaseAlpha_Implementation(FGameplayTag TargetIKPhase, float Weight)
+{
+	SetIKPhaseAlpha_Native(TargetIKPhase, Weight);
+}
+
+float UCharacterBaseAnimInstance::GetIKPhaseAlpha_Implementation(FGameplayTag TargetIKPhase)
+{
+	return GetIKPhaseAlpha_Native(TargetIKPhase);
+}
+
+void UCharacterBaseAnimInstance::SetIKLayerAlpha_Implementation(FGameplayTag TargetIKLayer, ELimbList Limb, float Weight)
+{
+	SetIKLayerAlpha_Native(TargetIKLayer, Limb, Weight);
 }
 
 float UCharacterBaseAnimInstance::GetIKLayerAlpha_Implementation(FGameplayTag TargetIKLayer, ELimbList Limb)
 {
-	return IKLayer.FindRef(TargetIKLayer).LimbWeights.FindRef(Limb);
+	return GetIKLayerAlpha_Native(TargetIKLayer, Limb);
 }

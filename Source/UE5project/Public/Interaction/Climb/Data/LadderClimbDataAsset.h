@@ -16,8 +16,9 @@ class UE5PROJECT_API ULadderClimbDataAsset : public UDataAsset
 	GENERATED_BODY()
 	
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-		FLadderClimbCurveSet_Map CurveSet;
+	UPROPERTY(EditAnywhere, Category = "Curve")
+	TMap<FClimbCurveKey, UCurveVector*> Curves;
 
-		//FLadderClimbCurveSet LadderClimbCurveSet;
+	UPROPERTY(EditAnywhere, Category = "Montage")
+	TMap<EClimbPhase, UAnimMontage*> Montages;
 };

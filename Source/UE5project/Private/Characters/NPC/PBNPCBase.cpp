@@ -32,10 +32,10 @@ APBNPCBase::APBNPCBase()
 	InteractTrigger->SetRelativeLocation(FVector(0.0f, 30.0f, 110.0f));
 	InteractTrigger->SetBoxExtent(FVector(100.0f, 100.0f, 100.0f));
 
-	static ConstructorHelpers::FClassFinder<UScriptWidget> ScriptWidget(TEXT("/Game/00_Character/Data/ScriptWidget_BP.ScriptWidget_BP_C"));
-	if (!ensure(ScriptWidget.Class != nullptr)) return;
+	//static ConstructorHelpers::FClassFinder<UScriptWidget> ScriptWidget(TEXT("/Game/00_Character/Data/ScriptWidget_BP.ScriptWidget_BP_C"));
+	//if (!ensure(ScriptWidget.Class != nullptr)) return;
 
-	DialogueWidgetClass = ScriptWidget.Class;
+	//DialogueWidgetClass = ScriptWidget.Class;
 
 	Tags.Add("NPC");
 }
@@ -50,10 +50,10 @@ void APBNPCBase::PostInitializeComponents()
 
 void APBNPCBase::Interact_Implementation(ACharacter* InteractActor)
 {
+	/*
 	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
 	if (PlayerController)
 	{
-		//DialogueSystem->StartDialogue(GetOwner());
 		UE_LOG(LogTemp, Warning, TEXT("StartDialogue1"));
 		if (DialogueWidgetClass)
 		{
@@ -64,41 +64,9 @@ void APBNPCBase::Interact_Implementation(ACharacter* InteractActor)
 			DialogueWidget->SetScriptWidget(this);
 			DialogueComponent->SetIsDialogue(true);
 			//PlayerController->SetInputMode(FInputModeGameAndUI());
-		
-			/*
-			if (DialogueWidget)
-			{
-				UE_LOG(LogTemp, Warning, TEXT("StartDialogue3"));
-				DialogueWidget->AddToViewport();
-
-				// 대화가 종료될 때 호출되는 함수를 설정합니다.
-				// 예: 대화 창 UI를 숨기거나 제거합니다.
-				//DialogueWidget->RemoveFromViewport();
-			}
-			*/
 		}
-
-		// Widget Blueprint 클래스를 로드합니다.
-		/*
-		TSubclassOf<UUserWidget> DialogueWidgetClass = LoadClass<UUserWidget>(nullptr, TEXT("/Game/00_Character/Data/ScriptWidget_BP.ScriptWidget_BP_C"));
-
-		if (DialogueWidgetClass)
-		{
-			// Widget 인스턴스를 생성합니다.
-			UScriptWidget* DialogueWidget = CreateWidget<UScriptWidget>(PlayerController, DialogueWidgetClass);
-
-			if (DialogueWidget)
-			{
-				// Widget을 플레이어에게 표시합니다.
-				DialogueWidget->AddToViewport();
-
-				// 대화가 종료될 때 호출되는 함수를 설정합니다.
-				// 예: 대화 창 UI를 숨기거나 제거합니다.
-				//DialogueWidget->RemoveFromViewport();
-			}
-		}
-		*/
 	}
+	*/
 }
 
 void APBNPCBase::EndInteract_Implementation()

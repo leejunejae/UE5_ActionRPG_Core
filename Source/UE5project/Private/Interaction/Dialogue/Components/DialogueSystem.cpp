@@ -13,10 +13,10 @@ UDialogueSystem::UDialogueSystem()
 
 	// ...
 
-	static ConstructorHelpers::FClassFinder<UScriptWidget> ScriptWidget (TEXT("/Game/00_Character/Data/ScriptWidget_BP.ScriptWidget_BP_C"));
-	if (!ensure(ScriptWidget.Class != nullptr)) return;
+	//static ConstructorHelpers::FClassFinder<UScriptWidget> ScriptWidget (TEXT("/Game/00_Character/Data/ScriptWidget_BP.ScriptWidget_BP_C"));
+	//if (!ensure(ScriptWidget.Class != nullptr)) return;
 
-	DialogueWidgetClass = ScriptWidget.Class;
+	//DialogueWidgetClass = ScriptWidget.Class;
 
 	static ConstructorHelpers::FObjectFinder<UDataTable> NPCListDT_Asset(TEXT("DataTable'/Game/DialogueSample/DT_DialogueParticipant.DT_DialogueParticipant'"));
 	if (NPCListDT_Asset.Succeeded())
@@ -73,6 +73,7 @@ FName UDialogueSystem::GetPrevDialogLoc()
 
 void UDialogueSystem::StartDialogue(AActor* InteractPlayer)
 {
+	/*
 	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
 	if (PlayerController)
 	{
@@ -95,7 +96,8 @@ void UDialogueSystem::StartDialogue(AActor* InteractPlayer)
 				// 예: 대화 창 UI를 숨기거나 제거합니다.
 				//DialogueWidget->RemoveFromViewport();
 			}
-			*/
+			
 		}
 	}
+	*/
 }

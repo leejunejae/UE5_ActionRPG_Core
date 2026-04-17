@@ -84,7 +84,7 @@ void UEquipmentComponent::EquipWeapon_Implementation(FName WeaponKey)
 		UWeaponDataSubsystem* WeaponSubsystem = World->GetGameInstance()->GetSubsystem<UWeaponDataSubsystem>();
 		if (!WeaponSubsystem)
 		{
-			UE_LOG(LogTemp, Error, TEXT("WeaponSubSystem not found"));
+			UE_LOG(LogTemp, Error, TEXT("[EquipmentComponent] WeaponSubSystem not found"));
 			return;
 		}
 		const FWeaponSetsInfo* FindWeapon = WeaponSubsystem->GetWeaponInfo(WeaponKey);
@@ -101,7 +101,8 @@ void UEquipmentComponent::EquipWeapon_Implementation(FName WeaponKey)
 			return;
 		}
 
-		if (!FindWeapon->WeaponDefenition.Get()->WeaponInstance.IsValid())
+		if (!FindWeapon->WeaponDefenition.Get()->WeaponInstance.IsValid()
+			&& WeaponKey != FName("Hand_Unarmed_01"))
 		{
 			UE_LOG(Log_Equip_Weapon, Error, TEXT("[EquipmentComponent] Weapon Mesh Asset is Missing"), *WeaponKey.ToString());
 			return;

@@ -40,7 +40,7 @@ void UAnimMode_Ground::Tick(float DeltaSeconds)
 
 	// 발 IK
 	UpdateFootIK(DeltaSeconds, AnimInst->Speed);
-	//UpdateTwoHandWeaponIK(DeltaSeconds);
+	UpdateTwoHandWeaponIK(DeltaSeconds);
 }
 
 float UAnimMode_Ground::ComputeCurrentDirection()
@@ -111,9 +111,12 @@ void UAnimMode_Ground::UpdateTwoHandWeaponIK(float DeltaSeconds)
 
 	if (!Mesh)
 	{
-		UE_LOG(Log_Anim_IK, Warning, TEXT("[AnimMode_Ground] %s HandIK Target Mesh Not Valid"), *Character->GetName());
+		//UE_LOG(Log_Anim_IK, Warning, TEXT("[AnimMode_Ground] %s HandIK Target Mesh Not Valid"), *Character->GetName());
 		return;
 	}
 
-	AnimInst->LeftHandWeaponOffset = Mesh->GetSocketLocation(FName("Hand_l_IK"));
+	AnimInst->LeftHandWeaponOffset = Mesh->GetSocketLocation(FName("Hand_L_IK"));
+	FVector Hand_L_Location = Character->GetMesh()->GetSocketLocation(FName("Hand_L_Offset"));
+	FVector Weapon_L_Location = Character->GetMesh()->GetSocketLocation(FName("Hand_L_WeaponIK"));
+	AnimInst->LeftHandWeaponOffset -= Weapon_L_Location - Hand_L_Location;
 }

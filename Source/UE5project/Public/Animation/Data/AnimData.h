@@ -111,6 +111,8 @@ public:
         TSoftObjectPtr<UAnimSequence> HitAir_Death;
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
         TSoftObjectPtr<UAnimSequence> Ground_Death;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+        TSoftObjectPtr<UAnimSequence> Guard;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IK")
         bool bUseWeaponIK = false;

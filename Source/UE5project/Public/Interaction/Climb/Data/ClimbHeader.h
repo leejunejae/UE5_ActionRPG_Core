@@ -58,15 +58,6 @@ FORCEINLINE uint32 GetTypeHash(const FClimbCurveKey& K)
 	return HashCombine(uint32(K.Phase), uint32(K.Limb));
 }
 
-USTRUCT(BlueprintType)
-struct FLadderClimbCurveSet_Map
-{
-	GENERATED_BODY()
-	// SoftObjectPtr로 참조하면 필요할 때만 로드 → 요리/메모리 부담↓
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-		TMap<FClimbCurveKey, TSoftObjectPtr<UCurveVector>> Curves;
-};
-
 USTRUCT(Atomic, BlueprintType)
 struct FNeighborInfo
 {

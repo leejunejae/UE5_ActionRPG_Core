@@ -151,10 +151,7 @@ void APlayerBase::BeginPlay()
 	{
 		DefaultWidget = CreateWidget<UDefaultWidget>(PlayerController, DefaultWidgetClass);
 	}
-
-	//StatComponent->OnDeath.BindUObject(this, &APlayerBase::Death);
 	StatComponent->InitializeStats();
-	GetAttackComponent()->SetCurAttackContextSet(EWeaponType::SwordAndShield);
 
 	InitSpringArmLocation = SpringArm->GetRelativeLocation();
 }
@@ -739,7 +736,7 @@ void APlayerBase::HandleArrivedInteractionPoint()
 		DisableInput(UGameplayStatics::GetPlayerController(GetWorld(), 0));
 		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		GetCharacterMovement()->SetMovementMode(MOVE_Flying);
-		Ride = Cast<ACharacter>(InteractActor);
+		Ride = Cast<ARide>(InteractActor);
 		CurRideStance = ERideStance::Mount;
 		GetCharacterStatusComponent()->SetCharacterState_Native(ECharacterState::Ride);
 	}
@@ -872,7 +869,7 @@ void APlayerBase::SpawnRide()
 		return;
 	}
 
-	Ride = GetWorld()->SpawnActor<APlayerRide>(GetActorLocation(), GetActorRotation());
+	Ride = GetWorld()->SpawnActor<APlayerRide>(RideClass, GetActorTransform());
 	if (!Ride)
 	{
 		UE_LOG(Log_RideSpawn, Warning, TEXT("[APlayerBase] %s : Horse was Not Spawned"), *GetName());
@@ -882,8 +879,7 @@ void APlayerBase::SpawnRide()
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
 	IRideInterface::Execute_Mount(Ride, this, GetVelocity());
-
-	GetCharacterMovement()->SetMovementMode(MOVE_None);
+	GetCharacterMovement()->DisableMovement();
 
 	CurRideStance = ERideStance::Mount;
 	GetCharacterStatusComponent()->SetCharacterState_Native(ECharacterState::Ride);

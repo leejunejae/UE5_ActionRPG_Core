@@ -42,7 +42,7 @@ class ULockOnComponent;
 class UPlayerConfig;
 
 class UDefaultWidget;
-
+class APlayerRide;
 // Delegates
 DECLARE_DELEGATE(FOnSingleDelegate);
 
@@ -98,51 +98,6 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = Camera)
 		TObjectPtr<UCameraComponent> Camera;
 
-
-	/* ĳ���� �Է� ���� ���� */
-	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputMappingContext> DefaultContext;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> MoveAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> CheckMoveAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> LookAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> JumpAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> AttackAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> DodgeAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> BlockAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> ParryAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> WalkAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> SprintAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> InteractAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> SpawnRideAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> ModifierAction;
-
-
 	FVector2D AimOffVal;
 
 	bool IsLocomotion = true;
@@ -152,8 +107,6 @@ protected:
 	FVector DodgeVector;
 
 	bool IsInteraction;
-
-	ACharacter* Ride;
 
 	FVector InitSpringArmLocation;
 	/* PROTECTED VARIATION */
@@ -319,16 +272,19 @@ protected:
 	void MountEnd();
 	void DisMountEnd();
 
+	UPROPERTY(EditDefaultsOnly, Category = "Ride")
+	TSubclassOf<APlayerRide> RideClass;
+
 public:
 	virtual FTransform GetCameraTransform_Implementation();
 	virtual FTransform GetSpringArmTransform_Implementation();
 	virtual float GetTargetArmLength_Implementation();
 	virtual FRotator GetControllerRotation_Implementation();
 
-
+	//void OnRideTurn(float TurnDirection);
 private:
 	bool CanRide;
-#pragma endregion
+#pragma endregion Ride
 
 #pragma region Status
 public:

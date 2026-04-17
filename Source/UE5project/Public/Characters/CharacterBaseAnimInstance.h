@@ -77,11 +77,15 @@ protected:
 		TMap<FGameplayTag, FIKContextWeights> IKLayer;
 
 public:
-	virtual void SetIKPhaseAlpha_Implementation(FGameplayTag TargetIKPhase, float Weight) override;
-	virtual float GetIKPhaseAlpha_Implementation(FGameplayTag TargetIKPhase) override;
+	void SetIKPhaseAlpha_Native(FGameplayTag TargetIKPhase, float Weight);
+	float GetIKPhaseAlpha_Native(FGameplayTag TargetIKPhase);
+	void SetIKLayerAlpha_Native(FGameplayTag TargetIKLayer, ELimbList Limb, float Weight);
+	float GetIKLayerAlpha_Native(FGameplayTag TargetIKLayer, ELimbList Limb);
 
-	virtual void SetIKLayerAlpha_Implementation(FGameplayTag TargetIKLayer, ELimbList Limb, float Weight) override;
-	virtual float GetIKLayerAlpha_Implementation(FGameplayTag TargetIKLayer, ELimbList Limb) override;
+	void SetIKPhaseAlpha_Implementation(FGameplayTag TargetIKPhase, float Weight) override;
+	float GetIKPhaseAlpha_Implementation(FGameplayTag TargetIKPhase) override;
+	void SetIKLayerAlpha_Implementation(FGameplayTag TargetIKLayer, ELimbList Limb, float Weight) override;
+	float GetIKLayerAlpha_Implementation(FGameplayTag TargetIKLayer, ELimbList Limb) override;
 #pragma endregion State & Stance_IK
 
 private:
@@ -222,6 +226,19 @@ protected:
 	UFUNCTION(BlueprintCallable)
 	void AnimNotify_NOT_ResetClimbState();
 #pragma endregion Ladder
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = IK_Ride, Meta = (AllowPrivateAccess = true))
+	FVector IK_FootL_Ride_Locomotion;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = IK_Ride, Meta = (AllowPrivateAccess = true))
+	FVector IK_FootR_Ride_Locomotion;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = IK_Ride, Meta = (AllowPrivateAccess = true))
+	FVector IK_HandL_Ride_Locomotion;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = IK_Ride, Meta = (AllowPrivateAccess = true))
+	FVector IK_HandR_Ride_Locomotion;
+
+#pragma region Ride_IK
+private:
+
+#pragma endregion RIde_IK
 
 #pragma endregion State & Stance
 

@@ -172,4 +172,13 @@ public:
 	virtual FRotator GetControllerRotation_Implementation();
 
 #pragma endregion
+
+#pragma region Turn
+protected:
+	UPROPERTY(EditAnywhere, Category = Turn)
+		TObjectPtr<UAnimMontage> TurnMontage;
+
+public:
+	void QuickTurn(float TurnDirection);
+#pragma endregion Turn
 };

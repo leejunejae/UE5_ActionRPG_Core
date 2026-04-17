@@ -5,6 +5,7 @@
 #include "Utils/CoreLog.h"
 #include "Utils/CustomMathUtility.h"
 #include "Animation/Interfaces/IAnimInstance.h"
+#include "Animation/AnimNotifyLibrary.h"
 
 void UANS_IKBlend::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, float TotalDuration, const FAnimNotifyEventReference& EventReference)
 {
@@ -40,13 +41,15 @@ void UANS_IKBlend::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSequenceBas
         {
             const float StartTime = Notify->GetTriggerTime();
             const float EndTime = Notify->GetEndTriggerTime();
-            const float CurrentTime = Notify->GetTime();
-            
+            const float CurrentTime = UAnimNotifyLibrary::GetCurrentAnimationNotifyStateTime(EventReference);
+
+            const float CurrentRatio = UAnimNotifyLibrary::GetCurrentAnimationNotifyStateTimeRatio(EventReference);
+
             const float InterpDuration = FMath::Max(EndTime - StartTime, KINDA_SMALL_NUMBER);
             
             const float ElapseRatio = FMath::Clamp(CurrentTime - StartTime / InterpDuration, 0.0f, 1.0f);
 
-            const float OutAlpha = bAlphaToZero ? 1.0f - ApplyCurve(ElapseRatio, BlendMode) : ApplyCurve(ElapseRatio, BlendMode);
+            const float OutAlpha = bAlphaToZero ? 1.0f - ApplyCurve(CurrentRatio, BlendMode) : ApplyCurve(CurrentRatio, BlendMode);
 
             float CurrentAlpha;
 
@@ -54,10 +57,11 @@ void UANS_IKBlend::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSequenceBas
                 ? IIAnimInstance::Execute_GetIKPhaseAlpha(MeshComp->GetAnimInstance(), ToPhaseTag)
                 : IIAnimInstance::Execute_GetIKLayerAlpha(MeshComp->GetAnimInstance(), LayerTag, TargetLimb);
 
-
+            /*
             if (TargetLimb == ELimbList::FootL && LayerTag.MatchesTag(FGameplayTag::RequestGameplayTag(TEXT("IK.Layer.Ladder.Climb"))))
-                UE_LOG(Log_Anim_IK, Warning, TEXT("Mode = %s, Start=%.4f End=%.4f Current=%.4f Duration=%.6f Ratio=%.4f"),
-                    *UEnum::GetValueAsString(Mode), StartTime, EndTime, CurrentTime, EndTime - StartTime, ElapseRatio);
+                UE_LOG(Log_Anim_IK, Warning, TEXT("Mode = %s, Ratio=%.4f"),
+                    *UEnum::GetValueAsString(Mode), CurrentRatio);
+                    * */
 
             if (!bAlphaToZero ? OutAlpha <= CurrentAlpha : OutAlpha >= CurrentAlpha)
                 return;

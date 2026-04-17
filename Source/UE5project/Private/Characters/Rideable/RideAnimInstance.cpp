@@ -24,8 +24,7 @@ void URideAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		Speed = Character->GetVelocity().Length();//FMath::FInterpTo(Speed, VelocityLength, DeltaSeconds, 20.0f);
 		Direction = Character->GetDirection();
 
-		//UE_LOG(LogTemp, Warning, TEXT("Speed = %f"), Speed);
-
+		/*
 		if (GetCurveValue(FName("TurnLock")) > 0.0f)
 		{
 			bQuickTurn = false;
@@ -34,5 +33,6 @@ void URideAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		{
 			bQuickTurn = Direction > 160.0f || Direction < -160.0f ? bQuickTurn = true : bQuickTurn = false;
 		}
+		*/
 	}
 }

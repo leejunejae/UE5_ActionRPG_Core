@@ -234,6 +234,16 @@ void ARide::Tick(float DeltaTime)
 			InteractWidget->SetTintColorAndOpacity(FLinearColor(1.0f, 1.0f, 1.0f, WidgetAlpha));
 		}
 	}
+
+	FRotator SocketRot = GetMesh()->GetSocketRotation(FName("MountPoint"));
+	FRotator CurrentRot = RiderLocation->GetComponentRotation();
+
+	// 느린 보간 → 큰 회전만 부드럽게 따라감, 미세 흔들림은 무시됨
+	float InterpSpeed = 5.0f; // 낮을수록 더 부드럽게, 높을수록 빠르게 추종
+	FRotator SmoothedRot = FMath::RInterpTo(CurrentRot, SocketRot, DeltaTime, InterpSpeed);
+
+	RiderLocation->SetWorldRotation(SmoothedRot);
+	RiderLocation->SetWorldLocation(GetMesh()->GetSocketLocation(FName("MountPoint")));
 }
 
 // Called to bind functionality to input
@@ -288,6 +298,7 @@ void ARide::Move(const FInputActionValue& value)
 
 	if (DotProductDegree > 160.0f)
 	{
+		QuickTurn(RotationAxis.Z);
 		return;
 	}
 
@@ -369,7 +380,7 @@ void ARide::Mount_Implementation(ACharacter* RiderCharacter, FVector InitVelocit
 	SpringArm->bEnableCameraRotationLag = false;
 
 	FAttachmentTransformRules AttachmentRules = FAttachmentTransformRules(
-		EAttachmentRule::KeepWorld,
+		EAttachmentRule::SnapToTarget,
 		EAttachmentRule::KeepWorld,
 		EAttachmentRule::KeepRelative,
 		true
@@ -377,9 +388,8 @@ void ARide::Mount_Implementation(ACharacter* RiderCharacter, FVector InitVelocit
 
 	Rider = RiderCharacter;
 
-	UE_LOG(LogTemp, Warning, TEXT("InitSpeed = %f"), InitVelocity.Length());
-
 	Rider->AttachToComponent(RiderLocation, AttachmentRules);
+	//Rider->AttachToComponent(GetMesh(), AttachmentRules, FName("MountPoint"));
 
 	FTransform SpringArmTransform = IViewDataInterface::Execute_GetSpringArmTransform(Rider);
 	SpringArm->SetWorldLocation(SpringArmTransform.GetLocation());
@@ -510,6 +520,19 @@ float ARide::GetTargetArmLength_Implementation()
 FRotator ARide::GetControllerRotation_Implementation()
 {
 	return GetController()->GetControlRotation();
+}
+
+void ARide::QuickTurn(float TurnDirection)
+{
+	if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
+	{
+		// 이미 재생 중이면 무시
+		if (AnimInstance->Montage_IsPlaying(TurnMontage))
+			return;
+
+		AnimInstance->Montage_Play(TurnMontage);
+		AnimInstance->Montage_JumpToSection(FName("TurnLeft"));
+	}
 }
 
 float ARide::GetRideSpeed_Implementation()

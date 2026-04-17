@@ -21,23 +21,7 @@ AFallenKnight::AFallenKnight(const FObjectInitializer& ObjectInitializer)
 {
 	PrimaryActorTick.bCanEverTick = true;
 	
-	static ConstructorHelpers::FObjectFinder<USkeletalMesh> MAIN_MESH(TEXT("/Game/04_Animations/Player/SK_DC_Knight_UE4_full_Silver.SK_DC_Knight_UE4_full_Silver"));
-	if (MAIN_MESH.Succeeded())
-	{
-		GetMesh()->SetSkeletalMesh(MAIN_MESH.Object);
-	}
-	
 	GetMesh()->SetAnimationMode(EAnimationMode::AnimationBlueprint);
-	static ConstructorHelpers::FClassFinder<UAnimInstance>FallenKnight_ANIM(TEXT("/Game/00_Character/Data/AnimData/Player_AnimBP.Player_AnimBP_C"));
-	if (FallenKnight_ANIM.Succeeded())
-	{
-		GetMesh()->SetAnimInstanceClass(FallenKnight_ANIM.Class);
-	}
-
-	//GetCharacterMovement()->MaxWalkSpeed = 500.0f;
-	//GetCharacterMovement()->MaxAcceleration = 2048.0f;
-	//GetCharacterMovement()->GroundFriction = 0.1f;
-	//GetCharacterMovement()->BrakingDecelerationWalking = 2048.0f;
 }
 
 void AFallenKnight::BeginPlay()

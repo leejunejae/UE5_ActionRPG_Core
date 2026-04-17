@@ -16,28 +16,32 @@ void UAnimMode_Ladder::Tick(float DeltaSeconds)
 
 	Anim->CurLadderStance = Ch->GetClimbComponent()->GetLadderStance_Native();
 
-	Anim->LeftHandLadderOffset = Character->GetClimbComponent()->GetLimbIKTarget(ELimbList::HandL);
 	FVector Hand_L_Location = Character->GetMesh()->GetSocketLocation(FName("Hand_L_Offset"));
 	FVector Palm_L_Location = Character->GetMesh()->GetSocketLocation(FName("Palm_L"));
+	Anim->LeftHandLadderOffset = Character->GetClimbComponent()->GetLimbIKTarget(ELimbList::HandL);
 	Anim->LeftHandLadderOffset -= Palm_L_Location - Hand_L_Location;
 
-	Anim->RightFootLadderOffset = Character->GetClimbComponent()->GetLimbIKTarget(ELimbList::FootR);
 	FVector Foot_R_Location = Character->GetMesh()->GetSocketLocation(FName("Foot_R_Offset"));
 	FVector Sole_R_Location = Character->GetMesh()->GetSocketLocation(FName("Sole_R"));
+	Anim->RightFootLadderOffset = Character->GetClimbComponent()->GetLimbIKTarget(ELimbList::FootR);
 	Anim->RightFootLadderOffset -= Sole_R_Location - Foot_R_Location;
 
-	Anim->RightHandLadderOffset = Character->GetClimbComponent()->GetLimbIKTarget(ELimbList::HandR);
 	FVector Hand_R_Location = Character->GetMesh()->GetSocketLocation(FName("Hand_R_Offset"));
 	FVector Palm_R_Location = Character->GetMesh()->GetSocketLocation(FName("Palm_R"));
+	Anim->RightHandLadderOffset = Character->GetClimbComponent()->GetLimbIKTarget(ELimbList::HandR);
 	Anim->RightHandLadderOffset -= Palm_R_Location - Hand_R_Location;
 
-	Anim->LeftFootLadderOffset = Character->GetClimbComponent()->GetLimbIKTarget(ELimbList::FootL);
 	FVector Foot_L_Location = Character->GetMesh()->GetSocketLocation(FName("Foot_L_Offset"));
 	FVector Sole_L_Location = Character->GetMesh()->GetSocketLocation(FName("Sole_L"));
+	Anim->LeftFootLadderOffset = Character->GetClimbComponent()->GetLimbIKTarget(ELimbList::FootL);
 	Anim->LeftFootLadderOffset -= Sole_L_Location - Foot_L_Location;
 
-	//UE_LOG(Log_Anim_IK_Climb, Log, TEXT("[AnimMode_Ladder] LeftHand Target = X : %f, Y : %f, Z : %f"), Anim->LeftHandLadderOffset.X, Anim->LeftHandLadderOffset.Y, Anim->LeftHandLadderOffset.Z);
-	//UE_LOG(Log_Anim_IK_Climb, Log, TEXT("[AnimMode_Ladder] RightHand Target = X : %f, Y : %f, Z : %f"), Anim->RightHandLadderOffset.X, Anim->RightHandLadderOffset.Y, Anim->RightHandLadderOffset.Z);
-	//UE_LOG(Log_Anim_IK_Climb, Log, TEXT("[AnimMode_Ladder] LeftFoot Target = X : %f, Y : %f, Z : %f"), Anim->LeftFootLadderOffset.X, Anim->LeftFootLadderOffset.Y, Anim->LeftFootLadderOffset.Z);
-	//UE_LOG(Log_Anim_IK_Climb, Log, TEXT("[AnimMode_Ladder] RightFoot Target = X : %f, Y : %f, Z : %f"), Anim->RightFootLadderOffset.X, Anim->RightFootLadderOffset.Y, Anim->RightFootLadderOffset.Z);
+	FIKContextWeights* Context = Anim->IKLayer.Find(
+		FGameplayTag::RequestGameplayTag(TEXT("IK.Layer.Ladder.Climb")));
+
+	if (Context)
+	{
+		float LH = Character->GetMesh()->GetSocketLocation(FName("hand_l")).Z;
+		UE_LOG(Log_Anim_IK_Climb, Warning, TEXT("LH : %f  LH Target : %f"), LH, Anim->LeftHandLadderOffset.Z);
+	}
 }

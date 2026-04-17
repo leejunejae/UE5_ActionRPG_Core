@@ -35,5 +35,5 @@ public:
 
 private:
 	UPROPERTY(EditAnyWhere, Category = Equipment)
-		FName DefaultWeaponKey = FName("SNS_HardenedIron");
+		FName DefaultWeaponKey = FName("SNS_HardenedIron_01");
 };

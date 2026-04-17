@@ -5,6 +5,7 @@
 #include "Characters/Player/PlayerBase.h"
 #include "Animation/Mode/AnimMode_Ride.h"
 #include "Animation/Mode/AnimMode_Ground_Player.h"
+#include "Utils/CoreLog.h"
 
 #include "Core/Subsystems/GameInstanceSystem/PlayerAnimRegistrySubsystem.h"
 
@@ -52,7 +53,7 @@ void UPlayerBaseAnimInstance::HandleWeaponChange(EWeaponType WeaponData)
 	UPlayerAnimRegistrySubsystem* PlayerAnimSubsystem = World->GetGameInstance()->GetSubsystem<UPlayerAnimRegistrySubsystem>();
 	if (!PlayerAnimSubsystem)
 	{
-		UE_LOG(LogTemp, Error, TEXT("PlayerAnimSubsystem not found"));
+		UE_LOG(Log_Anim_Equip, Warning, TEXT("[PlayerBaseAnimInstance] PlayerAnimSubsystem not found"));
 		return;
 	}
 
@@ -83,7 +84,14 @@ void UPlayerBaseAnimInstance::HandleWeaponChange(EWeaponType WeaponData)
 	HitAir_Death = TargetAnimSet->HitAir_Death.IsNull() ? nullptr : TargetAnimSet->HitAir_Death.LoadSynchronous();
 	Ground_Death = TargetAnimSet->Ground_Death.IsNull() ? nullptr : TargetAnimSet->Ground_Death.LoadSynchronous();
 
+	float WeaponIKAlpha = TargetAnimSet->bUseWeaponIK ? 1.0f : 0.0f;
+	SetIKLayerAlpha_Native(FGameplayTag::RequestGameplayTag(FName("IK.Layer.Ground.HandWeapon")), ELimbList::HandL, WeaponIKAlpha);
+
+	UE_LOG(Log_Anim_Equip, Log, TEXT("WeaponIKAlpha = %f"), WeaponIKAlpha);
+
 	bInitAnimSet = true;
+
+	UE_LOG(Log_Anim_Equip, Log, TEXT("[PlayerBaseAnimInstance] Character ID : %s Anim Has been Set By Weapon Change"), *Character->GetName());
 }
 
 void UPlayerBaseAnimInstance::AnimNotify_NOT_MountEnd()

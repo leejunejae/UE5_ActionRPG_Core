@@ -46,16 +46,8 @@ protected:
 
 #pragma region Owner Data
 protected:
-	TWeakObjectPtr<ACharacter> CachedCharacter;
-	TWeakObjectPtr<UAnimInstance> CachedAnim;
-	TScriptInterface<ICharacterStatusInterface> CachedPlayerStatus;
-
 	UPROPERTY(VisibleAnywhere, Meta = (AllowPrivateAccess = true))
 		const class ULadderClimbDataAsset* ClimbCurveDA;
-
-	UPROPERTY(EditAnywhere, Category = "Curve")
-		//FLadderClimbCurveSet ClimbCurveSet;
-		FLadderClimbCurveSet_Map ClimbCurveSet;
 
 	UPROPERTY(EditAnywhere, Category = "Curve")
 		TObjectPtr<UCurveFloat> EnterRotatorCurve;
@@ -65,6 +57,10 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "Setting")
 		bool HasEnterPhase = true;
+
+protected:
+	UCurveVector* GetClimbCurve(const FClimbCurveKey& Key) const;
+	UAnimMontage* GetClimbMontage(EClimbPhase Phase) const;
 #pragma endregion Owner Data
 
 #pragma region Climbable Object
@@ -85,6 +81,8 @@ protected:
 	TMap<ELimbList, FLimbData> LimbToGripNode;
 	TTuple<FVector, FVector> ClimbLocation;
 
+	FVector BodyLocation;
+
 	bool bIsClimbing;
 
 public:
@@ -93,8 +91,6 @@ public:
 
 	void EnterLadderFloat();
 	void ExitLadderFloat();
-
-	void CommitLadderState();
 
 	void SetGrip1DRelation(float MinInterval, float MaxInterval);
 	bool CheckGripListValid();
@@ -107,27 +103,8 @@ public:
 
 	FGripNode1D* GetLowestGrip1D();
 	FGripNode1D* GetHighestGrip1D();
-	/*
-	FGripNode1D* GetGripByHeightUpWard(float MinHeight = 0.0f, float Comparison = 0.0f);
-	FGripNode1D* GetGripByHeightDownWard(float MinHeight = 0.0f, float Comparison = 0.0f);
-
-	FGripNode1D* GetGripNeighborUpByRange(const FGripNode1D* CurrentGrip, float Range = 0);
-	FGripNode1D* GetGripNeighborDownByRange(const FGripNode1D* CurrentGrip, float Range = 0);
-
-	FGripNode1D* GetGripNeighborUp(const FGripNode1D* CurrentGrip, int32 Count = 1);
-	FGripNode1D* GetGripNeighborDown(const FGripNode1D* CurrentGrip, int32 Count = 1);
-
-	FGripNode1D* GetGripUpward(const FGripNode1D* CurrentGrip, float MinInterval = 0);
-	FGripNode1D* GetGripDownward(const FGripNode1D* CurrentGrip, float MinInterval = 0);
-
-	TOptional<int32> FindGripLevelDifference(const FGripNode1D* StartGrip, const FGripNode1D* DestGrip);
-	TOptional<float> FindGripDistance(const FGripNode1D* StartGrip, const FGripNode1D* DestGrip);
-	*/
 
 	void SetLowestGrip1D(float MinHeight = 0.0f, float Comparision = 0.0f);
-
-	void SetGripNeighborUp(FGripNode1D*& CurrentGrip, int32 Count = 1);
-	void SetGripNeighborDown(FGripNode1D*& CurrentGrip, int32 Count = 1);
 
 #pragma region Setting Value
 private:

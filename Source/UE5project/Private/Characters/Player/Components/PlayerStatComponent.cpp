@@ -170,7 +170,7 @@ void UPlayerStatComponent::ChangeMaxStamina(const float Amount)
 bool UPlayerStatComponent::ChangeStamina(const float Amount, const EStatChangeType SPChangeType)
 {
 	float Delta = Amount;
-	bool bChangeSuccess;
+	bool bChangeSuccess = false;
 
 	switch (SPChangeType)
 	{

@@ -16,4 +16,7 @@ class UE5PROJECT_API UAnimMode_Ride : public UAnimModeBase
 	
 public:
 	virtual void Tick(float DeltaSeconds) override;
+
+private:
+	void UpdateRideLocomotionIK(float DeltaSeconds);
 };

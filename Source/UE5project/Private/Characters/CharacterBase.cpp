@@ -8,6 +8,7 @@
 #include "Combat/Components/HitReactionComponent.h"
 #include "Characters/Components/CharacterStatusComponent.h"
 #include "Interaction/Climb/Components/ClimbComponent.h"
+#include "Characters/Rideable/Ride.h"
 #include "Utils/CoreLog.h"
 
 // Sets default values
@@ -76,4 +77,9 @@ void ACharacterBase::SetCurLocomotionGait(ELocomotionGait NewGait)
 	FGaitSetting NewGaitSetting = *GaitData.Find(CurLocomotionGait);
 
 	GetCharacterMovement()->MaxWalkSpeed = NewGaitSetting.MaxSpeed;
+}
+
+ARide* ACharacterBase::GetCurrentRide()
+{
+	return Ride;
 }
