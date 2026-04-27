@@ -21,5 +21,5 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 		TMap<EWeaponType, FAttackContextSet> AttackContextMap;
 
-	FAttackContextSet FindPlayerAttackContext(const EWeaponType& WeaponType, bool bLogNotFound = false) const;
+	const FAttackContextSet* FindPlayerAttackContext(const EWeaponType& WeaponType, bool bLogNotFound = false) const;
 };

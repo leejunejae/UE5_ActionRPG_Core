@@ -24,11 +24,10 @@ public:
 	UPROPERTY(EditAnywhere)
 		FName WindowName;
 
+	UPROPERTY(EditAnywhere)
+		FName TargetBone;
+
 protected:
-	float PrevTime = 0.0f;
-	float EndTime = 0.0f;
-	bool bFinished = false;
-	
 	UPROPERTY(EditAnywhere)
 		bool bDrawDebug = false;
 };

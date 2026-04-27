@@ -35,6 +35,12 @@ AEnemyBase::AEnemyBase(const FObjectInitializer& ObjectInitializer)
 	StatComponent = CreateDefaultSubobject<UCharacterStatComponent>(TEXT("StatComponent"));
 	StatComponent->bAutoActivate = true;
 
+	MainWeapon = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MainWeapon"));
+	MainWeapon->SetupAttachment(GetMesh());
+
+	SubEquip = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("SubEquip"));
+	SubEquip->SetupAttachment(GetMesh());
+
 	GetCapsuleComponent()->SetCollisionProfileName(TEXT("Character_NPC"));
 	GetMesh()->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
 	GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -90.0f));
@@ -125,6 +131,19 @@ bool AEnemyBase::ApplyEnemyInfo(const FEnemyInfo* Info)
 	GetMesh()->SetSkeletalMesh(InstanceData->SkeletalMesh);
 	GetMesh()->SetAnimInstanceClass(InstanceData->AnimBlueprint);
 
+	if(const UWeaponDataAsset* WeaponDataAsset = InstanceData->WeaponData)
+	{ 
+		if (WeaponDataAsset->WeaponInstance.IsValid())
+		{
+			MainWeapon->SetStaticMesh(WeaponDataAsset->WeaponInstance.WeaponMesh);
+			MainWeapon->AttachToComponent(
+				GetMesh(),
+				FAttachmentTransformRules::SnapToTargetIncludingScale,
+				FName("S_Weapon")
+			);
+		}
+	}
+	
 	GaitData = InstanceData->LocomotionGaitData;
 	SetCurLocomotionGait(ELocomotionGait::Walk);
 
@@ -152,12 +171,12 @@ bool AEnemyBase::ApplyEnemyInfo(const FEnemyInfo* Info)
 		return false;
 	}
 
+	CurrentProfileTag = InstanceData->SkeletonTag;
 	AnimProfiles.Add(ProfileTag, *Profile);
-	CurrentProfileTag = ProfileTag;
+	CurrentWeaponTag = ProfileTag;
 
-	CharacterBaseAnim->InitAnimationData(*AnimProfiles.Find(CurrentProfileTag));
-	HitReactionComponent->SetHitReactionDA(AnimProfiles.Find(CurrentProfileTag)->HitReactionAnimSet);
-
+	CharacterBaseAnim->InitAnimationData(*AnimProfiles.Find(CurrentWeaponTag));
+	HitReactionComponent->SetHitReactionDA(AnimProfiles.Find(CurrentWeaponTag)->HitReactionAnimSet);
 
 	AEnemyBaseAIController* AI = Cast<AEnemyBaseAIController>(GetController());
 	if (!AI)
@@ -198,6 +217,7 @@ bool AEnemyBase::ApplyEnemyInfo(const FEnemyInfo* Info)
 	}
 
 	AI->SetCombatPatternData(CombatPattern);
+	AttackComponent->InitAttackContextSet(&CombatData->AttackContextSet);
 
 	return true;
 }
@@ -233,7 +253,7 @@ FAttackTraceSource AEnemyBase::GetAttackTraceSource_Implementation(EAttackSource
 	}
 	case EAttackSourceType::OffHand:
 	{
-		OutSource.TraceComponent = SubWeapon;
+		OutSource.TraceComponent = SubEquip;
 		OutSource.Radius = 10.0f;
 	}
 	}

@@ -43,7 +43,7 @@ public:
 
     /** 외부에서 호출: 컨텍스트를 주면 최종 패턴을 선택 */
     UFUNCTION(BlueprintCallable, Category = "CombatDecision")
-        FCombatDecisionResult Decide(const FCombatContext& InCtx, const UDataTable* PatternTable, bool bDebugLog = false);
+        FCombatDecisionResult Decide(const FCombatContext& InCtx, const UDataTable* PatternTable, bool bDebugLog = true, const FString& DebugActorName = TEXT(""));
 
     /** 선택된 패턴을 실제로 사용했다고 기록(쿨다운/히스토리 갱신) */
     UFUNCTION(BlueprintCallable, Category = "CombatDecision")

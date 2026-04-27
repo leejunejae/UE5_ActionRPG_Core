@@ -20,6 +20,9 @@ public:
         FName Name;
 
     UPROPERTY()
+        FName TargetBone;
+
+    UPROPERTY()
         float StartTime;
 
     UPROPERTY()
@@ -27,8 +30,8 @@ public:
 
 
     FHitWindow() = default;
-    FHitWindow(FName InName, float InS, float InE)
-        : Name(InName), StartTime(InS), EndTime(InE) {}
+    FHitWindow(FName InName, FName InTargetBone, float InS, float InE)
+        : Name(InName), TargetBone(InTargetBone), StartTime(InS), EndTime(InE) {}
 };
 
 class UAnimSequence;
@@ -45,7 +48,6 @@ public:
     UFUNCTION(BlueprintCallable, CallInEditor, Category = "Attack|HitData")
         static void BuildHitDataFromNotifyWindows(
             UAnimSequence* AnimSequence,
-            FName BoneName,
             float SampleInterval,
             UAttackBoneDataRegistry* Registry
         );
@@ -60,7 +62,6 @@ private:
         TMap<FName, FBoneTransformSegment>& OutSegments,
         const TArray<FHitWindow>& Windows,
         UAnimSequence* AnimSequence,
-        const FName& BoneName,
         float SampleInterval
     );
 

@@ -9,6 +9,7 @@
 /**
  * 
  */
+
 UCLASS()
 class UE5PROJECT_API UBTTask_ExecutePattern_Attack : public UBTTaskNode
 {
@@ -18,4 +19,10 @@ public:
 	UBTTask_ExecutePattern_Attack();
 
 	virtual EBTNodeResult::Type ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory) override;
+	virtual void OnTaskFinished(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, EBTNodeResult::Type TaskResult) override;
+
+private:
+	void OnAttackFinished();
+
+	UBehaviorTreeComponent* OwnerCompRef = nullptr;
 };

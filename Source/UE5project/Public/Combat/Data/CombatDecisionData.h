@@ -145,67 +145,37 @@ struct FPatternCondition
         if (Cooldown > 0.f)
         {
             const float Elapsed = Ctx.CurrentTime - LastUsedTime;
-            if (Elapsed < Cooldown)
-            {
-                UE_LOG(Log_AI, Log, TEXT("Cooldown (Remain=%.3f)"), (Cooldown - Elapsed));
-                return false;
-            }
+            if (Elapsed < Cooldown) return false;
         }
         
         if (bUsePhase)
         {
-            if (Ctx.Phase < RequiredPhase)
-            {
-                UE_LOG(Log_AI, Log, TEXT("Phase (Cur=%d Req=%d)"), Ctx.Phase, RequiredPhase);
-                return false;
-            }
+            if (Ctx.Phase < RequiredPhase) return false;
         }
 
         if (bUseRange)
         {
-            if (Ctx.DistanceToTarget < MinRange || Ctx.DistanceToTarget > MaxRange)
-            {
-                UE_LOG(Log_AI, Log, TEXT("Range (Min=%.1f, Max=%.1f) Dist=%.1f"),
-                    MinRange, MaxRange, Ctx.DistanceToTarget);
-                return false;
-            }
+            if (Ctx.DistanceToTarget < MinRange || Ctx.DistanceToTarget > MaxRange) return false;
         }
 
         if (bUseHPRange)
         {
-            if (Ctx.HPPercent < MinHPPercent || Ctx.HPPercent > MaxHPPercent)
-            {
-                UE_LOG(Log_AI, Log, TEXT("HP (Min=%.1f, Max=%.1f) HP=%.1f"),
-                    MinHPPercent, MaxHPPercent, Ctx.HPPercent);
-                return false;
-            }
+            if (Ctx.HPPercent < MinHPPercent || Ctx.HPPercent > MaxHPPercent) return false;
         }
 
         if (bRequirePoiseBroken)
         {
-            if (!Ctx.bPoiseBroken)
-            {
-                UE_LOG(Log_AI, Log, TEXT("PoiseBrokenRequired"));
-                return false;
-            }
+            if (!Ctx.bPoiseBroken) return false;
         }
 
         if (bRequireRangedThreat)
         {
-            if (!Ctx.bRangedThreat)
-            {
-                UE_LOG(Log_AI, Log, TEXT("RangedThreatRequired"));
-                return false;
-            }
+            if (!Ctx.bRangedThreat) return false;
         }
 
         if (bRequireStanceBroken)
         {
-            if (!Ctx.bStanceBroken)
-            {
-                UE_LOG(Log_AI, Log, TEXT("StanceBrokenRequired"));
-                return false;
-            }
+            if (!Ctx.bStanceBroken) return false;
         }
         
         return true;

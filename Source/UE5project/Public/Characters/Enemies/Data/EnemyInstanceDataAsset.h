@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
 #include "Animation/Data/AnimData.h"
+#include "Items/Weapons/Data/WeaponDataAsset.h"
 #include "Core/MovementTypes.h"
 #include "EnemyInstanceDataAsset.generated.h"
 
@@ -27,6 +28,9 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation")
         FGameplayTag SkeletonTag;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Visual")
+        TObjectPtr<UWeaponDataAsset> WeaponData;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation")
         FGameplayTag WeaponTag;

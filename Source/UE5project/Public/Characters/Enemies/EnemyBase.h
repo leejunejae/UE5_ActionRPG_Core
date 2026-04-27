@@ -75,7 +75,7 @@ public:
 		TObjectPtr<UStaticMeshComponent> MainWeapon = nullptr;
 
 	UPROPERTY(Transient) // 런타임 생성물이니 Save/Serialize 필요 없으면 Transient 권장
-		TObjectPtr<UStaticMeshComponent> SubWeapon = nullptr;
+		TObjectPtr<UStaticMeshComponent> SubEquip = nullptr;
 
 	UStaticMeshComponent* GetMainWeaponMesh() const override { return MainWeapon; }
 
@@ -138,5 +138,8 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "Animation")
 		TMap<FGameplayTag, FAnimDataSet> AnimProfiles;
+
+	UPROPERTY(VisibleAnywhere, Category = "Animation")
+		FGameplayTag CurrentWeaponTag;
 #pragma endregion Animation
 };

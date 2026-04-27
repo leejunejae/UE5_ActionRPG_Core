@@ -21,6 +21,7 @@
 
 // 컴포넌트
 #include "Interaction/Climb/Components/ClimbComponent.h"
+#include "Utils/GameplayTagsBase.h"
 
 UCharacterBaseAnimInstance::UCharacterBaseAnimInstance()
 {

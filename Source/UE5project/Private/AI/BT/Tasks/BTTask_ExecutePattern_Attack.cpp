@@ -10,19 +10,13 @@
 
 UBTTask_ExecutePattern_Attack::UBTTask_ExecutePattern_Attack()
 {
-	NodeName = TEXT("Chase");
+	NodeName = TEXT("Attack");
+	bCreateNodeInstance = true;
 }
 
 EBTNodeResult::Type UBTTask_ExecutePattern_Attack::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
 	EBTNodeResult::Type Result = Super::ExecuteTask(OwnerComp, NodeMemory);
-
-	ACharacterBase* ControllingPawn = Cast<ACharacterBase>(OwnerComp.GetAIOwner()->GetPawn());
-	if (ControllingPawn == nullptr)
-	{
-		UE_LOG(Log_AI, Warning, TEXT("[BTTask_ExecutePattern_Chase] Owner Pawn Not Valid"));
-		return EBTNodeResult::Failed;
-	}
 
 	AEnemyBaseAIController* EnemyController = Cast<AEnemyBaseAIController>(OwnerComp.GetAIOwner());
 
@@ -32,9 +26,45 @@ EBTNodeResult::Type UBTTask_ExecutePattern_Attack::ExecuteTask(UBehaviorTreeComp
 		return EBTNodeResult::Failed;
 	}
 
+	ACharacterBase* ControllingPawn = Cast<ACharacterBase>(EnemyController->GetPawn());
+	if (ControllingPawn == nullptr)
+	{
+		UE_LOG(Log_AI, Warning, TEXT("[BTTask_ExecutePattern_Chase] Owner Pawn Not Valid"));
+		return EBTNodeResult::Failed;
+	}
+
+	UAttackComponent* AttackComp = ControllingPawn->GetAttackComponent();
+	if (!AttackComp)
+	{
+		return EBTNodeResult::Failed;
+	}
+
+	OwnerCompRef = &OwnerComp;
+	AttackComp->OnAttackFinished.AddUObject(this, &UBTTask_ExecutePattern_Attack::OnAttackFinished);
+
 	FName PickedAttackPattern = OwnerComp.GetBlackboardComponent()->GetValueAsName(FName(TEXT("CombatPatternID")));
+	AttackComp->ExecuteAttack(PickedAttackPattern);
 
-	ControllingPawn->GetAttackComponent()->ExecuteAttack(PickedAttackPattern);
+	return EBTNodeResult::InProgress;
+}
 
-	return EBTNodeResult::Succeeded;
+void UBTTask_ExecutePattern_Attack::OnAttackFinished()
+{
+	UE_LOG(Log_Attack, Log, TEXT("[UAttackComponent] Attack End Delegate"));
+	if (OwnerCompRef)
+	{
+		FinishLatentTask(*OwnerCompRef, EBTNodeResult::Succeeded);
+	}
+}
+
+void UBTTask_ExecutePattern_Attack::OnTaskFinished(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory,EBTNodeResult::Type TaskResult)
+{
+	if (!IsValid(OwnerCompRef)) return;
+
+	ACharacterBase* Pawn = Cast<ACharacterBase>(OwnerCompRef->GetAIOwner()->GetPawn());
+
+	if (!IsValid(Pawn)) return;
+	Pawn->GetAttackComponent()->OnAttackFinished.RemoveAll(this);
+
+	Super::OnTaskFinished(OwnerComp, NodeMemory, TaskResult);
 }

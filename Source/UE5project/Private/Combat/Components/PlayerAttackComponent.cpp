@@ -45,7 +45,7 @@ void UPlayerAttackComponent::SetCurAttackContextSet(EWeaponType WeaponData)
 		return;
 	}
 
-	FAttackContextSet ContextSet = TypedAsset->FindPlayerAttackContext(WeaponType, /*bLogNotFound=*/true);
+	const FAttackContextSet* ContextSet = TypedAsset->FindPlayerAttackContext(WeaponType, /*bLogNotFound=*/true);
 
 
 	if(APlayerBase* Player = Cast<APlayerBase>(GetOwner()))

@@ -57,6 +57,11 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		TArray<FStatusEffect> StatusEffectList;
+
+	bool operator==(const FName& Other) const
+	{
+		return SectionName == Other;
+	}
 };
 
 USTRUCT(Atomic, BlueprintType)

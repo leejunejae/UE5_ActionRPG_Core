@@ -21,8 +21,12 @@ public:
 
 	void ExecuteAttack(FName AttackName, float Playrate = 1.0f) override;
 
+	FORCEINLINE void SetAttackDA(const UDataAsset* AttackDA) { AttackListDA = AttackDA; }
+
 protected:
 	void BeginPlay() override;
 
 private:
+	UPROPERTY(VisibleAnywhere, Meta = (AllowPrivateAccess = true))
+	const class UDataAsset* AttackListDA;
 };

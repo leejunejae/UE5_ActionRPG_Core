@@ -40,7 +40,6 @@
 #include "Characters/Rideable/Interfaces/RideInterface.h"
 
 // 유저 컴포넌트
-#include "Characters/Components/BaseCharacterMovementComponent.h"
 #include "Characters/Player/Components/PlayerStatusComponent.h"
 #include "Characters/Player/Components/PlayerStatComponent.h"
 #include "Characters/Components/EquipmentComponent.h"
@@ -261,7 +260,7 @@ void APlayerBase::ApplyConfig()
 	GetMesh()->SetSkeletalMesh(Config->Mesh);
 	GetMesh()->SetAnimInstanceClass(Config->AnimBP);
 	HitReactionComponent->SetHitReactionDA(Config->HitReactData);
-	AttackComponent->SetAttackDA(Config->AttackData);
+	GetAttackComponent()->SetAttackDA(Config->AttackData);
 }
 
 void APlayerBase::CameraSetting()

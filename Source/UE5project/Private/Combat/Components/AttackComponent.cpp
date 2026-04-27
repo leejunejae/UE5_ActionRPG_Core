@@ -73,10 +73,10 @@ void UAttackComponent::ExecuteAttack(FName AttackName, float Playrate)
 	}
 	else
 	{
-		if (CurAttackContextSet.Contexts.IsEmpty()) return;
+		if (CurAttackContextSet->Contexts.IsEmpty()) return;
 		FAttackContext DataForFind;
 		DataForFind.AttackName = AttackName;
-		const FAttackContext* FoundData = CurAttackContextSet.Contexts.Find(DataForFind);
+		const FAttackContext* FoundData = CurAttackContextSet->Contexts.Find(DataForFind);
 		CurAttackContext = FoundData ? *FoundData : FAttackContext{};
 
 		if (CurAttackContext.Anim && !CurAttackContext.AttackDetail.IsEmpty())
@@ -88,6 +88,7 @@ void UAttackComponent::ExecuteAttack(FName AttackName, float Playrate)
 
 	if (CanPlayAttack)
 	{
+		LastTraceTime = 0.0f;
 		HitActorListCurrentAttack.Empty();
 		PlayAnimation(CurAttackContext, ComboIndex, Playrate);
 	}
@@ -126,6 +127,8 @@ void UAttackComponent::OnMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 		ComboIndex = 0;
 		CurAttackContext = FAttackContext();
 	}
+
+	OnAttackFinished.Broadcast();
 
 	Anim->OnMontageEnded.RemoveDynamic(this, &UAttackComponent::OnMontageEnded);
 }
@@ -219,6 +222,26 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 					{
 						FAttackDamageSource DamageSource = IAttackSourceInterface::Execute_GetAttackDamageSource(AttackSourceInterface.GetObject());
 
+						UAnimInstance* Anim = Character->GetMesh()->GetAnimInstance();
+						FName CurrentSection = Anim->Montage_GetCurrentSection(CurAttackContext.Anim);
+						//UE_LOG(Log_Attack, Log, TEXT("[AttackComponent] Current Section %s"), *CurrentSection.ToString());
+						
+						const FBaseAttackData* Detail = CurAttackContext.AttackDetail.FindByKey(CurrentSection);
+						if (!Detail) return;
+
+						float OutDamage = DamageSource.AttackRating * Detail->DamageMultiplier;
+						float OutPoiseDamage = DamageSource.PoiseRating * Detail->PoiseDamageMultiplier;
+						float OutStanceDamage = DamageSource.StanceRating * Detail->StanceDamageMultiplier;
+						EHitResponse OutResponse = Detail->Response;
+						EDamageType OutAttackType = Detail->DamageType;
+						FVector OutHitPoint = Result.ImpactPoint;
+						FString OutHitPointName = Result.PhysMaterial.IsValid() ? Result.PhysMaterial->GetName() : FString();
+						bool OutCanBlocked = Detail->CanBlocked;
+						bool OutCanParried = Detail->CanParried;
+						bool OutCanAvoid = Detail->CanAvoid;
+						TArray<FStatusEffect> OutStatusEffect = Detail->StatusEffectList;
+
+						/*
 						float OutDamage = DamageSource.AttackRating * CurAttackContext.AttackDetail[ComboIndex].DamageMultiplier;
 						float OutPoiseDamage = DamageSource.PoiseRating * CurAttackContext.AttackDetail[ComboIndex].PoiseDamageMultiplier;
 						float OutStanceDamage = DamageSource.StanceRating * CurAttackContext.AttackDetail[ComboIndex].StanceDamageMultiplier;
@@ -230,6 +253,7 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 						bool OutCanParried = CurAttackContext.AttackDetail[ComboIndex].CanParried;
 						bool OutCanAvoid = CurAttackContext.AttackDetail[ComboIndex].CanAvoid;
 						TArray<FStatusEffect> OutStatusEffect = CurAttackContext.AttackDetail[ComboIndex].StatusEffectList;
+						*/
 
 						FAttackRequest OutAttackData(
 							OutDamage,
@@ -258,6 +282,8 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 			FQuat CurCapsuleRotation = FRotationMatrix::MakeFromZ(CurCapsuleAxis).ToQuat();
 			DrawDebugCapsule(GetWorld(), CurCapsuleCenter, CurHalfHeight, Radius, CurCapsuleRotation, FColor::Red, false, 5.0f);
 		}
+
+		LastTraceTime = EndTime;
 	}
 }
 
@@ -268,5 +294,15 @@ void UAttackComponent::BeginAttackTrace(FGameplayTag Profile, const UAnimSequenc
 	UAnimBoneDataSubsystem* Subsys = GetWorld()->GetGameInstance()->GetSubsystem<UAnimBoneDataSubsystem>();
 	if (!Subsys) return;
 
+	UE_LOG(Log_Attack, Error, TEXT("[AttackComponent] Profile Tag = %s"), *Profile.ToString());
+
 	CurrentSeg = Subsys->GetAnimBoneData(Profile, AnimKey, WindowName);
+}
+
+void UAttackComponent::EndAttackTrace(float EndTime, bool bDrawDebug)
+{
+	if (EndTime <= LastTraceTime) return;
+
+	UE_LOG(Log_Attack, Error, TEXT("PrevTime : %f, EndTime : %f"), LastTraceTime, EndTime);
+	ExecuteAttackTrace(LastTraceTime, EndTime, bDrawDebug);
 }

@@ -16,7 +16,7 @@ class UNiagaraComponent;
 class IAttackSourceInterface;
 struct FBoneTransformSegment;
 
-DECLARE_DELEGATE(FOnSingleDelegate);
+DECLARE_MULTICAST_DELEGATE(FOnMultiDelegate);
 
 USTRUCT(BlueprintType)
 struct FBoneTransformSample
@@ -53,30 +53,31 @@ protected:
 	virtual void BeginPlay() override;
 
 public:	
-	FORCEINLINE void SetAttackDA(const UDataAsset* AttackDA) { AttackListDA = AttackDA; }
-
 	void OnMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	virtual void ExecuteAttack(FName AttackName, float Playrate = 1.0f);
 	virtual void PlayAnimation(FAttackContext AttackInfo, int32 index, float Playrate = 1.0f);
 	virtual void ExecuteAttackTrace(float StartTime, float EndTime, bool bDrawDebug = false);
 
 	void BeginAttackTrace(FGameplayTag Profile, const UAnimSequence* AnimKey, FName WindowName);
+	void EndAttackTrace(float EndTime, bool bDrawDebug = false);
+
+	void InitAttackContextSet(const FAttackContextSet* InContextSet){CurAttackContextSet = InContextSet;}
+
+	FOnMultiDelegate OnAttackFinished;
 
 protected:
-	UPROPERTY(VisibleAnywhere, Meta = (AllowPrivateAccess = true))
-		const class UDataAsset* AttackListDA;
-
 	TScriptInterface<IAttackSourceInterface> AttackSourceInterface;
 	FOnMontageEnded OnMontageEndedDelegate;
 	TSet<AActor*> HitActorListCurrentAttack;
 	const FBoneTransformSegment* CurrentSeg = nullptr;
 
-	UPROPERTY(VisibleAnywhere, Category = Attack)
-		FAttackContextSet CurAttackContextSet;
+	const FAttackContextSet* CurAttackContextSet = nullptr;
 
 	UPROPERTY(VisibleAnywhere, Category = Attack)
 		FAttackContext CurAttackContext;
 
 	UPROPERTY(VisibleAnywhere, Category = Attack)
 		int32 ComboIndex = 0;
+
+		float LastTraceTime = 0.0f;
 };

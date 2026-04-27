@@ -4,30 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
-#include "NativeGameplayTags.h"
 #include "GameplayTagContainer.h"
 #include "IKData.generated.h"
 
 /**
  * 
  */
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_IK_Phase)
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_IK_Phase_Ground)
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_IK_Phase_Ladder)
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_IK_Phase_Ride)
-
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_IK_Layer)
-
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_IK_Layer_Ground)
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_IK_Layer_Ground_Locomotion)
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_IK_Layer_Ground_HandWeapon)
-
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_IK_Layer_Ladder)
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_IK_Layer_Ladder_Climb)
-
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_IK_Layer_Ride)
-UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_IK_Layer_Ride_Locomotion)
-
 
 UENUM(BlueprintType)
 enum class ELimbList : uint8 { HandL, HandR, FootL, FootR, Body };

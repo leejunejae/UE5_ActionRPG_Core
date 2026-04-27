@@ -80,7 +80,7 @@ void UBTService_UpdateCombatState::TickNode(UBehaviorTreeComponent& OwnerComp, u
 	Context.bTargetStanceBroken = false;
 	Context.Phase = 1;
 
-	const FCombatDecisionResult ExecuteCombatPattern = EnemyController->GetCombatDecisionComponent()->Decide(Context, CombatPatternDT, true);
+	const FCombatDecisionResult ExecuteCombatPattern = EnemyController->GetCombatDecisionComponent()->Decide(Context, CombatPatternDT, true, Enemy->EnemyID.ToString());
 
 	Blackboard->SetValueAsEnum(CombatStateKey.SelectedKeyName, (uint8)ExecuteCombatPattern.PickedType);
 	Blackboard->SetValueAsName(PatternIDKey.SelectedKeyName, ExecuteCombatPattern.PickedPatternID);

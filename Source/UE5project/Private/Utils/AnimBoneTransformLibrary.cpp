@@ -54,7 +54,7 @@ void UAnimBoneTransformLibrary::GatherAttackHitWindows(const UAnimSequence* Anim
 
         if (E > S)
         {
-            OutWindows.Add(FHitWindow(WindowANS->WindowName, S, E));
+            OutWindows.Add(FHitWindow(WindowANS->WindowName, WindowANS->TargetBone, S, E));
         }
     }
 
@@ -134,7 +134,7 @@ FTransform UAnimBoneTransformLibrary::GetBoneTransformAtTime(UAnimSequence* Anim
     return RelativeTransform;
 }
 
-void UAnimBoneTransformLibrary::BuildSegmentsFromWindows(TMap<FName, FBoneTransformSegment>& OutSegments, const TArray<FHitWindow>& Windows, UAnimSequence* AnimSequence, const FName& BoneName, float SampleInterval)
+void UAnimBoneTransformLibrary::BuildSegmentsFromWindows(TMap<FName, FBoneTransformSegment>& OutSegments, const TArray<FHitWindow>& Windows, UAnimSequence* AnimSequence, float SampleInterval)
 {
     OutSegments.Reset();
     if (!AnimSequence || Windows.Num() == 0) return;
@@ -142,18 +142,20 @@ void UAnimBoneTransformLibrary::BuildSegmentsFromWindows(TMap<FName, FBoneTransf
     for (const auto& W : Windows)
     {
         FBoneTransformSegment Seg;
+        Seg.BoneName = W.TargetBone;
+        Seg.SampleInterval = SampleInterval;
         Seg.StartTime = W.StartTime;
         Seg.EndTime = W.EndTime;
 
         for (double T = Seg.StartTime; T <= Seg.EndTime + KINDA_SMALL_NUMBER; T += SampleInterval)
         {
-            Seg.Samples.Add(FBoneFrameSample(T, GetBoneTransformAtTime(AnimSequence, BoneName, T)));
+            Seg.Samples.Add(FBoneFrameSample(T, GetBoneTransformAtTime(AnimSequence, W.TargetBone, T)));
         }
 
         // EndTime을 정확히 찍도록 보정
         if (Seg.Samples.Num() == 0 || !FMath::IsNearlyEqual(Seg.Samples.Last().Time, Seg.EndTime, 1e-4f))
         {
-            Seg.Samples.Add(FBoneFrameSample(Seg.EndTime, GetBoneTransformAtTime(AnimSequence, BoneName, Seg.EndTime)));
+            Seg.Samples.Add(FBoneFrameSample(Seg.EndTime, GetBoneTransformAtTime(AnimSequence, W.TargetBone, Seg.EndTime)));
         }
 
         // (선택) 여기에 ReduceSamples(Seg.Samples, PosTol, RotTol) 넣으면 B 방식 완성
@@ -165,7 +167,6 @@ void UAnimBoneTransformLibrary::BuildSegmentsFromWindows(TMap<FName, FBoneTransf
 
 void UAnimBoneTransformLibrary::BuildHitDataFromNotifyWindows(
     UAnimSequence* AnimSequence,
-    FName BoneName,
     float SampleInterval,
     UAttackBoneDataRegistry* Registry
 )
@@ -190,14 +191,11 @@ void UAnimBoneTransformLibrary::BuildHitDataFromNotifyWindows(
         SingleWindow.Add(Windows[i]);
 
         FHitDataEntry Entry;
-        Entry.BoneName = BoneName;
-        Entry.SampleInterval = SampleInterval;
 
         BuildSegmentsFromWindows(
             Entry.Segments,
             SingleWindow,
             AnimSequence,
-            BoneName,
             SampleInterval
         );
 
@@ -207,8 +205,8 @@ void UAnimBoneTransformLibrary::BuildHitDataFromNotifyWindows(
     // 3) Registry 저장
     SaveObjectPackage(Registry);
 
-    UE_LOG(LogTemp, Log, TEXT("[BuildHitData] Done. Anim=%s, Bone=%s, Windows=%d"),
-        *AnimSequence->GetName(), *BoneName.ToString(), Windows.Num());
+    UE_LOG(LogTemp, Log, TEXT("[BuildHitData] Done. Anim=%s, Windows=%d"),
+        *AnimSequence->GetName(), Windows.Num());
 }
 
 #endif // WITH_EDITOR

@@ -38,6 +38,10 @@ struct FBoneTransformSegment
 
 public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+        FName BoneName = FName("Hand_R");
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
+        float SampleInterval = 0.001f;
+    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
         float StartTime = 0.f;
 
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
@@ -59,13 +63,6 @@ struct FHitDataEntry
 public:
     UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
         TMap<FName, FBoneTransformSegment> Segments; // 네가 만든 Segments 그대로
-
-        // (선택) BoneName, SampleInterval, AnimName 등 메타
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-        FName BoneName = NAME_None;
-
-    UPROPERTY(VisibleAnywhere, BlueprintReadOnly)
-        float SampleInterval = 0.0f;
 };
 
 UCLASS(BlueprintType)
@@ -106,8 +103,14 @@ public:
             AssetId = FPrimaryAssetId(FName("AnimSequence"), Anim->GetFName());
         }
 
+        FHitDataEntry& Existing = HitDataMap.FindOrAdd(AssetId);
+
         //const FSoftObjectPath Key = AnimSoft.ToSoftObjectPath();
-        HitDataMap.FindOrAdd(AssetId) = Entry;
+        for (const auto& Pair : Entry.Segments)
+        {
+            Existing.Segments.Add(Pair.Key, Pair.Value);
+        }
+        //HitDataMap.FindOrAdd(AssetId) = Entry;
 
         MarkPackageDirty();
     }

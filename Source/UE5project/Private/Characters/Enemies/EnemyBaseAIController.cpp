@@ -530,9 +530,9 @@ void AEnemyBaseAIController::PushToBlackboard(AActor* TargetActor)
     // 1) BBKey_BehaviorState를 Enum(또는 uint8)로 만들었으면:
     if ((EAIBehaviorState)BB->GetValueAsEnum(Key_BehaviorState) != CurrentState)
     {
-        UE_LOG(Log_AI, Log, TEXT("[EnemyBaseAIController] %s BehaviorState Set : %d"),
+        UE_LOG(Log_AI, Log, TEXT("[EnemyBaseAIController] %s BehaviorState Set : %s"),
          *GetNameSafe(GetPawn()),
-         (int32)CurrentState);
+            *UEnum::GetValueAsString(CurrentState));
     }
 
     BB->SetValueAsEnum(Key_BehaviorState, static_cast<uint8>(CurrentState));

@@ -10,12 +10,12 @@ uint32 GetTypeHash(const FPlayerAttackDetail& AttackDetail)
 }
 */
 
-FAttackContextSet UPlayerAttackDataAsset::FindPlayerAttackContext(const EWeaponType& WeaponType, bool bLogNotFound) const
+const FAttackContextSet* UPlayerAttackDataAsset::FindPlayerAttackContext(const EWeaponType& WeaponType, bool bLogNotFound) const
 {
 	const FAttackContextSet* Info = AttackContextMap.Find(WeaponType);
 	if (Info)
 	{
-		return *Info;
+		return Info;
 	}
 
 	if (bLogNotFound)
@@ -23,5 +23,5 @@ FAttackContextSet UPlayerAttackDataAsset::FindPlayerAttackContext(const EWeaponT
 		UE_LOG(LogTemp, Error, TEXT("Not SkillInfo"))
 	}
 
-	return FAttackContextSet();
+	return nullptr;
 }
