@@ -24,162 +24,145 @@ enum class ECombatActionType : uint8
     Recover   UMETA(DisplayName = "Recover"),
 };
 
+/**
+ * 전투 의사결정에 필요한 런타임 컨텍스트
+ */
 USTRUCT(BlueprintType)
 struct FCombatContext
 {
     GENERATED_BODY()
 
 public:
-    UPROPERTY(BlueprintReadWrite)
-        float DistanceToTarget = 0.f;
+    /** 타겟까지의 거리 (cm) */
+    UPROPERTY(BlueprintReadWrite, Category = "Spatial")
+    float DistanceToTarget = 0.f;
 
-    UPROPERTY() 
-        float AbsDeltaYawDeg = 0.f;
+    /** 타겟 방향과의 절대 Yaw 차이 (도) */
+    UPROPERTY(BlueprintReadWrite, Category = "Spatial")
+    float AbsDeltaYawDeg = 0.f;
 
-    UPROPERTY(BlueprintReadWrite)
-        float HPPercent = 1.f;
+    /** 시야 확보 여부 */
+    UPROPERTY(BlueprintReadWrite, Category = "Spatial")
+    bool bHasLOS = true;
 
-    UPROPERTY(BlueprintReadWrite)
-        int32 Phase = 1;
+    /** 자기 HP 비율 0~1 */
+    UPROPERTY(BlueprintReadWrite, Category = "Self State")
+    float HPPercent = 1.f;
 
-    UPROPERTY(BlueprintReadWrite)
-        bool bPoiseBroken = false;
+    /** 현재 페이즈 */
+    UPROPERTY(BlueprintReadWrite, Category = "Self State")
+    int32 Phase = 1;
 
-    UPROPERTY(BlueprintReadWrite)
-        bool bStanceBroken = false;
+    /** 자기 경직 상태 */
+    UPROPERTY(BlueprintReadWrite, Category = "Self State")
+    bool bPoiseBroken = false;
 
-    UPROPERTY(BlueprintReadWrite)
-        float Aggressiveness = 0.5f; // 0~1
+    /** 자기 가드 붕괴 상태 */
+    UPROPERTY(BlueprintReadWrite, Category = "Self State")
+    bool bStanceBroken = false;
 
-        // 타겟/상황 플래그들 (네 시스템에 맞게 채워)
-    UPROPERTY() 
-        bool bHasLOS = true;
+    /** 공격 성향 0~1 (캐릭터 personality에서 주입) */
+    UPROPERTY(BlueprintReadWrite, Category = "Personality")
+    float Aggressiveness = 0.5f;
 
-    UPROPERTY() 
-        bool bTargetInRecovery = false;
+    /** 타겟이 공격 후딜 중인가 */
+    UPROPERTY(BlueprintReadWrite, Category = "Target State")
+    bool bTargetInRecovery = false;
 
-    UPROPERTY() 
-        bool bTargetGuarding = false;
+    /** 타겟이 가드 중인가 */
+    UPROPERTY(BlueprintReadWrite, Category = "Target State")
+    bool bTargetGuarding = false;
 
-    UPROPERTY() 
-        bool bTargetAttacking = false;
+    /** 타겟이 공격 모션 중인가 */
+    UPROPERTY(BlueprintReadWrite, Category = "Target State")
+    bool bTargetAttacking = false;
 
-    UPROPERTY() 
-        bool bTargetPoiseBroken = false;
+    /** 타겟 경직 상태 */
+    UPROPERTY(BlueprintReadWrite, Category = "Target State")
+    bool bTargetPoiseBroken = false;
 
-    UPROPERTY() 
-        bool bTargetStanceBroken = false;
+    /** 타겟 가드 붕괴 상태 */
+    UPROPERTY(BlueprintReadWrite, Category = "Target State")
+    bool bTargetStanceBroken = false;
 
-    UPROPERTY() 
-        bool bRangedThreat = false;
+    /** 원거리 위협 존재 여부 */
+    UPROPERTY(BlueprintReadWrite, Category = "Target State")
+    bool bRangedThreat = false;
 
-    UPROPERTY(BlueprintReadWrite)
-        float CurrentTime = 0.f;
+    /** 현재 시간 (월드 시간) */
+    UPROPERTY(BlueprintReadWrite, Category = "Time")
+    float CurrentTime = 0.f;
 };
 
+/**
+ * 패턴 사용 가능 여부를 판정하는 하드 조건들
+ */
 USTRUCT(BlueprintType)
 struct FPatternCondition
 {
     GENERATED_BODY()
 
-        // Range
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        bool bUseRange = false;
+    // ---------- Range ----------
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Range")
+    bool bUseRange = false;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "bUseRange"))
-        float MinRange = 0.f;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Range", meta = (EditCondition = "bUseRange"))
+    float MinRange = 0.f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "bUseRange"))
-        float MaxRange = 99999.f;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Range", meta = (EditCondition = "bUseRange"))
+    float MaxRange = 99999.f;
 
-    UPROPERTY(EditAnywhere) 
-        bool bUseIdealRange = false;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Range")
+    bool bUseIdealRange = false;
 
-    UPROPERTY(EditAnywhere) 
-        float IdealRange = 0.f; // bUseIdealRange=false면 (Min+Max)/2 사용
+    /** bUseIdealRange=false면 (Min+Max)/2 사용 */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Range", meta = (EditCondition = "bUseIdealRange"))
+    float IdealRange = 0.f;
 
-    // Angle
-    UPROPERTY(EditAnywhere) 
-        bool bUseAngle = false;
+    // ---------- Angle ----------
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Angle")
+    bool bUseAngle = false;
 
-    UPROPERTY(EditAnywhere) 
-        float AngleGoodDeg = 30.f; // 이내면 1
+    /** 이 각도 이내면 점수 1 */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Angle", meta = (EditCondition = "bUseAngle"))
+    float AngleGoodDeg = 30.f;
 
-    UPROPERTY(EditAnywhere) 
-        float AngleBadDeg = 90.f; // 이상이면 0
+    /** 이 각도 이상이면 점수 0 */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Angle", meta = (EditCondition = "bUseAngle"))
+    float AngleBadDeg = 90.f;
 
-    // HP
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        bool bUseHPRange = false;
+    // ---------- HP ----------
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "HP")
+    bool bUseHPRange = false;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "bUseHPRange"))
-        float MinHPPercent = 0.f;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "HP", meta = (EditCondition = "bUseHPRange", ClampMin = "0.0", ClampMax = "1.0"))
+    float MinHPPercent = 0.f;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "bUseHPRange"))
-        float MaxHPPercent = 1.f;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "HP", meta = (EditCondition = "bUseHPRange", ClampMin = "0.0", ClampMax = "1.0"))
+    float MaxHPPercent = 1.f;
 
-    // Phase
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        bool bUsePhase = false;
+    // ---------- Phase ----------
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Phase")
+    bool bUsePhase = false;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "bUsePhase"))
-        int32 RequiredPhase = 1;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Phase", meta = (EditCondition = "bUsePhase", ClampMin = "1"))
+    int32 RequiredPhase = 1;
 
-    // Poise / Stance
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        bool bRequirePoiseBroken = false;
+    // ---------- Status Flags ----------
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Status")
+    bool bRequirePoiseBroken = false;
 
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        bool bRequireStanceBroken = false;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Status")
+    bool bRequireStanceBroken = false;
 
-    // Ranged threat
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        bool bRequireRangedThreat = false;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Status")
+    bool bRequireRangedThreat = false;
 
-    // Cooldown
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        float Cooldown = 0.f;
+    // ---------- Cooldown ----------
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cooldown", meta = (ClampMin = "0.0"))
+    float Cooldown = 0.f;
 
-    bool IsAvailable(const FCombatContext& Ctx, float LastUsedTime) const
-    {
-        if (Cooldown > 0.f)
-        {
-            const float Elapsed = Ctx.CurrentTime - LastUsedTime;
-            if (Elapsed < Cooldown) return false;
-        }
-        
-        if (bUsePhase)
-        {
-            if (Ctx.Phase < RequiredPhase) return false;
-        }
-
-        if (bUseRange)
-        {
-            if (Ctx.DistanceToTarget < MinRange || Ctx.DistanceToTarget > MaxRange) return false;
-        }
-
-        if (bUseHPRange)
-        {
-            if (Ctx.HPPercent < MinHPPercent || Ctx.HPPercent > MaxHPPercent) return false;
-        }
-
-        if (bRequirePoiseBroken)
-        {
-            if (!Ctx.bPoiseBroken) return false;
-        }
-
-        if (bRequireRangedThreat)
-        {
-            if (!Ctx.bRangedThreat) return false;
-        }
-
-        if (bRequireStanceBroken)
-        {
-            if (!Ctx.bStanceBroken) return false;
-        }
-        
-        return true;
-    }
+    bool IsAvailable(const FCombatContext& Ctx, float LastUsedTime) const;
 };
 
 USTRUCT(BlueprintType)

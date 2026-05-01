@@ -161,7 +161,10 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 	// 현재 루트본의 위치
 	FTransform CurrentRootWorldTransform = Character->GetMesh()->GetBoneTransform(0);
 
-	FAttackTraceSource TraceSource = IAttackSourceInterface::Execute_GetAttackTraceSource(AttackSourceInterface.GetObject(), CurAttackContext.AttackDetail[ComboIndex].AttackSource);
+	FAttackTraceSource TraceSource;
+	if (IAttackSourceInterface* AttackSource = Cast<IAttackSourceInterface>(Character))
+		TraceSource = AttackSource->GetAttackTraceSource(CurAttackContext.AttackDetail[ComboIndex].AttackSource);
+		//IAttackSourceInterface::Execute_GetAttackTraceSource(AttackSourceInterface.GetObject(), CurAttackContext.AttackDetail[ComboIndex].AttackSource);
 
 	FTransform TargetWeaponOffset = TraceSource.TraceComponent->GetRelativeTransform();
 
@@ -220,7 +223,10 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 
 					if (HitActor->Implements<UHitReactionInterface>())
 					{
-						FAttackDamageSource DamageSource = IAttackSourceInterface::Execute_GetAttackDamageSource(AttackSourceInterface.GetObject());
+						FAttackDamageSource DamageSource;
+						//= IAttackSourceInterface::Execute_GetAttackDamageSource(AttackSourceInterface.GetObject());
+						if (IAttackSourceInterface* AttackSource = Cast<IAttackSourceInterface>(Character))
+							DamageSource = AttackSource->GetAttackDamageSource();
 
 						UAnimInstance* Anim = Character->GetMesh()->GetAnimInstance();
 						FName CurrentSection = Anim->Montage_GetCurrentSection(CurAttackContext.Anim);

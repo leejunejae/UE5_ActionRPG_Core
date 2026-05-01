@@ -236,6 +236,9 @@ struct FNPCStats
 		FCharacterStats BaseStats;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+		float AttackPower;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		FResourceStat Stance;
 
 public:

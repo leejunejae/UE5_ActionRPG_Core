@@ -1083,3 +1083,17 @@ UPlayerStatusComponent* APlayerBase::GetCharacterStatusComponent() const
 {
 	return Cast<UPlayerStatusComponent>(CharacterStatusComponent);
 }
+
+FAttackTraceSource APlayerBase::GetAttackTraceSource(EAttackSourceType AttackSourceType) const
+{
+	if (!EquipmentComponent) return FAttackTraceSource();
+
+	return EquipmentComponent->GetAttackTraceSource(AttackSourceType);
+}
+
+FAttackDamageSource APlayerBase::GetAttackDamageSource() const
+{
+	if (!EquipmentComponent) return FAttackDamageSource();
+
+	return EquipmentComponent->GetAttackDamageSource();
+}

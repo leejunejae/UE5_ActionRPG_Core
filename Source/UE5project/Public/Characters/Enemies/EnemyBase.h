@@ -79,6 +79,9 @@ public:
 
 	UStaticMeshComponent* GetMainWeaponMesh() const override { return MainWeapon; }
 
+	virtual FAttackTraceSource GetAttackTraceSource(EAttackSourceType AttackSourceType) const override;
+	virtual FAttackDamageSource GetAttackDamageSource() const override;
+
 	//void CreateAndAttachEquip(UStaticMesh* MeshAsset, FName SocketName, FTransform Equip, FName CompName);
 #pragma endregion Equip
 
@@ -96,9 +99,6 @@ public:
 	void SetEnemyID(const FName ID) { EnemyID = ID; }
 	bool ApplyEnemyInfo(const FEnemyInfo* Info);
 	bool ApplyEnemyStats(const FEnemyStats* Stat);
-
-	FAttackTraceSource GetAttackTraceSource_Implementation(EAttackSourceType AttackSourceType) const;
-	FAttackDamageSource GetAttackDamageSource_Implementation() const;
 
 #pragma endregion Character_Data
 

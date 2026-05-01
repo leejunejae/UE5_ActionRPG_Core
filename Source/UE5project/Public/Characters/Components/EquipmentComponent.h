@@ -7,10 +7,10 @@
 
 // 인터페이스
 #include "Characters/Interfaces/EquipmentDataInterface.h"
-#include "Combat/Interfaces/AttackSourceInterface.h"
 #include "Characters/Interfaces/StatInterface.h"
 
 #include "Items/Weapons/Data/WeaponData.h"
+#include "Combat/Data/AttackData.h"
 
 #include "EquipmentComponent.generated.h"
 
@@ -20,8 +20,7 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnEquipmentMulDel, const EWeaponType);
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class UE5PROJECT_API UEquipmentComponent : public UActorComponent,
-	public IEquipmentDataInterface,
-	public IAttackSourceInterface
+	public IEquipmentDataInterface
 {
 	GENERATED_BODY()
 
@@ -61,8 +60,8 @@ public:
 	void EquipWeapon_Implementation(FName WeaponKey) override;
 	FVector GetWeaponSocketLocation_Implementation(FName SocketName, bool IsSubWeapon) const;
 
-	FAttackTraceSource GetAttackTraceSource_Implementation(EAttackSourceType AttackSourceType) const;
-	FAttackDamageSource GetAttackDamageSource_Implementation() const;
+	FAttackTraceSource GetAttackTraceSource(EAttackSourceType AttackSourceType) const;
+	FAttackDamageSource GetAttackDamageSource() const;
 
 	void SetWeaponSocketName(FName SocketName) { WeaponSocket = SocketName; }
 	void SetSubEquipSocketName(FName SocketName) { SubEquipSocket = SocketName; }

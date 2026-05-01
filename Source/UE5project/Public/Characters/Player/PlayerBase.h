@@ -12,6 +12,7 @@
 // 인터페이스
 #include "Characters/Player/Interfaces/PlayerInterface.h"
 #include "Combat/Interfaces/HitReactionInterface.h"
+#include "Combat/Interfaces/AttackSourceInterface.h"
 #include "Characters/Player/Interfaces/ViewDataInterface.h"
 #include "Characters/Interfaces/CharacterTransformInterface.h"
 #include "PlayerBase.generated.h"
@@ -50,7 +51,8 @@ UCLASS()
 class UE5PROJECT_API APlayerBase : public ACharacterBase,
 	public IPlayerInterface,
 	public IViewDataInterface,
-	public ICharacterTransformInterface
+	public ICharacterTransformInterface,
+	public IAttackSourceInterface
 {
 	GENERATED_BODY()
 public:
@@ -188,6 +190,9 @@ public:
 	FORCEINLINE UEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
 
 	UStaticMeshComponent* GetMainWeaponMesh() const override;
+
+	virtual FAttackTraceSource GetAttackTraceSource(EAttackSourceType AttackSourceType) const override;
+	virtual FAttackDamageSource GetAttackDamageSource() const override;
 
 #pragma endregion Inventory & Equip
 

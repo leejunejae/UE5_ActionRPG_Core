@@ -137,7 +137,7 @@ FVector UEquipmentComponent::GetWeaponSocketLocation_Implementation(FName Socket
 	return !IsSubWeapon ? WeaponMesh->GetSocketLocation(SocketName) : SubEquipMesh->GetSocketLocation(SocketName);
 }
 
-FAttackTraceSource UEquipmentComponent::GetAttackTraceSource_Implementation(EAttackSourceType AttackSourceType) const
+FAttackTraceSource UEquipmentComponent::GetAttackTraceSource(EAttackSourceType AttackSourceType) const
 {
 	FAttackTraceSource OutData;
 
@@ -156,11 +156,10 @@ FAttackTraceSource UEquipmentComponent::GetAttackTraceSource_Implementation(EAtt
 		break;
 	}
 	}
-
 	return OutData;
 }
 
-FAttackDamageSource UEquipmentComponent::GetAttackDamageSource_Implementation() const
+FAttackDamageSource UEquipmentComponent::GetAttackDamageSource() const
 {
 	FAttackDamageSource OutData;
 

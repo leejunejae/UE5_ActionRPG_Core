@@ -20,6 +20,30 @@ enum class EAttackSourceType : uint8
 };
 
 USTRUCT(BlueprintType)
+struct FAttackTraceSource
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY() USceneComponent* TraceComponent = nullptr; // 무기 메시 or 캐릭터 메시
+	UPROPERTY() float Radius = 0.f;
+
+	bool IsValid() { return TraceComponent ? true : false; }
+	// 필요하면: 추가 소켓들, 오프셋, 채널, 트레이스 프로파일 등
+};
+
+USTRUCT(BlueprintType)
+struct FAttackDamageSource
+{
+	GENERATED_BODY()
+
+public:
+	UPROPERTY() float AttackRating = 0.f;   // (무기공격력 * 스탯보정)
+	UPROPERTY() float PoiseRating = 0.f;
+	UPROPERTY() float StanceRating = 0.f;
+};
+
+USTRUCT(BlueprintType)
 struct FBaseAttackData
 {
 	GENERATED_BODY()

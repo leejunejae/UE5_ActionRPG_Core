@@ -240,7 +240,7 @@ bool AEnemyBase::ApplyEnemyStats(const FEnemyStats* Stat)
 	return true;
 }
 
-FAttackTraceSource AEnemyBase::GetAttackTraceSource_Implementation(EAttackSourceType AttackSourceType) const
+FAttackTraceSource AEnemyBase::GetAttackTraceSource(EAttackSourceType AttackSourceType) const
 {
 	FAttackTraceSource OutSource;
 
@@ -261,8 +261,11 @@ FAttackTraceSource AEnemyBase::GetAttackTraceSource_Implementation(EAttackSource
 	return OutSource;
 }
 
-FAttackDamageSource AEnemyBase::GetAttackDamageSource_Implementation() const
+FAttackDamageSource AEnemyBase::GetAttackDamageSource() const
 {
+	FAttackDamageSource OutData;
+
+	//OutData.AttackRating = StatComponent->GetCommonStats().
 	return FAttackDamageSource();
 }
 

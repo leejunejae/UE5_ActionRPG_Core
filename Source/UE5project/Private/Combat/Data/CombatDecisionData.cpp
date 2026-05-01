@@ -6,6 +6,51 @@
 
 using namespace CustomMath::Math;
 
+// ---------- FPatternCondition ----------
+
+bool FPatternCondition::IsAvailable(const FCombatContext& Ctx, float LastUsedTime) const
+{
+    // Cooldown
+    if (Cooldown > 0.f)
+    {
+        const float Elapsed = Ctx.CurrentTime - LastUsedTime;
+        if (Elapsed < Cooldown) return false;
+    }
+
+    // Phase
+    if (bUsePhase && Ctx.Phase < RequiredPhase)
+    {
+        return false;
+    }
+
+    // Range
+    if (bUseRange)
+    {
+        if (Ctx.DistanceToTarget < MinRange || Ctx.DistanceToTarget > MaxRange)
+        {
+            return false;
+        }
+    }
+
+    // HP Range
+    if (bUseHPRange)
+    {
+        if (Ctx.HPPercent < MinHPPercent || Ctx.HPPercent > MaxHPPercent)
+        {
+            return false;
+        }
+    }
+
+    // Status flags
+    if (bRequirePoiseBroken && !Ctx.bPoiseBroken)        return false;
+    if (bRequireStanceBroken && !Ctx.bStanceBroken)      return false;
+    if (bRequireRangedThreat && !Ctx.bRangedThreat)      return false;
+
+    return true;
+}
+
+// ---------- FCombatPattern ----------
+
 float FCombatPattern::CalcScore(const FCombatContext& Ctx) const
 {
     float Score = FMath::Max(0.f, BaseScore);
@@ -55,7 +100,7 @@ float FCombatPattern::CalcScore(const FCombatContext& Ctx) const
         }
     }
 
-    // ---------- 상대 윈도우(엘든링 감성 핵심) ----------
+    // ---------- 상대 윈도우 ----------
     if (ActionType == ECombatActionType::Attack)
     {
         if (Ctx.bTargetInRecovery) Score *= 1.35f;
@@ -69,17 +114,9 @@ float FCombatPattern::CalcScore(const FCombatContext& Ctx) const
         if (ActionType == ECombatActionType::Evasion) Score *= 1.35f;
     }
 
-    // ---------- 내 리소스(HP/스태미나/공격성) ----------
+    // ---------- 내 리소스(HP) ----------
     switch (ActionType)
     {
-    case ECombatActionType::Attack:
-        Score *= FMath::Lerp(0.9f, 1.8f, Ctx.Aggressiveness);
-        break;
-
-    case ECombatActionType::Defend:
-        Score *= FMath::Lerp(1.2f, 0.7f, Ctx.Aggressiveness);
-        break;
-
     case ECombatActionType::Recover:
         Score *= FMath::Lerp(0.9f, 1.4f, 1.f - Ctx.HPPercent);
         break;
@@ -89,7 +126,6 @@ float FCombatPattern::CalcScore(const FCombatContext& Ctx) const
         Score *= FMath::Lerp(0.7f, 1.6f, RampNormal(Ctx.DistanceToTarget, 300.f, 900.f));
         if (Ctx.DistanceToTarget < 250.f) Score *= 0.2f;
         break;
-
     default:
         break;
     }
