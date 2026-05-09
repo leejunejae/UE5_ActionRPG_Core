@@ -42,6 +42,7 @@ public:
 	void OnHitReactionEnded(UAnimMontage* Montage, bool bInterrupted);
 	
 	FOnHitReactionMulDel HitEndDelegate;
+	FOnHitReactionMulDel HitStartDelegate;
 	
 private:
 	UPROPERTY(VisibleAnywhere, Meta = (AllowPrivateAccess = true))

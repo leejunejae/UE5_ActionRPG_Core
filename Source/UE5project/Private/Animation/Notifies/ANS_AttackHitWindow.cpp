@@ -12,17 +12,23 @@
 void UANS_AttackHitWindow::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, float TotalDuration, const FAnimNotifyEventReference& EventReference)
 {
     if (!MeshComp) return;
-    
+
+    // 이 메시컴포넌트의 누적 시간을 0으로 초기화
+    float StartTime = 0.f;
+
+    if (const FAnimNotifyEvent* Notify = EventReference.GetNotify())
+    {
+        StartTime = Notify->GetTriggerTime();
+    }
+
     ACharacterBase* Character = Cast<ACharacterBase>(MeshComp->GetOwner());
     if (!Character) return;
+
     if (UAttackComponent* AttackComp = Character->GetAttackComponent())
     {
-        if (const FAnimNotifyEvent* Notify = EventReference.GetNotify())
-        {
-            FGameplayTag ProfileTag = Character->GetCharacterProfileTag();
-            const UAnimSequence* Seq = Cast<UAnimSequence>(Anim);
-            AttackComp->BeginAttackTrace(ProfileTag, Seq, WindowName);
-        }
+        FGameplayTag ProfileTag = Character->GetCharacterProfileTag();
+        const UAnimSequence* Seq = Cast<UAnimSequence>(Anim);
+        AttackComp->BeginAttackTrace(ProfileTag, Seq, WindowName, StartTime);
     }
 }
 
@@ -35,24 +41,7 @@ void UANS_AttackHitWindow::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSeq
 
     if (UAttackComponent* AttackComp = Character->GetAttackComponent())
     {
-        if (const FAnimNotifyEvent* Notify = EventReference.GetNotify())
-        {
-            float CurrentTime = UAnimNotifyLibrary::GetCurrentAnimationNotifyStateTime(EventReference);
-            float PrevTime = CurrentTime - FrameDeltaTime;
-            if (CurrentTime < Notify->GetEndTriggerTime())
-            {
-                AttackComp->ExecuteAttackTrace(PrevTime, CurrentTime, bDrawDebug);
-                UE_LOG(Log_Attack, Error, TEXT("PrevTime : %f, CurrentTime : %f"), PrevTime, CurrentTime);
-                PrevTime = CurrentTime;
-            }
-            else
-            {
-                float EndTime = Notify->GetEndTriggerTime();
-                AttackComp->ExecuteAttackTrace(PrevTime, EndTime, bDrawDebug);
-                UE_LOG(Log_Attack, Error, TEXT("PrevTime : %f, EndTime : %f"), PrevTime, EndTime);
-                PrevTime = EndTime;
-            }    
-        }
+        AttackComp->TickAttackTrace(FrameDeltaTime, bDrawDebug);
     }
 }
 

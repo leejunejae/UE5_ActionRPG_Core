@@ -63,7 +63,7 @@ public:
     // ============================================================
     /** 후보가 하나도 없을 때 선택할 기본 행동 */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatDecision|Tuning|Fallback")
-    ECombatActionType FallbackAction = ECombatActionType::Chase;
+    ECombatActionType FallbackAction = ECombatActionType::Reposition;
 
     /** 후보가 하나도 없을 때 선택할 기본 패턴 ID */
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CombatDecision|Tuning|Fallback")

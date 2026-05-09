@@ -16,6 +16,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Perception/AIPerceptionComponent.h"
 #include "AI/CombatDecisionComponent.h"
+#include "Combat/Components/HitReactionComponent.h"
 
 #include "Utils/CoreLog.h"
 #include "Utils/CustomMathUtility.h"
@@ -66,8 +67,6 @@ void AEnemyBaseAIController::BeginPlay()
 		AIPerceptionComponent->OnTargetPerceptionUpdated.AddDynamic(this, &AEnemyBaseAIController::OnTargetPerceptionUpdated_Delegate);
 		AIPerceptionComponent->OnTargetPerceptionForgotten.AddDynamic(this, &AEnemyBaseAIController::OnTargetPerceptionForgotten_Delegate);
 	}
-
-	//AIPerceptionComponent->OnTargetPerceptionUpdated.AddDynamic(this, &AEnemyBaseAIController::OnTargetPerceptionUpdated_Delegate);
 }
 
 void AEnemyBaseAIController::Tick(float DeltaTime)
@@ -80,6 +79,17 @@ void AEnemyBaseAIController::Tick(float DeltaTime)
 void AEnemyBaseAIController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
+
+    if (AEnemyBase* Enemy = Cast<AEnemyBase>(InPawn))
+    {
+        if (UHitReactionComponent* HitReaction = Enemy->GetHitReactionComponent())
+        {
+            HitReaction->HitStartDelegate.AddUObject(
+                this, &AEnemyBaseAIController::OnStaggeredStarted);
+            HitReaction->HitEndDelegate.AddUObject(
+                this, &AEnemyBaseAIController::OnStaggeredEnded);
+        }
+    }
 }
 
 void AEnemyBaseAIController::OnUnPossess()
@@ -248,7 +258,7 @@ void AEnemyBaseAIController::HostileMonitor()
     if (HostileMap.Num() == 0)
     {
         PrimaryTarget = nullptr;
-        CurrentState = EAIBehaviorState::Normal;
+        if (CurrentState != EAIBehaviorState::Stagger) CurrentState = EAIBehaviorState::Normal;
         PushToBlackboard(nullptr);
         StopHostileMonitoring();
         return;
@@ -339,8 +349,7 @@ void AEnemyBaseAIController::UpdateRuntimeEval(FThreatEntry& Entry, APawn* Contr
 void AEnemyBaseAIController::UpdateThreatScore(FThreatEntry& Entry, float DeltaSeconds)
 {
     // 1) 기본 감쇠
-    if(Entry.Distance > SightRadiusForThreat)
-        Entry.ThreatScore -= ThreatDecayPerSec * DeltaSeconds;
+    Entry.ThreatScore -= ThreatDecayPerSec * DeltaSeconds;
 
     // 2) 거리 기반 (0~SightRadius)
     const float DistAlpha = 1.f - FMath::Clamp(Entry.Distance / SightRadiusForThreat, 0.f, 1.f);
@@ -475,10 +484,13 @@ void AEnemyBaseAIController::ApplyPrimaryTarget(AActor* NewPrimary, float Now)
 
 void AEnemyBaseAIController::UpdateBehaviorStateFromPrimary()
 {
+    if (CurrentState == EAIBehaviorState::Stagger) return;
+
     AActor* TargetActor = PrimaryTarget.Get();
     if (!TargetActor)
     {
         CurrentState = EAIBehaviorState::Normal;
+        ExitLockOn();
         return;
     }
 
@@ -486,6 +498,7 @@ void AEnemyBaseAIController::UpdateBehaviorStateFromPrimary()
     if (!Entry)
     {
         CurrentState = EAIBehaviorState::Normal;
+        ExitLockOn();
         return;
     }
 
@@ -514,6 +527,7 @@ void AEnemyBaseAIController::UpdateBehaviorStateFromPrimary()
     case EAIBehaviorState::Combat:
     {
         EnterLockOn(TargetActor);
+        break;
     }
     }
 }
@@ -551,6 +565,24 @@ void AEnemyBaseAIController::PushToBlackboard(AActor* TargetActor)
         BB->SetValueAsFloat(Key_TargetDistance, 0.f);
         BB->SetValueAsBool(Key_TargetApproaching, false);
     }
+}
+
+void AEnemyBaseAIController::OnStaggeredStarted()
+{
+    CurrentState = EAIBehaviorState::Stagger;
+    ExitLockOn();
+
+    if (UBlackboardComponent* BB = GetBlackboardComponent())
+    {
+        BB->SetValueAsEnum(Key_BehaviorState, static_cast<uint8>(EAIBehaviorState::Stagger));
+    }
+}
+
+void AEnemyBaseAIController::OnStaggeredEnded()
+{
+    CurrentState = EAIBehaviorState::Normal;
+    UpdateBehaviorStateFromPrimary();
+    PushToBlackboard(PrimaryTarget.Get());
 }
 
 void AEnemyBaseAIController::EnterLockOn(AActor* Target)

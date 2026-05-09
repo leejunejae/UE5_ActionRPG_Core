@@ -30,36 +30,52 @@ struct FEnemyStats :public FTableRowBase
         FText Location;
 
     /** 체력 */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats", meta = (ClampMin = "0.0"))
         float Health;
 
     /** 강인도(강인도가 0이 되면 무력화 상태) */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats", meta = (ClampMin = "0.0"))
         float Poise;
 
     /** 스탠스(스탠스가 0이 되면 경직 반응) */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats", meta = (ClampMin = "0.0"))
         float Stance;
 
     /** 물리 방어력 */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats", meta = (ClampMin = "0.0"))
         float PhysicalDefense;
 
     /** 마법 방어력 */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats", meta = (ClampMin = "0.0"))
         float MagicDefense;
 
     /** 상태이상 저항 */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats", meta = (ClampMin = "0.0"))
         float Resistance;
 
     /** 상태이상 저항 */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats", meta = (ClampMin = "0.0", ClampMax = "100.0"))
         float GuardNegation;
 
     /** 캐릭터 성향 : 공격성 */
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats", meta = (ClampMin = "0.0", ClampMax = "1.0"))
         float Aggressiveness;
+
+    /** 물리 공격력 */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats|Attack", meta = (ClampMin = "0.0"))
+        float PhysicalAttackPower = 0.f;
+
+    /** 마법 공격력 */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats|Attack", meta = (ClampMin = "0.0"))
+        float MagicAttackPower = 0.f;
+
+    /** 강인도 공격력 (상대 Poise 깎기) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats|Attack", meta = (ClampMin = "0.0"))
+        float PoiseAttackPower = 0.f;
+
+    /** 스탠스 공격력 (상대 Stance 깎기) */
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats|Attack", meta = (ClampMin = "0.0"))
+        float StaminaAttackPower = 0.f;
 };
 
 USTRUCT(BlueprintType)

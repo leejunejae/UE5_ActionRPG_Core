@@ -163,8 +163,9 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 
 	FAttackTraceSource TraceSource;
 	if (IAttackSourceInterface* AttackSource = Cast<IAttackSourceInterface>(Character))
+	{
 		TraceSource = AttackSource->GetAttackTraceSource(CurAttackContext.AttackDetail[ComboIndex].AttackSource);
-		//IAttackSourceInterface::Execute_GetAttackTraceSource(AttackSourceInterface.GetObject(), CurAttackContext.AttackDetail[ComboIndex].AttackSource);
+	}
 
 	FTransform TargetWeaponOffset = TraceSource.TraceComponent->GetRelativeTransform();
 
@@ -247,20 +248,6 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 						bool OutCanAvoid = Detail->CanAvoid;
 						TArray<FStatusEffect> OutStatusEffect = Detail->StatusEffectList;
 
-						/*
-						float OutDamage = DamageSource.AttackRating * CurAttackContext.AttackDetail[ComboIndex].DamageMultiplier;
-						float OutPoiseDamage = DamageSource.PoiseRating * CurAttackContext.AttackDetail[ComboIndex].PoiseDamageMultiplier;
-						float OutStanceDamage = DamageSource.StanceRating * CurAttackContext.AttackDetail[ComboIndex].StanceDamageMultiplier;
-						EHitResponse OutResponse = CurAttackContext.AttackDetail[ComboIndex].Response;
-						EDamageType OutAttackType = CurAttackContext.AttackDetail[ComboIndex].DamageType;
-						FVector OutHitPoint = Result.ImpactPoint;
-						FString OutHitPointName = Result.PhysMaterial.IsValid() ? Result.PhysMaterial->GetName() : FString();
-						bool OutCanBlocked = CurAttackContext.AttackDetail[ComboIndex].CanBlocked;
-						bool OutCanParried = CurAttackContext.AttackDetail[ComboIndex].CanParried;
-						bool OutCanAvoid = CurAttackContext.AttackDetail[ComboIndex].CanAvoid;
-						TArray<FStatusEffect> OutStatusEffect = CurAttackContext.AttackDetail[ComboIndex].StatusEffectList;
-						*/
-
 						FAttackRequest OutAttackData(
 							OutDamage,
 							OutStanceDamage,
@@ -293,7 +280,7 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 	}
 }
 
-void UAttackComponent::BeginAttackTrace(FGameplayTag Profile, const UAnimSequence* AnimKey, FName WindowName)
+void UAttackComponent::BeginAttackTrace(FGameplayTag Profile, const UAnimSequence* AnimKey, FName WindowName, float StartTime)
 {
 	if (!AnimKey) return;
 
@@ -303,6 +290,23 @@ void UAttackComponent::BeginAttackTrace(FGameplayTag Profile, const UAnimSequenc
 	UE_LOG(Log_Attack, Error, TEXT("[AttackComponent] Profile Tag = %s"), *Profile.ToString());
 
 	CurrentSeg = Subsys->GetAnimBoneData(Profile, AnimKey, WindowName);
+	LastTraceTime = StartTime;
+}
+
+void UAttackComponent::TickAttackTrace(float DeltaTime, bool bDrawDebug)
+{
+	if (!CurrentSeg) return;
+
+	const float PrevTime = LastTraceTime;
+	const float CurrentTime = LastTraceTime + DeltaTime;
+
+	if (CurrentSeg->EndTime < CurrentTime || CurrentSeg->StartTime > CurrentTime) return;
+
+	ExecuteAttackTrace(PrevTime, CurrentTime, bDrawDebug);
+
+	UE_LOG(Log_Attack, Error, TEXT("PrevTime : %f, CurrentTime : %f"), PrevTime, CurrentTime);
+
+	LastTraceTime = CurrentTime;
 }
 
 void UAttackComponent::EndAttackTrace(float EndTime, bool bDrawDebug)
@@ -311,4 +315,5 @@ void UAttackComponent::EndAttackTrace(float EndTime, bool bDrawDebug)
 
 	UE_LOG(Log_Attack, Error, TEXT("PrevTime : %f, EndTime : %f"), LastTraceTime, EndTime);
 	ExecuteAttackTrace(LastTraceTime, EndTime, bDrawDebug);
+	LastTraceTime = 0.0f;
 }

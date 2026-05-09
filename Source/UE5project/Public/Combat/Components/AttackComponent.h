@@ -58,10 +58,13 @@ public:
 	virtual void PlayAnimation(FAttackContext AttackInfo, int32 index, float Playrate = 1.0f);
 	virtual void ExecuteAttackTrace(float StartTime, float EndTime, bool bDrawDebug = false);
 
-	void BeginAttackTrace(FGameplayTag Profile, const UAnimSequence* AnimKey, FName WindowName);
+	void BeginAttackTrace(FGameplayTag Profile, const UAnimSequence* AnimKey, FName WindowName, float StartTime);
+	void TickAttackTrace(float DeltaTime, bool bDrawDebug);
 	void EndAttackTrace(float EndTime, bool bDrawDebug = false);
 
 	void InitAttackContextSet(const FAttackContextSet* InContextSet){CurAttackContextSet = InContextSet;}
+
+	FORCEINLINE float GetLastTraceTime() { return LastTraceTime; }
 
 	FOnMultiDelegate OnAttackFinished;
 
@@ -79,5 +82,5 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = Attack)
 		int32 ComboIndex = 0;
 
-		float LastTraceTime = 0.0f;
+	float LastTraceTime = 0.0f;
 };

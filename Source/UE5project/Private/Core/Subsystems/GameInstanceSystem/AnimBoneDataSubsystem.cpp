@@ -34,8 +34,7 @@ const FBoneTransformSegment* UAnimBoneDataSubsystem::GetAnimBoneData(const FGame
 		return nullptr;
 	}
 
-	TSoftObjectPtr<UAttackBoneDataRegistry>* AnimBoneDataPtr = 
-		AnimBoneDataRegistryRoot->AnimBoneDataRegistry.Find(SkeletonTag);
+	TSoftObjectPtr<UAttackBoneDataRegistry>* AnimBoneDataPtr = AnimBoneDataRegistryRoot->AnimBoneDataRegistry.Find(SkeletonTag);
 
 	if (!AnimBoneDataPtr)
 	{

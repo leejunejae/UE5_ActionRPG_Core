@@ -94,7 +94,7 @@ float FCombatPattern::CalcScore(const FCombatContext& Ctx) const
         {
         case ECombatActionType::Attack:  Score *= 0.15f; break;
         case ECombatActionType::Recover: Score *= 0.9f;  break;
-        case ECombatActionType::Chase:   Score *= 1.1f;  break;
+        case ECombatActionType::Reposition:   Score *= 1.1f;  break;
         case ECombatActionType::Alert:   Score *= 1.3f;  break;
         default:                         Score *= 0.7f;  break;
         }
@@ -121,7 +121,7 @@ float FCombatPattern::CalcScore(const FCombatContext& Ctx) const
         Score *= FMath::Lerp(0.9f, 1.4f, 1.f - Ctx.HPPercent);
         break;
 
-    case ECombatActionType::Chase:
+    case ECombatActionType::Reposition:
         // 멀수록 올라가고, 너무 가까우면 내려가게
         Score *= FMath::Lerp(0.7f, 1.6f, RampNormal(Ctx.DistanceToTarget, 300.f, 900.f));
         if (Ctx.DistanceToTarget < 250.f) Score *= 0.2f;

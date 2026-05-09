@@ -233,6 +233,10 @@ bool AEnemyBase::ApplyEnemyStats(const FEnemyStats* Stat)
 	RuntimeStats.BaseStats.PhysicalDefense = Stat->PhysicalDefense;
 	RuntimeStats.BaseStats.MagicDefense = Stat->MagicDefense;
 	RuntimeStats.BaseStats.Resistance = Stat->Resistance;
+	RuntimeStats.MagicAttackPower = Stat->MagicAttackPower;
+	RuntimeStats.PhysicalAttackPower = Stat->PhysicalAttackPower;
+	RuntimeStats.PoiseAttackPower = Stat->PoiseAttackPower;
+	RuntimeStats.StaminaAttackPower = Stat->StaminaAttackPower;
 	RuntimeStats.Stance.InitResource(Stat->Stance);
 
 	StatComponent->InitializeNPCStats(RuntimeStats);
@@ -250,11 +254,13 @@ FAttackTraceSource AEnemyBase::GetAttackTraceSource(EAttackSourceType AttackSour
 	{
 		OutSource.TraceComponent = MainWeapon;
 		OutSource.Radius = 10.0f;
+		break;
 	}
 	case EAttackSourceType::OffHand:
 	{
 		OutSource.TraceComponent = SubEquip;
 		OutSource.Radius = 10.0f;
+		break;
 	}
 	}
 
@@ -292,6 +298,10 @@ void AEnemyBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 			UE_LOG(Log_Hit, Log, TEXT("[EnemyBase] %s stagger occurred"), *Owner->GetName());
 			FHitReactionRequest InputReaction = { Response,HitAngle };
 			HitReactionComponent->ExecuteHitResponse(InputReaction);
+			if (AEnemyBaseAIController* AI = Cast<AEnemyBaseAIController>(GetController()))
+			{
+
+			}
 		}
 		break;
 	}

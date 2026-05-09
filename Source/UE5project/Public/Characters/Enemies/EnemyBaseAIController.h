@@ -19,6 +19,7 @@ enum class EAIBehaviorState : uint8
 	Normal UMETA(DisplayName = "Normal"),
 	Alert UMETA(DisplayName = "Alert"),
 	Combat UMETA(DisplayName = "Combat"),
+    Stagger UMETA(DisplayName = "Stagger"),
 	Flee UMETA(DisplayName = "Flee"),
 };
 
@@ -248,6 +249,12 @@ private:
     void PushToBlackboard(AActor* TargetActor);
 
 	bool bHostileMonitoring = false;
+
+#pragma region State : Stagger
+public:
+    void OnStaggeredStarted();
+    void OnStaggeredEnded();
+#pragma endregion State : Stagger
 
 public:
     //FORCEINLINE FThreatEntry GetHostileEntry(AActor* Hostile) const { return HostileMap.Find(Hostile); }

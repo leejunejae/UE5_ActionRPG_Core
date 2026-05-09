@@ -19,7 +19,7 @@ enum class ECombatActionType : uint8
     Attack  UMETA(DisplayName = "Attack"),
     Defend   UMETA(DisplayName = "Defend"),
     Evasion   UMETA(DisplayName = "Evasion"),
-    Chase   UMETA(DisplayName = "Chase"),
+    Reposition   UMETA(DisplayName = "Reposition"),
     Alert   UMETA(DisplayName = "Alert"),
     Recover   UMETA(DisplayName = "Recover"),
 };

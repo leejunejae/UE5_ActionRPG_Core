@@ -1,6 +1,5 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "Characters/Player/PlayerBase.h"
 
 // 이동
@@ -56,14 +55,25 @@
 //유틸리티
 #include "Utils/CoreLog.h"
 
-// Sets default values
+/* ============================================================
+ *  Cached Gameplay Tags (static 초기화)
+ * ============================================================ */
+const FGameplayTag APlayerBase::ActionTag_Attack = FGameplayTag::RequestGameplayTag(TEXT("Action.Attack"));
+const FGameplayTag APlayerBase::ActionTag_Jump = FGameplayTag::RequestGameplayTag(TEXT("Action.Jump"));
+const FGameplayTag APlayerBase::ActionTag_Dodge = FGameplayTag::RequestGameplayTag(TEXT("Action.Dodge"));
+const FGameplayTag APlayerBase::ActionTag_Block = FGameplayTag::RequestGameplayTag(TEXT("Action.Block"));
+const FGameplayTag APlayerBase::ActionTag_Interact = FGameplayTag::RequestGameplayTag(TEXT("Action.Interact"));
+const FGameplayTag APlayerBase::ActionTag_Ride = FGameplayTag::RequestGameplayTag(TEXT("Action.Ride"));
+
+/* ============================================================
+ *  Constructor
+ * ============================================================ */
 APlayerBase::APlayerBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer
 		.SetDefaultSubobjectClass<UPlayerAttackComponent>(TEXT("AttackComponent"))
 		.SetDefaultSubobjectClass<UPlayerHitReactionComponent>(TEXT("HitReactionComponent"))
 		.SetDefaultSubobjectClass<UPlayerStatusComponent>(TEXT("CharacterStatusComponent")))
 {
-	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
 
 	StatComponent = CreateDefaultSubobject<UPlayerStatComponent>(TEXT("StatComponent"));
@@ -86,7 +96,6 @@ APlayerBase::APlayerBase(const FObjectInitializer& ObjectInitializer)
 	GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -90.0f));
 
 	GetCapsuleComponent()->SetCapsuleHalfHeight(90.0f);
-	//GetMesh()->SetOwnerNoSee(true);
 
 	static ConstructorHelpers::FClassFinder<UDefaultWidget>Class_DefualtWidget(TEXT("/Game/00_Character/Data/DefaultWidget_BP"));
 	if (Class_DefualtWidget.Succeeded()) DefaultWidgetClass = Class_DefualtWidget.Class;
@@ -99,7 +108,6 @@ APlayerBase::APlayerBase(const FObjectInitializer& ObjectInitializer)
 
 	GetMesh()->SetGenerateOverlapEvents(true);
 
-	//CanMovementInput = true;
 	CurLocomotionGait = ELocomotionGait::Jog;
 
 	GetCharacterMovement()->MaxWalkSpeed = 450.0f;
@@ -112,7 +120,6 @@ APlayerBase::APlayerBase(const FObjectInitializer& ObjectInitializer)
 
 	GetCharacterMovement()->GravityScale = 1.2f;
 	GetCharacterMovement()->GroundFriction = 10.0f;
-	//GetCharacterMovement()->MaxStepHeight
 
 	EquipmentComponent->SetWeaponSocketName(FName("S_Sword"));
 	EquipmentComponent->SetSubEquipSocketName(FName("S_SubEquip"));
@@ -122,7 +129,9 @@ APlayerBase::APlayerBase(const FObjectInitializer& ObjectInitializer)
 	Tags.Add("Player");
 }
 
-// Called when the game starts or when spawned
+/* ============================================================
+ *  BeginPlay
+ * ============================================================ */
 void APlayerBase::BeginPlay()
 {
 	Super::BeginPlay();
@@ -155,7 +164,9 @@ void APlayerBase::BeginPlay()
 	InitSpringArmLocation = SpringArm->GetRelativeLocation();
 }
 
-// Called every frame
+/* ============================================================
+ *  Tick
+ * ============================================================ */
 void APlayerBase::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -165,8 +176,7 @@ void APlayerBase::Tick(float DeltaTime)
 		FRotator CurrentRot = GetActorRotation();
 		FRotator NewRot = FMath::RInterpConstantTo(CurrentRot, InputRotation, DeltaTime, ForcedRotationSpeed);
 
-		// 일정 각도 이하로 차이 나면 고정
-		if (FMath::Abs((NewRot - InputRotation).Yaw) < 1.0f)
+		if (FMath::Abs((NewRot - InputRotation).Yaw) < 1.0f) // 일정 각도 이하로 차이 나면 고정
 		{
 			SetActorRotation(InputRotation);
 			bForcedRotatingInputDirection = false;
@@ -194,9 +204,9 @@ void APlayerBase::Tick(float DeltaTime)
 	if (!LastInputDirection.IsNearlyZero())
 	{
 		FVector MovementDirection = GetVelocity().GetSafeNormal();
-		//GetActorForwardVector();
-	// 입력 방향 (Movement Input)
-	// 캐릭터 위치
+		// 입력 방향 (Movement Input)
+		// 
+		// 캐릭터 위치
 		FVector DebugStartLocation = GetActorLocation() - FVector(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 		// 디버깅 시작위치
 		float DotProduct = FVector::DotProduct(MovementDirection, LastInputDirection);
@@ -210,9 +220,8 @@ void APlayerBase::Tick(float DeltaTime)
 
 		FText DebugAxisText = FText::AsNumber(DegreeAngle, &FormatOptions);
 		FString DebugAxisString = DebugAxisText.ToString();
-		//FString::Append(DebugAxisText);
 
-	// 디버깅용 길이
+		// 디버깅용 길이
 		float DebugLineLength = 100.0f;
 
 		// 이동 방향 표시

@@ -236,7 +236,16 @@ struct FNPCStats
 		FCharacterStats BaseStats;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float AttackPower;
+		float PhysicalAttackPower = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+		float MagicAttackPower = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+		float PoiseAttackPower = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+		float StaminaAttackPower = 0.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		FResourceStat Stance;

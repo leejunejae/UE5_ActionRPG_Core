@@ -379,4 +379,15 @@ public:
 	FORCEINLINE ULockOnComponent* GetLockOnComponent() const { return LockOnComponent; }
 
 #pragma endregion LockOn
+
+/* ============================================================
+ *  Cached Action Tags (매 프레임 RequestGameplayTag 호출 방지)
+ * ============================================================ */
+private:
+	static const FGameplayTag ActionTag_Attack;
+	static const FGameplayTag ActionTag_Jump;
+	static const FGameplayTag ActionTag_Dodge;
+	static const FGameplayTag ActionTag_Block;
+	static const FGameplayTag ActionTag_Interact;
+	static const FGameplayTag ActionTag_Ride;
 };

@@ -96,6 +96,8 @@ void UHitReactionComponent::ExecuteHitResponse(const FHitReactionRequest Reactio
 	}
 
 	PlayReaction(CurHitReaction, MatchInfo.SectionName);
+
+	HitStartDelegate.Broadcast();
 }
 
 void UHitReactionComponent::PlayReaction(const FHitReactionInfo HitReaction, const FName SectionName)
@@ -140,7 +142,6 @@ void UHitReactionComponent::OnHitReactionEnded(UAnimMontage* Montage, bool bInte
 
 	if (AActor* Owner = GetOwner())UE_LOG(Log_Hit, Log, TEXT("[HitReactionComponent] %s stagger response End"), *Owner->GetName());
 
-	//ICharacterStatusInterface::Execute_SetGroundStance(CachedPlayerStatus.GetObject(), EGroundStance::Normal);
 	HitEndDelegate.Broadcast();
 }
 
