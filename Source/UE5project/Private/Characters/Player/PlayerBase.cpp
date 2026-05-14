@@ -35,7 +35,7 @@
 #include "Characters/Player/PlayerRide.h"
 
 // 인터페이스
-#include "Interaction/Interfaces/InteractInterface.h" ///삭제 예정
+#include "Interaction/Interfaces/InteractInterface.h"
 #include "Characters/Rideable/Interfaces/RideInterface.h"
 
 // 유저 컴포넌트
@@ -52,18 +52,9 @@
 // 데이터 참조
 #include "Characters/Player/PlayerConfig.h"
 
-//유틸리티
+// 유틸리티
+#include "Utils/GameplayTagsBase.h"
 #include "Utils/CoreLog.h"
-
-/* ============================================================
- *  Cached Gameplay Tags (static 초기화)
- * ============================================================ */
-const FGameplayTag APlayerBase::ActionTag_Attack = FGameplayTag::RequestGameplayTag(TEXT("Action.Attack"));
-const FGameplayTag APlayerBase::ActionTag_Jump = FGameplayTag::RequestGameplayTag(TEXT("Action.Jump"));
-const FGameplayTag APlayerBase::ActionTag_Dodge = FGameplayTag::RequestGameplayTag(TEXT("Action.Dodge"));
-const FGameplayTag APlayerBase::ActionTag_Block = FGameplayTag::RequestGameplayTag(TEXT("Action.Block"));
-const FGameplayTag APlayerBase::ActionTag_Interact = FGameplayTag::RequestGameplayTag(TEXT("Action.Interact"));
-const FGameplayTag APlayerBase::ActionTag_Ride = FGameplayTag::RequestGameplayTag(TEXT("Action.Ride"));
 
 /* ============================================================
  *  Constructor
@@ -97,8 +88,8 @@ APlayerBase::APlayerBase(const FObjectInitializer& ObjectInitializer)
 
 	GetCapsuleComponent()->SetCapsuleHalfHeight(90.0f);
 
-	static ConstructorHelpers::FClassFinder<UDefaultWidget>Class_DefualtWidget(TEXT("/Game/00_Character/Data/DefaultWidget_BP"));
-	if (Class_DefualtWidget.Succeeded()) DefaultWidgetClass = Class_DefualtWidget.Class;
+	static ConstructorHelpers::FClassFinder<UDefaultWidget> Class_DefaultWidget(TEXT("/Game/00_Character/Data/DefaultWidget_BP"));
+	if (Class_DefaultWidget.Succeeded()) DefaultWidgetClass = Class_DefaultWidget.Class;
 
 	static ConstructorHelpers::FObjectFinder<UAnimMontage> RollMontageAsset(TEXT("/Game/04_Animations/Player/SSH/Roll/Normal/Roll_Montage.Roll_Montage"));
 	if (RollMontageAsset.Succeeded())
@@ -115,7 +106,7 @@ APlayerBase::APlayerBase(const FObjectInitializer& ObjectInitializer)
 	GetCharacterMovement()->MaxAcceleration = 800.0f;
 	GetCharacterMovement()->bUseSeparateBrakingFriction = true;
 	GetCharacterMovement()->JumpZVelocity = 500.0f;
-	GetCharacterMovement()->AirControl = 0.2f; // 1.0f;
+	GetCharacterMovement()->AirControl = 0.2f;
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 
 	GetCharacterMovement()->GravityScale = 1.2f;
@@ -176,7 +167,7 @@ void APlayerBase::Tick(float DeltaTime)
 		FRotator CurrentRot = GetActorRotation();
 		FRotator NewRot = FMath::RInterpConstantTo(CurrentRot, InputRotation, DeltaTime, ForcedRotationSpeed);
 
-		if (FMath::Abs((NewRot - InputRotation).Yaw) < 1.0f) // 일정 각도 이하로 차이 나면 고정
+		if (FMath::Abs((NewRot - InputRotation).Yaw) < 1.0f)
 		{
 			SetActorRotation(InputRotation);
 			bForcedRotatingInputDirection = false;
@@ -200,67 +191,40 @@ void APlayerBase::Tick(float DeltaTime)
 		ApplyLockOnRotation(DeltaTime);
 	}
 
+	// 디버그 드로잉 (기존 유지)
 	FVector LastInputDirection = GetLastMovementInputVector().GetSafeNormal();
 	if (!LastInputDirection.IsNearlyZero())
 	{
 		FVector MovementDirection = GetVelocity().GetSafeNormal();
-		// 입력 방향 (Movement Input)
-		// 
-		// 캐릭터 위치
 		FVector DebugStartLocation = GetActorLocation() - FVector(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
-		// 디버깅 시작위치
 		float DotProduct = FVector::DotProduct(MovementDirection, LastInputDirection);
-		// 아크코사인(Arccos)을 이용해 각도 구하기 (라디안)
 		float RadianAngle = FMath::Acos(DotProduct);
-		// 라디안을 각도로 변환
 		float DegreeAngle = FMath::RadiansToDegrees(RadianAngle);
 
 		FNumberFormattingOptions FormatOptions;
-		FormatOptions.SetMaximumFractionalDigits(1); // 보기 좋게 1자리
+		FormatOptions.SetMaximumFractionalDigits(1);
 
 		FText DebugAxisText = FText::AsNumber(DegreeAngle, &FormatOptions);
 		FString DebugAxisString = DebugAxisText.ToString();
 
-		// 디버깅용 길이
 		float DebugLineLength = 100.0f;
 
-		// 이동 방향 표시
-		DrawDebugDirectionalArrow(
-			GetWorld(),
-			DebugStartLocation,
+		DrawDebugDirectionalArrow(GetWorld(), DebugStartLocation,
 			DebugStartLocation + MovementDirection * DebugLineLength,
-			50.0f,          // 화살표 크기
-			FColor::Green,   // 이동 방향은 녹색
-			false,           // 영구 표시 여부 (false: 짧은 시간만 표시)
-			0.0f,            // 표시 시간
-			0,               // 두께
-			2.0f             // 선 두께
-		);
+			50.0f, FColor::Green, false, 0.0f, 0, 2.0f);
 
-		// 입력 방향 표시
-		DrawDebugDirectionalArrow(
-			GetWorld(),
-			DebugStartLocation,
+		DrawDebugDirectionalArrow(GetWorld(), DebugStartLocation,
 			DebugStartLocation + LastInputDirection * DebugLineLength,
-			50.0f,
-			FColor::Blue,    // 입력 방향은 파란색
-			false,
-			0.0f,
-			0,
-			2.0f
-		);
+			50.0f, FColor::Blue, false, 0.0f, 0, 2.0f);
 
-		DrawDebugString(
-			GetWorld(),
-			DebugStartLocation,
-			DebugAxisString,
-			0,
-			FColor::White,
-			0.0f
-		);
+		DrawDebugString(GetWorld(), DebugStartLocation, DebugAxisString,
+			0, FColor::White, 0.0f);
 	}
 }
 
+/* ============================================================
+ *  ApplyConfig
+ * ============================================================ */
 void APlayerBase::ApplyConfig()
 {
 	if (!Config) { ensureMsgf(false, TEXT("Config missing")); return; }
@@ -272,6 +236,9 @@ void APlayerBase::ApplyConfig()
 	GetAttackComponent()->SetAttackDA(Config->AttackData);
 }
 
+/* ============================================================
+ *  Camera
+ * ============================================================ */
 void APlayerBase::CameraSetting()
 {
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SPRINGARM"));
@@ -296,7 +263,9 @@ void APlayerBase::CameraSetting()
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 300.0f, 0.0f);
 }
 
-// Called to bind functionality to input
+/* ============================================================
+ *  Input Binding
+ * ============================================================ */
 void APlayerBase::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -309,16 +278,16 @@ void APlayerBase::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 
 		EnhancedInputComponent->BindAction(InputConfig->Look, ETriggerEvent::Triggered, this, &APlayerBase::Look);
 
-		EnhancedInputComponent->BindAction(InputConfig->Jump, ETriggerEvent::Triggered, this, &APlayerBase::Jump);
+		// ★ 변경: 커브 체크 → RequestAction 방식
+		EnhancedInputComponent->BindAction(InputConfig->Jump, ETriggerEvent::Triggered, this, &APlayerBase::JumpInput);
+		EnhancedInputComponent->BindAction(InputConfig->Dodge, ETriggerEvent::Triggered, this, &APlayerBase::DodgeInput);
 
-		EnhancedInputComponent->BindAction(InputConfig->Block, ETriggerEvent::Ongoing, this, &APlayerBase::OnBlock);
-		EnhancedInputComponent->BindAction(InputConfig->Block, ETriggerEvent::Triggered, this, &APlayerBase::OffBlock);
+		EnhancedInputComponent->BindAction(InputConfig->Block, ETriggerEvent::Ongoing, this, &APlayerBase::BlockInput);
+		EnhancedInputComponent->BindAction(InputConfig->Block, ETriggerEvent::Triggered, this, &APlayerBase::BlockInputEnd);
 
-		EnhancedInputComponent->BindAction(InputConfig->Parry, ETriggerEvent::Triggered, this, &APlayerBase::Parry);
+		//EnhancedInputComponent->BindAction(InputConfig->Parry, ETriggerEvent::Triggered, this, &APlayerBase::ParryInput);
 
-		EnhancedInputComponent->BindAction(InputConfig->Dodge, ETriggerEvent::Triggered, this, &APlayerBase::Dodge);
-
-		EnhancedInputComponent->BindAction(InputConfig->Interact, ETriggerEvent::Triggered, this, &APlayerBase::Interact);
+		EnhancedInputComponent->BindAction(InputConfig->Interact, ETriggerEvent::Triggered, this, &APlayerBase::InteractInput);
 
 		EnhancedInputComponent->BindAction(InputConfig->Sprint, ETriggerEvent::Started, this, &APlayerBase::Sprint);
 		EnhancedInputComponent->BindAction(InputConfig->Sprint, ETriggerEvent::Triggered, this, &APlayerBase::Jog);
@@ -326,7 +295,7 @@ void APlayerBase::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 		EnhancedInputComponent->BindAction(InputConfig->Walk, ETriggerEvent::Started, this, &APlayerBase::Walk);
 		EnhancedInputComponent->BindAction(InputConfig->Walk, ETriggerEvent::Triggered, this, &APlayerBase::Jog);
 
-		EnhancedInputComponent->BindAction(InputConfig->SpawnRide, ETriggerEvent::Triggered, this, &APlayerBase::SpawnRide);
+		EnhancedInputComponent->BindAction(InputConfig->SpawnRide, ETriggerEvent::Triggered, this, &APlayerBase::SpawnRideInput);
 
 		EnhancedInputComponent->BindAction(InputConfig->Attack, ETriggerEvent::Started, this, &APlayerBase::AttackInput);
 		EnhancedInputComponent->BindAction(InputConfig->Attack, ETriggerEvent::Triggered, this, &APlayerBase::AttackInputEnd);
@@ -340,6 +309,9 @@ void APlayerBase::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 	}
 }
 
+/* ============================================================
+ *  PostInitializeComponents — 델리게이트 바인딩
+ * ============================================================ */
 void APlayerBase::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
@@ -349,19 +321,50 @@ void APlayerBase::PostInitializeComponents()
 	if (GetCharacterStatusComponent())
 	{
 		GetCharacterStatusComponent()->OnDeath.AddUObject(this, &APlayerBase::OnDeath);
+
+		// ★ 버퍼에서 소비된 행동의 실제 실행을 위한 바인딩
+		GetCharacterStatusComponent()->OnActionConsumed.BindUObject(this, &APlayerBase::HandleBufferedAction);
+		GetAttackComponent()->OnAttackFinished.AddUObject(this, &APlayerBase::OnActionFinished);
 	}
 }
 
-/* Input Action */
+/* ============================================================
+ *  버퍼 소비 콜백 — 버퍼링된 입력이 Window 열릴 때 자동 실행
+ * ============================================================ */
+void APlayerBase::HandleBufferedAction(const FGameplayTag& ActionTag)
+{
+	if (ActionTag == TAG_Action_Attack)
+	{
+		ExecuteAttack();
+	}
+	else if (ActionTag == TAG_Action_Jump)
+	{
+		ExecuteJump();
+	}
+	else if (ActionTag == TAG_Action_Dodge)
+	{
+		ExecuteDodge();
+	}
+	else if (ActionTag == TAG_Action_Guard)
+	{
+		ExecuteBlock();
+	}
+	else if (ActionTag == TAG_Action_Interact)
+	{
+		ExecuteInteract();
+	}
+}
+
+/* ============================================================
+ *  Move / Look
+ * ============================================================ */
 void APlayerBase::Move(const FInputActionValue& value)
 {
 	IsMovementInput = true;
 
 	const FVector2D DirectionValue = value.Get<FVector2D>();
 
-	switch (GetCharacterStatusComponent()->GetCharacterState_Native())
-	{
-	case ECharacterState::Ground:
+	if(GetCharacterStatusComponent()->GetState() == TAG_State_Ground)
 	{
 		const FRotator Rotation = GetControlRotation();
 		const FRotator YawRotation(0, Rotation.Yaw, 0);
@@ -380,21 +383,13 @@ void APlayerBase::Move(const FInputActionValue& value)
 
 		AddMovementInput(UKismetMathLibrary::GetForwardVector(YawRotation), MovementScale.Y);
 		AddMovementInput(UKismetMathLibrary::GetRightVector(YawRotation), MovementScale.X);
-		break;
 	}
-	case ECharacterState::Ladder:
+	else if(GetCharacterStatusComponent()->GetState() == TAG_State_Ladder)
 	{
 		IsMovementInput = FMath::IsNearlyZero(DirectionValue.Y) ? false : true;
 		if (!IsMovementInput) return;
-		
-		DirectionValue.Y > 0.0f ? GetClimbComponent()->ClimbUpLadder() : GetClimbComponent()->ClimbDownLadder();
-		break;
 
-	}
-	default:
-	{
-		break;
-	}
+		DirectionValue.Y > 0.0f ? GetClimbComponent()->ClimbUpLadder() : GetClimbComponent()->ClimbDownLadder();
 	}
 }
 
@@ -415,9 +410,95 @@ void APlayerBase::EndMoveInput()
 	IsMovementInput = false;
 }
 
-void APlayerBase::Dodge()
+/* ============================================================
+ *  Combat Input — 판단부 (RequestAction으로 체크/버퍼)
+ * ============================================================ */
+void APlayerBase::AttackInput()
 {
-	if (CharacterBaseAnim->GetCurveValue(FName("EnableDodge")) < 0.9f) return;
+	UE_LOG(Log_Player_Input, Error, TEXT("[APlayerBase] Input AttackInput"));
+	if (GetCharacterStatusComponent()->RequestAction(TAG_Action_Attack))
+	{
+		UE_LOG(Log_Player_Input, Error, TEXT("[APlayerBase] Can Attack Action"));
+		ExecuteAttack(); // 즉시 가능하면 바로 실행
+	}
+	// else: 버퍼에 저장됨 → Window 열리면 HandleBufferedAction → ExecuteAttack
+}
+
+void APlayerBase::AttackInputEnd()
+{
+	IsAttackInput = false;
+}
+
+void APlayerBase::JumpInput()
+{
+	if (GetCharacterStatusComponent()->RequestAction(TAG_Action_Jump))
+	{
+		ExecuteJump();
+	}
+}
+
+void APlayerBase::DodgeInput()
+{
+	if (GetCharacterStatusComponent()->RequestAction(TAG_Action_Dodge))
+	{
+		ExecuteDodge();
+	}
+}
+
+void APlayerBase::BlockInput()
+{
+	if (!GetCharacterStatusComponent()->CanTryAction(TAG_Action_Guard)) return;
+	ExecuteBlock();
+}
+
+void APlayerBase::BlockInputEnd()
+{
+	IsBlockInput = false;
+	GetCharacterStatusComponent()->SetGroundStance_Native(EGroundStance::Normal);
+	OnActionFinished(false);
+}
+
+void APlayerBase::InteractInput()
+{
+	if (!GetCharacterStatusComponent()->CanTryAction(TAG_Action_Interact)) return;
+	ExecuteInteract();
+}
+
+void APlayerBase::SpawnRideInput()
+{
+	ExecuteSpawnRide();
+}
+
+/* ============================================================
+ *  Combat Execute — 실행부 (순수 로직, 판단 없음)
+ * ============================================================ */
+void APlayerBase::ExecuteAttack()
+{
+	GetCharacterStatusComponent()->SwitchAction(TAG_Action_Attack);
+
+	IsAttackInput = true;
+	GetAttackComponent()->ExecuteAttack(FName("DefaultCombo"));
+}
+
+void APlayerBase::ExecuteJump()
+{
+	GetCharacterStatusComponent()->SwitchAction(TAG_Action_Jump);
+
+	if (CharacterBaseAnim->GetCurrentActiveMontage())
+	{
+		CharacterBaseAnim->Montage_Stop(0.1f);
+		GetWorld()->GetTimerManager().SetTimerForNextTick(this, &Super::Jump);
+	}
+	else
+	{
+		GetCharacterStatusComponent()->SetGroundStance_Native(EGroundStance::Jump);
+		Super::Jump();
+	}
+}
+
+void APlayerBase::ExecuteDodge()
+{
+	GetCharacterStatusComponent()->SwitchAction(TAG_Action_Dodge);
 
 	const FRotator Rotation = GetControlRotation();
 	const FRotator YawRotation(0, Rotation.Yaw, 0);
@@ -472,44 +553,88 @@ void APlayerBase::Dodge()
 	CharacterBaseAnim->Montage_JumpToSection(RollDirectionName, RollMontage);
 
 	CharacterStatusComponent->SetGroundStance_Native(EGroundStance::Dodge);
+
+	FOnMontageEnded EndDelegate;
+	EndDelegate.BindUObject(this, &APlayerBase::OnDodgeMontageEnded);
+	CharacterBaseAnim->Montage_SetEndDelegate(EndDelegate, RollMontage);
 }
 
-void APlayerBase::Jump()
+void APlayerBase::ExecuteBlock()
 {
-	if (CharacterBaseAnim->GetCurveValue(FName("EnableJump")) < 0.9f)
-		return;
+	GetCharacterStatusComponent()->SwitchAction(TAG_Action_Guard);
 
-	if (CharacterBaseAnim->GetCurrentActiveMontage())
+	IsBlockInput = true;
+	GetCharacterStatusComponent()->SetGroundStance_Native(EGroundStance::Block);
+}
+
+void APlayerBase::ExecuteInteract()
+{
+	GetCharacterStatusComponent()->SwitchAction(TAG_Action_Interact);
+
+	if (IsInteraction)
 	{
-		CharacterBaseAnim->Montage_Stop(0.1f);
-		GetWorld()->GetTimerManager().SetTimerForNextTick(this, &Super::Jump);
+		GetController()->SetIgnoreMoveInput(false);
+		GetController()->StopMovement();
+		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+		IsInteraction = false;
+		return;
 	}
 	else
 	{
-		GetCharacterStatusComponent()->SetGroundStance_Native(EGroundStance::Jump);
-		Super::Jump();
+		bool InteractTargetValid = InteractComponent->SetInteractActorByDegree(this, 60.0f);
+
+		if (!InteractTargetValid)
+			return;
+
+		GetController()->SetIgnoreMoveInput(true);
+		IsInteraction = InteractComponent->MovetoInteractPos();
 	}
-	//GetCharacterMovement()->bOrientRotationToMovement = false;
 }
 
+void APlayerBase::ExecuteSpawnRide()
+{
+	Ride = GetWorld()->SpawnActor<APlayerRide>(RideClass, GetActorTransform());
+	if (!Ride)
+	{
+		UE_LOG(Log_RideSpawn, Warning, TEXT("[APlayerBase] %s : Horse was Not Spawned"), *GetName());
+		return;
+	}
+
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+
+	IRideInterface::Execute_Mount(Ride, this, GetVelocity());
+	GetCharacterMovement()->DisableMovement();
+
+	CurRideStance = ERideStance::Mount;
+	GetCharacterStatusComponent()->SetState(TAG_State_Ride);
+
+	GetWorldTimerManager().SetTimer(MountTimerHandle, this, &APlayerBase::MountTimer, 0.01f, true);
+}
+
+void APlayerBase::OnActionFinished(bool bInterrupted)
+{
+	if(!bInterrupted) GetCharacterStatusComponent()->ClearAction();
+}
+
+void APlayerBase::OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	OnActionFinished(bInterrupted);
+}
+
+/* ============================================================
+ *  Landed
+ * ============================================================ */
 void APlayerBase::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
 	GetCharacterStatusComponent()->SetGroundStance_Native(EGroundStance::Normal);
 	GetCharacterMovement()->bOrientRotationToMovement = true;
-
-	const bool bNoMoveInput = false;
-	//GetInputAxisValue("MoveAction") == 0.f;
-
-	if (bNoMoveInput)
-	{
-		FVector V = GetCharacterMovement()->Velocity;
-		V.X *= 0.1f;
-		V.Y *= 0.1f;
-		GetCharacterMovement()->Velocity = V;
-	}
+	OnActionFinished(false);
 }
 
+/* ============================================================
+ *  Locomotion
+ * ============================================================ */
 void APlayerBase::Walk()
 {
 	CurLocomotionGait = ELocomotionGait::Walk;
@@ -548,80 +673,6 @@ void APlayerBase::SetRotationInputDirection_Implementation()
 	}
 }
 
-void APlayerBase::Interact()
-{
-	if (IsInteraction)
-	{
-		//bUseControllerRotationYaw = true;
-		//CurrentState = ECharacterState::Ground;
-		GetController()->SetIgnoreMoveInput(false);
-		GetController()->StopMovement();
-		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
-		IsInteraction = false;
-		return;
-	}
-	else
-	{
-		bool InteractTargetValid = InteractComponent->SetInteractActorByDegree(this, 60.0f);
-
-		if (!InteractTargetValid)
-			return;
-
-		GetController()->SetIgnoreMoveInput(true);
-		IsInteraction = InteractComponent->MovetoInteractPos();
-	}
-}
-
-void APlayerBase::MountEnd()
-{
-	//IInteractInterface::Execute_Interact(Ride, this);
-
-	FTransform MountTransform = IRideInterface::Execute_GetMountTransform(Ride);
-	SetActorLocation(MountTransform.GetLocation());
-	SetActorRotation(MountTransform.GetRotation().Rotator());
-
-	if (GetWorldTimerManager().IsTimerActive(MountTimerHandle))
-	{
-		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		GetWorldTimerManager().ClearTimer(MountTimerHandle);
-	}
-	CurRideStance = ERideStance::Riding;
-}
-
-void APlayerBase::Attack(FName AttackName)
-{
-	GetAttackComponent()->ExecuteAttack(AttackName);
-}
-
-void APlayerBase::AttackInput()
-{
-	if (CharacterBaseAnim->GetCurveValue(FName("EnableAttack")) < 0.9f) return;
-
-	IsAttackInput = true;
-
-	GetAttackComponent()->ExecuteAttack(FName("DefaultCombo"));
-}
-
-void APlayerBase::ChargeAttackTimer()
-{
-	AttackChargeTime += 0.1f;
-	UE_LOG(LogTemp, Warning, TEXT("AttackTimer : %f"), AttackChargeTime);
-	if (AttackChargeTime >= 1.0f || !IsModifierInput || !IsAttackInput)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Reset Timer"));
-		GetAttackComponent()->ExecuteAttack(FName("ChargeAttack"), 2.0f - AttackChargeTime);
-		AttackChargeTime = 0.0f;
-		GetWorldTimerManager().ClearTimer(AttackTimerHandle);
-	}
-}
-
-void APlayerBase::AttackInputEnd()
-{
-	IsAttackInput = false;
-	//UE_LOG(LogTemp, Warning, TEXT("inputend"));
-}
-
 bool APlayerBase::GetIsMovementInput()
 {
 	return IsMovementInput;
@@ -629,17 +680,13 @@ bool APlayerBase::GetIsMovementInput()
 
 float APlayerBase::GetRideSpeed()
 {
-	if (Ride == nullptr)
-		return 0.0f;
-
+	if (Ride == nullptr) return 0.0f;
 	return IRideInterface::Execute_GetRideSpeed(Ride);
 }
 
 float APlayerBase::GetRideDirection()
 {
-	if (Ride == nullptr)
-		return 0.0f;
-
+	if (Ride == nullptr) return 0.0f;
 	return IRideInterface::Execute_GetRideDirection(Ride);
 }
 
@@ -666,68 +713,50 @@ TOptional<FVector> APlayerBase::GetRideIKTargetLoc(EBodyType BoneType)
 	switch (BoneType)
 	{
 	case EBodyType::Hand_L:
-	{
 		return Ride->GetMesh()->DoesSocketExist(FName("Reins_Bn_Hand_L"))
 			? Ride->GetMesh()->GetSocketLocation(FName("Reins_Bn_Hand_L"))
 			: TOptional<FVector>();
-	}
 	case EBodyType::Hand_R:
-	{
 		return Ride->GetMesh()->DoesSocketExist(FName("Reins_Bn_Hand_R"))
 			? Ride->GetMesh()->GetSocketLocation(FName("Reins_Bn_Hand_R"))
 			: TOptional<FVector>();
-	}
 	case EBodyType::Foot_L:
-	{
 		return Ride->GetMesh()->DoesSocketExist(FName("SaddleLeftFootPlace"))
 			? Ride->GetMesh()->GetSocketLocation(FName("SaddleLeftFootPlace"))
 			: TOptional<FVector>();
-	}
 	case EBodyType::Foot_R:
-	{
 		return Ride->GetMesh()->DoesSocketExist(FName("SaddleRightFootPlace"))
 			? Ride->GetMesh()->GetSocketLocation(FName("SaddleRightFootPlace"))
 			: TOptional<FVector>();
-	}
 	default:
-	{
 		return TOptional<FVector>();
-	}
 	}
 }
 
+/* ============================================================
+ *  Interface Implementations
+ * ============================================================ */
 bool APlayerBase::IsPlayer_Implementation()
 {
 	IPlayerInterface::IsPlayer_Implementation();
-
 	return false;
 }
 
 void APlayerBase::RegisterInteractableActor_Implementation(AActor* Interactable)
 {
 	IPlayerInterface::RegisterInteractableActor_Implementation(Interactable);
-
 	InteractComponent->AddInteractObject(Interactable);
-	//InteractActorList.Add(Interactable);
 }
 
 void APlayerBase::DeRegisterInteractableActor_Implementation(AActor* Interactable)
 {
 	IPlayerInterface::DeRegisterInteractableActor_Implementation(Interactable);
-
 	InteractComponent->RemoveInteractObject(Interactable);
 }
 
 void APlayerBase::EndInteraction_Implementation(AActor* Interactable)
 {
 	IPlayerInterface::EndInteraction_Implementation(Interactable);
-
-	if (Interactable->ActorHasTag("Ride"))
-	{
-		//IsRide = false;
-
-		//GetMesh()->SetRelativeLocation(FVector(0.0f, 0.0f, -90.0f));
-	}
 }
 
 void APlayerBase::HandleArrivedInteractionPoint()
@@ -737,8 +766,12 @@ void APlayerBase::HandleArrivedInteractionPoint()
 
 	GetController()->SetIgnoreMoveInput(false);
 
+	GetCharacterStatusComponent()->ClearAction();
+
 	if (InteractActor->ActorHasTag("Ride"))
 	{
+		GetCharacterStatusComponent()->SetState(TAG_State_Ride);
+
 		IInteractInterface::Execute_RegisterInteractActor(InteractActor, this);
 
 		DisableInput(UGameplayStatics::GetPlayerController(GetWorld(), 0));
@@ -746,11 +779,14 @@ void APlayerBase::HandleArrivedInteractionPoint()
 		GetCharacterMovement()->SetMovementMode(MOVE_Flying);
 		Ride = Cast<ARide>(InteractActor);
 		CurRideStance = ERideStance::Mount;
-		GetCharacterStatusComponent()->SetCharacterState_Native(ECharacterState::Ride);
 	}
 	else if (InteractActor->ActorHasTag("Ladder"))
 	{
+		
 		bool IsRequestSuccess = ClimbComponent->RequestEnterLadder(InteractActor);
+		if (!IsRequestSuccess) return;
+
+		GetCharacterStatusComponent()->SetState(TAG_State_Ladder);
 	}
 	else if (InteractActor->ActorHasTag("NPC"))
 	{
@@ -760,24 +796,9 @@ void APlayerBase::HandleArrivedInteractionPoint()
 	IsInteraction = true;
 }
 
-void APlayerBase::OnBlock()
-{
-	if (CharacterBaseAnim->GetCurveValue(FName("EnableBlock")) < 0.9f) return;
-	IsBlockInput = true;
-	GetCharacterStatusComponent()->SetGroundStance_Native(EGroundStance::Block);
-}
-
-void APlayerBase::OffBlock()
-{
-	IsBlockInput = false;
-	GetCharacterStatusComponent()->SetGroundStance_Native(EGroundStance::Normal);
-}
-
-void APlayerBase::Parry()
-{
-	//CharacterStatusComponent
-}
-
+/* ============================================================
+ *  Hit Reaction
+ * ============================================================ */
 void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 {
 	float HitAngle = GetHitReactionComponent()->CalculateHitAngle(AttackInfo.HitPoint);
@@ -799,7 +820,7 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 		GetStatComponent()->ChangePoise(AttackInfo.PoiseDamage, EStatChangeType::Damage);
 		if (GetStatComponent()->GetCommonStats().GetPoise() <= 0.0f && !GetCharacterStatusComponent()->IsDead())
 		{
-			FHitReactionRequest InputReaction = { Response,HitAngle };
+			FHitReactionRequest InputReaction = { Response, HitAngle };
 			GetCharacterStatusComponent()->SetGroundStance_Native(EGroundStance::Hit);
 			GetHitReactionComponent()->ExecuteHitResponse(InputReaction);
 		}
@@ -852,55 +873,39 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 
 void APlayerBase::OnDeathEnd_Implementation()
 {
-	// 사망 시 UI 호출
-	// 스탯 초기화
 	GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
-	GetMesh()->SetSimulatePhysics(true); // 일단 꺼줌
+	GetMesh()->SetSimulatePhysics(true);
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-	// 사망효과로 교체
 	SetLifeSpan(5.0f);
 }
 
 void APlayerBase::OnDeath()
 {
-	// 기본 UI 비활성화
 	APlayerController* MyController = Cast<APlayerController>(GetController());
 	DisableInput(MyController);
 }
 
-void APlayerBase::SpawnRide()
+/* ============================================================
+ *  Ride
+ * ============================================================ */
+void APlayerBase::MountEnd()
 {
-	if (CharacterBaseAnim->GetCurveValue(FName("EnableRide")) < 0.9f)
+	FTransform MountTransform = IRideInterface::Execute_GetMountTransform(Ride);
+	SetActorLocation(MountTransform.GetLocation());
+	SetActorRotation(MountTransform.GetRotation().Rotator());
+
+	if (GetWorldTimerManager().IsTimerActive(MountTimerHandle))
 	{
-		UE_LOG(Log_RideSpawn, Warning, TEXT("[APlayerBase] %s : Cant Spawn Ride"), *GetName());
-		return;
+		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+		GetWorldTimerManager().ClearTimer(MountTimerHandle);
 	}
-
-	Ride = GetWorld()->SpawnActor<APlayerRide>(RideClass, GetActorTransform());
-	if (!Ride)
-	{
-		UE_LOG(Log_RideSpawn, Warning, TEXT("[APlayerBase] %s : Horse was Not Spawned"), *GetName());
-		return;
-	}
-
-	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-	IRideInterface::Execute_Mount(Ride, this, GetVelocity());
-	GetCharacterMovement()->DisableMovement();
-
-	CurRideStance = ERideStance::Mount;
-	GetCharacterStatusComponent()->SetCharacterState_Native(ECharacterState::Ride);
-
-	GetWorldTimerManager().SetTimer(MountTimerHandle, this, &APlayerBase::MountTimer, 0.01f, true);
+	CurRideStance = ERideStance::Riding;
 }
 
 void APlayerBase::DespawnRide_Implementation(FVector InitVelocity)
 {
-	if (!Ride)
-	{
-		return;
-	}
+	if (!Ride) return;
 
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
@@ -910,9 +915,7 @@ void APlayerBase::DespawnRide_Implementation(FVector InitVelocity)
 	if (Ride->GetClass()->ImplementsInterface(UViewDataInterface::StaticClass()))
 	{
 		FDetachmentTransformRules DetachmentRules = FDetachmentTransformRules(
-			EDetachmentRule::KeepWorld,
-			false
-		);
+			EDetachmentRule::KeepWorld, false);
 
 		DetachFromActor(DetachmentRules);
 
@@ -934,7 +937,6 @@ void APlayerBase::DespawnRide_Implementation(FVector InitVelocity)
 	}
 
 	CurRideStance = ERideStance::DisMount;
-	//GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 	FVector DisMountVelocity = InitVelocity * 0.4f;
 	DisMountVelocity.Z = 600.0f;
 
@@ -1000,6 +1002,9 @@ void APlayerBase::MountTimer()
 	SetActorLocation(CurLocation);
 }
 
+/* ============================================================
+ *  View Data Interface
+ * ============================================================ */
 FTransform APlayerBase::GetCameraTransform_Implementation()
 {
 	return Camera->GetComponentTransform();
@@ -1027,10 +1032,12 @@ TOptional<FVector> APlayerBase::GetCharBoneLocation(FName BoneName)
 
 void APlayerBase::DisMountEnd()
 {
-	UE_LOG(LogTemp, Warning, TEXT("Dismountend"));
-	GetCharacterStatusComponent()->SetCharacterState_Native(ECharacterState::Ground);
+	GetCharacterStatusComponent()->SetState(TAG_State_Ground);
 }
 
+/* ============================================================
+ *  Component Getters
+ * ============================================================ */
 UPlayerAttackComponent* APlayerBase::GetAttackComponent() const
 {
 	return Cast<UPlayerAttackComponent>(AttackComponent);
@@ -1041,6 +1048,29 @@ UPlayerHitReactionComponent* APlayerBase::GetHitReactionComponent() const
 	return Cast<UPlayerHitReactionComponent>(HitReactionComponent);
 }
 
+UPlayerStatusComponent* APlayerBase::GetCharacterStatusComponent() const
+{
+	return Cast<UPlayerStatusComponent>(CharacterStatusComponent);
+}
+
+/* ============================================================
+ *  Attack Source Interface
+ * ============================================================ */
+FAttackTraceSource APlayerBase::GetAttackTraceSource(EAttackSourceType AttackSourceType) const
+{
+	if (!EquipmentComponent) return FAttackTraceSource();
+	return EquipmentComponent->GetAttackTraceSource(AttackSourceType);
+}
+
+FAttackDamageSource APlayerBase::GetAttackDamageSource() const
+{
+	if (!EquipmentComponent) return FAttackDamageSource();
+	return EquipmentComponent->GetAttackDamageSource();
+}
+
+/* ============================================================
+ *  LockOn
+ * ============================================================ */
 void APlayerBase::ApplyLockOnRotation(float DeltaTime)
 {
 	AActor* Target = LockOnComponent ? LockOnComponent->GetCurrentTarget() : nullptr;
@@ -1080,29 +1110,10 @@ void APlayerBase::OnLockOnToggle()
 
 void APlayerBase::OnLockOnSwitchLeft()
 {
-	if(LockOnComponent) LockOnComponent->SwitchTarget(false);
+	if (LockOnComponent) LockOnComponent->SwitchTarget(false);
 }
 
 void APlayerBase::OnLockOnSwitchRight()
 {
 	if (LockOnComponent) LockOnComponent->SwitchTarget(true);
-}
-
-UPlayerStatusComponent* APlayerBase::GetCharacterStatusComponent() const
-{
-	return Cast<UPlayerStatusComponent>(CharacterStatusComponent);
-}
-
-FAttackTraceSource APlayerBase::GetAttackTraceSource(EAttackSourceType AttackSourceType) const
-{
-	if (!EquipmentComponent) return FAttackTraceSource();
-
-	return EquipmentComponent->GetAttackTraceSource(AttackSourceType);
-}
-
-FAttackDamageSource APlayerBase::GetAttackDamageSource() const
-{
-	if (!EquipmentComponent) return FAttackDamageSource();
-
-	return EquipmentComponent->GetAttackDamageSource();
 }

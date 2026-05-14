@@ -16,6 +16,7 @@ class ACharacter;
 class UCharacterMovementComponent;
 
 DECLARE_MULTICAST_DELEGATE(FOnMultiDelegate);
+DECLARE_DELEGATE_OneParam(FOnSingleTagDelegate, const FGameplayTag& /*ActionTag*/);
 
 USTRUCT(BlueprintType)
 struct FBufferedAction
@@ -56,6 +57,7 @@ public:
 	// ---- Action (교체 철학) ----
 	void SwitchAction(const FGameplayTag& NewActionTag); // 행동 교체(이전 행동 윈도우 무효)
 	FGameplayTag GetCurrentAction() const { return CurrentActionTag; }
+	void ClearAction(); // 행동 종료시 설정 초기화
 
 	// ---- Window control (Notify에서 호출) ----
 	void OpenWindow(const FGameplayTag& WindowTag);
@@ -65,13 +67,17 @@ public:
 	bool RequestAction(const FGameplayTag& ActionTag, int32 Priority = 0);
 	bool CanTryAction(const FGameplayTag& ActionTag) const;
 
+
+	// ---- 버퍼 소비 시 실제 행동 실행을 위한 델리게이트 ----
+	FOnSingleTagDelegate OnActionConsumed;
 private:
 	// 현재 상태/행동 태그
-	UPROPERTY() FGameplayTag CurrentStateTag;  // State.Normal 등
-	UPROPERTY() FGameplayTag CurrentActionTag; // Action.Attack 등(없어도 됨)
+	UPROPERTY(VisibleAnywhere, Category = "State") FGameplayTag CurrentStateTag;  // State.Normal 등
+	UPROPERTY(VisibleAnywhere, Category = "State") FGameplayTag CurrentActionTag; // Action.Attack 등(없어도 됨)
 
 	// 현재 열려있는 Window.* 집합
-	TSet<FGameplayTag> OpenWindows;
+	UPROPERTY(VisibleAnywhere, Category = "State")
+		TSet<FGameplayTag> OpenWindows;
 
 	// 입력 버퍼
 	TArray<FBufferedAction> BufferedActions;
@@ -98,20 +104,6 @@ protected:
 	TWeakObjectPtr<ACharacter> CachedCharacter;
 
 	bool bIsDead = false;
-
-#pragma region State
-protected:
-	UPROPERTY(VisibleAnywhere, Category = "State")
-	ECharacterState CurrentState = ECharacterState::Ground;
-
-public:
-	FORCEINLINE ECharacterState GetCharacterState_Native() const { return CurrentState; }
-	FORCEINLINE void SetCharacterState_Native(ECharacterState NewState) { CurrentState = NewState; }
-
-	ECharacterState GetCharacterState_Implementation() const { return CurrentState; }
-	void SetCharacterState_Implementation(ECharacterState NewState) { CurrentState = NewState; }
-#pragma endregion State
-
 
 #pragma region Ground
 public:

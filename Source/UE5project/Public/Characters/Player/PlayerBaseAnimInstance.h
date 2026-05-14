@@ -70,6 +70,8 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
 		TObjectPtr<UAnimSequence> GetUp = nullptr;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
+		TObjectPtr<UAnimSequence> Guard = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
 		TObjectPtr<UAnimSequence> HitAir_Death = nullptr;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
 		TObjectPtr<UAnimSequence> Ground_Death = nullptr;

@@ -1,6 +1,5 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "Characters/Components/CharacterStatusComponent.h"
 #include "GameFramework/Character.h" 
 #include "GameFramework/CharacterMovementComponent.h"
@@ -8,28 +7,26 @@
 #include "Combat/Components/HitReactionComponent.h"
 #include "Characters/Components/StatComponent.h"
 
-// Sets default values for this component's properties
+// 유틸리티
+#include "Utils/CoreLog.h"
+
 UCharacterStatusComponent::UCharacterStatusComponent()
 {
-
-	// ...
 }
 
-
-// Called when the game starts
 void UCharacterStatusComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	CachedCharacter = Cast<ACharacter>(GetOwner());
-
-	if (UHitReactionComponent* HitComp = CachedCharacter->FindComponentByClass<UHitReactionComponent>())
+	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
 	{
-		HitComp->HitEndDelegate.AddUObject(this, &UCharacterStatusComponent::SetGroundStance_Native, EGroundStance::Normal);
+		if (UHitReactionComponent* HitComp = Character->FindComponentByClass<UHitReactionComponent>())
+		{
+			HitComp->HitEndDelegate.AddUObject(this, &UCharacterStatusComponent::SetGroundStance_Native, EGroundStance::Normal);
+		}
 	}
-	// ...
 
-	CurrentStateTag = FGameplayTag::RequestGameplayTag(TEXT("State.Normal"));
+	CurrentStateTag = FGameplayTag::RequestGameplayTag(TEXT("State.Ground"));
 	CurrentActionTag = FGameplayTag(); // 비어있음
 
 	ResetWindowsToStateDefaults();
@@ -60,8 +57,11 @@ void UCharacterStatusComponent::ApplyCloseOnActionBegin(const FGameplayTag& Acti
 	if (!WindowRules || !ActionTag.IsValid())
 		return;
 
+	UE_LOG(Log_Player_Input, Error, TEXT("[CharacterStatusComponent] Apply Close Action Begin"));
+
 	if (const FGameplayTagContainer* CloseSet = WindowRules->CloseOnActionBegin.Find(ActionTag))
 	{
+		UE_LOG(Log_Player_Input, Error, TEXT("[CharacterStatusComponent] Close Window Set By Action Valid"));
 		for (const FGameplayTag& W : *CloseSet)
 			OpenWindows.Remove(W);
 	}
@@ -93,6 +93,12 @@ void UCharacterStatusComponent::SwitchAction(const FGameplayTag& NewActionTag)
 
 	// 전환 직후 버퍼도 한 번 소비 시도
 	TryConsumeBufferedActions();
+}
+
+void UCharacterStatusComponent::ClearAction()
+{
+	CurrentActionTag = FGameplayTag();
+	ResetWindowsToStateDefaults();
 }
 
 void UCharacterStatusComponent::OpenWindow(const FGameplayTag& WindowTag)
@@ -136,13 +142,30 @@ void UCharacterStatusComponent::PruneExpiredBufferedActions()
 
 bool UCharacterStatusComponent::RequestAction(const FGameplayTag& ActionTag, int32 Priority)
 {
-	if (!ActionTag.IsValid()) return false;
+	if (!ActionTag.IsValid())
+	{
+		UE_LOG(Log_Player_Input, Error, TEXT("[CharacterStatusComponent] ActionTag Invalid"));
+		return false;
+	}
 
 	// 가능하면 즉시 교체 실행
 	if (CanTryAction(ActionTag))
 	{
+		UE_LOG(Log_Player_Input, Error, TEXT("[CharacterStatusComponent] CanTryAction"));
 		SwitchAction(ActionTag);
 		return true;
+	}
+
+	// 같은 태그가 이미 버퍼에 있으면 갱신만
+	for (FBufferedAction& Existing : BufferedActions)
+	{
+		if (Existing.ActionTag == ActionTag)
+		{
+			const float Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
+			Existing.ExpireTime = Now + BufferDuration;
+			Existing.Priority = FMath::Max(Existing.Priority, Priority);
+			return false;
+		}
 	}
 
 	// 불가능하면 버퍼에 저장
@@ -186,6 +209,7 @@ void UCharacterStatusComponent::TryConsumeBufferedActions()
 	BufferedActions.RemoveAtSwap(BestIdx);
 
 	SwitchAction(Chosen);
+	OnActionConsumed.ExecuteIfBound(Chosen);
 }
 
 bool UCharacterStatusComponent::IsInAir() const

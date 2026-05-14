@@ -128,7 +128,7 @@ void UAttackComponent::OnMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 		CurAttackContext = FAttackContext();
 	}
 
-	OnAttackFinished.Broadcast();
+	OnAttackFinished.Broadcast(bInterrupted);
 
 	Anim->OnMontageEnded.RemoveDynamic(this, &UAttackComponent::OnMontageEnded);
 }

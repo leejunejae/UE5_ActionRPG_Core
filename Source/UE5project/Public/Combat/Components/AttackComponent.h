@@ -16,7 +16,7 @@ class UNiagaraComponent;
 class IAttackSourceInterface;
 struct FBoneTransformSegment;
 
-DECLARE_MULTICAST_DELEGATE(FOnMultiDelegate);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnMultiOneParamDelegate, bool);
 
 USTRUCT(BlueprintType)
 struct FBoneTransformSample
@@ -66,7 +66,7 @@ public:
 
 	FORCEINLINE float GetLastTraceTime() { return LastTraceTime; }
 
-	FOnMultiDelegate OnAttackFinished;
+	FOnMultiOneParamDelegate OnAttackFinished;
 
 protected:
 	TScriptInterface<IAttackSourceInterface> AttackSourceInterface;

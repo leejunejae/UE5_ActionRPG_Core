@@ -6,6 +6,7 @@
 #include "Animation/Mode/AnimMode_Ride.h"
 #include "Animation/Mode/AnimMode_Ground_Player.h"
 #include "Utils/CoreLog.h"
+#include "Utils/GameplayTagsBase.h"
 
 #include "Core/Subsystems/GameInstanceSystem/PlayerAnimRegistrySubsystem.h"
 
@@ -30,8 +31,8 @@ void UPlayerBaseAnimInstance::NativeInitializeAnimation()
 	GroundMode->Character = Player;
 	GroundMode->AnimInst = this;
 
-	AnimModeMap.Add(ECharacterState::Ride, RideMode);
-	AnimModeMap.Add(ECharacterState::Ground, GroundMode);
+	AnimModeMap.Add(TAG_State_Ride, RideMode);
+	AnimModeMap.Add(TAG_State_Ground, GroundMode);
 }
 
 void UPlayerBaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
@@ -81,6 +82,7 @@ void UPlayerBaseAnimInstance::HandleWeaponChange(EWeaponType WeaponData)
 	HitAir_Loop = TargetAnimSet->HitAir_Loop.IsNull() ? nullptr : TargetAnimSet->HitAir_Loop.LoadSynchronous();
 	HitAir_End = TargetAnimSet->HitAir_End.IsNull() ? nullptr : TargetAnimSet->HitAir_End.LoadSynchronous();
 	GetUp = TargetAnimSet->GetUp.IsNull() ? nullptr : TargetAnimSet->GetUp.LoadSynchronous();
+	Guard = TargetAnimSet->Guard.IsNull() ? nullptr : TargetAnimSet->Guard.LoadSynchronous();
 	HitAir_Death = TargetAnimSet->HitAir_Death.IsNull() ? nullptr : TargetAnimSet->HitAir_Death.LoadSynchronous();
 	Ground_Death = TargetAnimSet->Ground_Death.IsNull() ? nullptr : TargetAnimSet->Ground_Death.LoadSynchronous();
 

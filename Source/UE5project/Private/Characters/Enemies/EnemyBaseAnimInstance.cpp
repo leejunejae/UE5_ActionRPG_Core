@@ -5,6 +5,7 @@
 #include "Characters/Enemies/EnemyBase.h"
 #include "Animation/Mode/AnimMode_Ground_NPC.h"
 #include "Utils/CoreLog.h"
+#include "Utils/GameplayTagsBase.h"
 
 UEnemyBaseAnimInstance::UEnemyBaseAnimInstance()
 {
@@ -21,9 +22,7 @@ void UEnemyBaseAnimInstance::NativeInitializeAnimation()
 	GroundMode->Character = Enemy;
 	GroundMode->AnimInst = this;
 
-	AnimModeMap.Add(ECharacterState::Ground, GroundMode);
-
-	UE_LOG(Log_Anim, Log, TEXT("[EnemyBaseAnimInstance] Check AnimModeList"));
+	AnimModeMap.Add(TAG_State_Ground, GroundMode);
 
 	for (auto& Pair : AnimModeMap)
 	{
@@ -33,9 +32,6 @@ void UEnemyBaseAnimInstance::NativeInitializeAnimation()
 			// 여기선 안전하게 스킵
 			continue;
 		}
-
-		UE_LOG(Log_Anim, Log, TEXT("[EnemyBaseAnimInstance] AnimMode : %s")
-			, *StaticEnum<ECharacterState>()->GetValueAsString(Pair.Key));
 	}
 }
 

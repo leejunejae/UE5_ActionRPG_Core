@@ -288,8 +288,8 @@ bool UClimbComponent::RequestEnterLadder(AActor* TargetLadder)
 
 	ClimbLocation = MakeTuple(GetOwner()->GetActorLocation(), InitCharacterPosition);
 
-	if(UActorComponent* StatusComp = Character->FindComponentByInterface(UCharacterStatusInterface::StaticClass()))
-		ICharacterStatusInterface::Execute_SetCharacterState(StatusComp, ECharacterState::Ladder);
+	//if(UActorComponent* StatusComp = Character->FindComponentByInterface(UCharacterStatusInterface::StaticClass()))
+		//ICharacterStatusInterface::Execute_SetCharacterState(StatusComp, ECharacterState::Ladder);
 
 	SetComponentTickEnabled(true);
 	bIsClimbing = true;

@@ -22,7 +22,7 @@ public:
 	virtual void OnTaskFinished(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, EBTNodeResult::Type TaskResult) override;
 
 private:
-	void OnAttackFinished();
+	void OnAttackFinished(bool bInterrupted);
 
 	UBehaviorTreeComponent* OwnerCompRef = nullptr;
 };

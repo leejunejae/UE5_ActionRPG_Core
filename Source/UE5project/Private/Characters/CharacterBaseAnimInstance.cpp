@@ -39,8 +39,8 @@ void UCharacterBaseAnimInstance::NativeInitializeAnimation()
 	}
 
 	AnimModeMap.Empty();
-	AnimModeMap.Add(ECharacterState::Ground, NewObject<UAnimMode_Ground>(this));
-	AnimModeMap.Add(ECharacterState::Ladder, NewObject<UAnimMode_Ladder>(this));
+	AnimModeMap.Add(TAG_State_Ground, NewObject<UAnimMode_Ground>(this));
+	AnimModeMap.Add(TAG_State_Ladder, NewObject<UAnimMode_Ladder>(this));
 
 	IKPhase.Add(FGameplayTag::RequestGameplayTag(TEXT("IK.Phase.Ground")), 1.0f);
 	IKPhase.Add(FGameplayTag::RequestGameplayTag(TEXT("IK.Phase.Ladder")), 0.0f);
@@ -58,7 +58,7 @@ void UCharacterBaseAnimInstance::NativeInitializeAnimation()
 		Pair.Value->AnimInst = this;
 	}
 
-	SwitchAnimMode(ECharacterState::Ground);
+	SwitchAnimMode(TAG_State_Ground);
 }
 
 void UCharacterBaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
@@ -66,12 +66,11 @@ void UCharacterBaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	Super::NativeUpdateAnimation(DeltaSeconds);
 	if (Character)
 	{
-		CurrentState = Character->GetCharacterStatusComponent()->GetCharacterState_Native();
+		CurrentState = Character->GetCharacterStatusComponent()->GetState();
 
-		const auto NewState = Character->GetCharacterStatusComponent()->GetCharacterState_Native();
-		if (!CurrentMode || AnimModeMap.FindRef(NewState) != CurrentMode)
+		if (!CurrentMode || AnimModeMap.FindRef(CurrentState) != CurrentMode)
 		{
-			SwitchAnimMode(NewState);
+			SwitchAnimMode(CurrentState);
 		}
 
 		if (CurrentMode)
@@ -81,7 +80,7 @@ void UCharacterBaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	}
 }
 
-void UCharacterBaseAnimInstance::SwitchAnimMode(const ECharacterState TargetMode)
+void UCharacterBaseAnimInstance::SwitchAnimMode(const FGameplayTag TargetMode)
 {
 	if (CurrentMode)
 		CurrentMode->OnModeExit();

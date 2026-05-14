@@ -54,12 +54,12 @@ protected:
 #pragma region Animation Mode
 protected:
 	UPROPERTY(VisibleAnywhere, Transient)
-		TMap<ECharacterState, UAnimModeBase*> AnimModeMap;
+		TMap<FGameplayTag, UAnimModeBase*> AnimModeMap;
 	
 	UPROPERTY(VisibleAnywhere)
 		TObjectPtr<UAnimModeBase> CurrentMode = nullptr;
 
-	void SwitchAnimMode(const ECharacterState TargetMode);
+	void SwitchAnimMode(const FGameplayTag TargetMode);
 
 #pragma endregion Animation Mode
 
@@ -93,7 +93,7 @@ private:
 		//void AnimNotify_NOT_EnterWalkState();
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = State, Meta = (AllowPrivateAccess = true))
-		ECharacterState CurrentState;
+		FGameplayTag CurrentState;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
 		EClimbPhase CurLadderStance;
@@ -156,7 +156,7 @@ protected:
 		bool bIsLockOn;
 
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Ground|Combat", meta = (AllowPrivateAccess = "true"))
-		float BlockBlend;
+		float GuardBlend;
 
 	// Foot IK //
 	TTuple<FVector, float> FootTrace(FName SocketName);

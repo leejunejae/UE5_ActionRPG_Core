@@ -140,14 +140,10 @@ void UInteractComponent::InteractPosCheckTimer(USceneComponent* Target)
 		);
 
 		GetOwner()->GetWorldTimerManager().ClearTimer(InteractTimerHandle);
-		//SetActorLocation(Target->GetComponentLocation());
-		//SetActorRotation(Target->GetComponentRotation());
 	}
 }
 
 void UInteractComponent::OnMovetoInteractPosEnd()
 {
-	UE_LOG(LogTemp, Warning, TEXT("Arrived"));
 	OnArrivedInteractionPoint.ExecuteIfBound();
-	//GetOwner()->GetWorldTimerManager().ClearTimer(InteractTimerHandle);
 }

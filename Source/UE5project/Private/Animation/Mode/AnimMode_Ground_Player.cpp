@@ -6,6 +6,8 @@
 #include "Characters/Player/PlayerBaseAnimInstance.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Characters/Player/Components/LockOnComponent.h"
+#include "Characters/Player/Components/PlayerStatusComponent.h"
+#include "Utils/GameplayTagsBase.h"
 #include "Kismet/KismetMathLibrary.h"
 
 void UAnimMode_Ground_Player::OnModeEnter()
@@ -44,6 +46,9 @@ void UAnimMode_Ground_Player::Tick(float DeltaSeconds)
 	}
 
 	AnimInst->bIsLockOn = Ch->GetLockOnComponent()->IsLockedOn();
+
+	float Target = Ch->GetCharacterStatusComponent()->GetCurrentAction() == TAG_Action_Guard ? 1.f : 0.f;
+	AnimInst->GuardBlend = FMath::FInterpTo(AnimInst->GuardBlend, Target, DeltaSeconds, 5.f);
 }
 
 float UAnimMode_Ground_Player::ComputeLeanYawPerSecond(float DeltaSeconds)

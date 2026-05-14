@@ -48,7 +48,7 @@ EBTNodeResult::Type UBTTask_ExecutePattern_Attack::ExecuteTask(UBehaviorTreeComp
 	return EBTNodeResult::InProgress;
 }
 
-void UBTTask_ExecutePattern_Attack::OnAttackFinished()
+void UBTTask_ExecutePattern_Attack::OnAttackFinished(bool bInterrupted)
 {
 	UE_LOG(Log_Attack, Log, TEXT("[UAttackComponent] Attack End Delegate"));
 	if (OwnerCompRef)

@@ -6,7 +6,7 @@
 #include "Characters/CharacterBase.h"
 #include "InputActionValue.h"
 
-// 구조체, 자료형 
+// 구조체, 자료형
 #include "Characters/Data/BaseCharacterHeader.h"
 
 // 인터페이스
@@ -17,16 +17,13 @@
 #include "Characters/Interfaces/CharacterTransformInterface.h"
 #include "PlayerBase.generated.h"
 
-/**
- * 
- */
 class UInputMappingContext;
 class UInputAction;
 
 class UCameraComponent;
 class USpringArmComponent;
 class UCharacterMovementComponent;
-class UBaseChracterMovementComponent;
+class UBaseCharacterMovementComponent;
 
 class UInputConfigDataAsset;
 
@@ -44,7 +41,9 @@ class UPlayerConfig;
 
 class UDefaultWidget;
 class APlayerRide;
-// Delegates
+
+struct FGameplayTag;
+
 DECLARE_DELEGATE(FOnSingleDelegate);
 
 UCLASS()
@@ -55,50 +54,45 @@ class UE5PROJECT_API APlayerBase : public ACharacterBase,
 	public IAttackSourceInterface
 {
 	GENERATED_BODY()
+
 public:
-	// Sets default values for this character's properties
-	APlayerBase(const FObjectInitializer& ObejctInitializer);
+	APlayerBase(const FObjectInitializer& ObjectInitializer);
 
 protected:
-	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
 public:
-	// Called every frame
 	virtual void Tick(float DeltaTime) override;
-
-	// Called to bind functionality to input
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
-
 	virtual void PostInitializeComponents() override;
 
-
-	/* PRIVATE VARIATION */
+	/* ============================================================
+	 *  Private Variables
+	 * ============================================================ */
 private:
 	UPROPERTY(EditAnywhere)
-		TSubclassOf<UDefaultWidget> DefaultWidgetClass;
+	TSubclassOf<UDefaultWidget> DefaultWidgetClass;
 
 	UPROPERTY(EditAnywhere)
-		TObjectPtr<UDefaultWidget> DefaultWidget;
-
+	TObjectPtr<UDefaultWidget> DefaultWidget;
 
 	float YAxisScale;
-	float DebugUpdateInterval = 0.1f; // 디버깅 갱신 간격
+	float DebugUpdateInterval = 0.1f;
 	float TimeSinceLastDebugUpdate = 0.0f;
 	FVector PastLastInputVector;
-	/* PRIVATE VARIATION */
 
-
-	/* PROTECTED VARIATION */
+	/* ============================================================
+	 *  Protected Variables
+	 * ============================================================ */
 protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = Movement)
-		class UBaseCharacterMovementComponent* BaseMovement;
+	class UBaseCharacterMovementComponent* BaseMovement;
 
 	UPROPERTY(VisibleAnywhere, Category = Camera)
-		TObjectPtr<USpringArmComponent> SpringArm;
+	TObjectPtr<USpringArmComponent> SpringArm;
 
 	UPROPERTY(VisibleAnywhere, Category = Camera)
-		TObjectPtr<UCameraComponent> Camera;
+	TObjectPtr<UCameraComponent> Camera;
 
 	FVector2D AimOffVal;
 
@@ -111,34 +105,23 @@ protected:
 	bool IsInteraction;
 
 	FVector InitSpringArmLocation;
-	/* PROTECTED VARIATION */
 
-	/* PROTECTED FUNCTION */
+	/* ============================================================
+	 *  Input — 기본 이동/카메라
+	 * ============================================================ */
 protected:
-
-	/* ĳ������ �⺻���� �������� �����ϴ� �Լ�*/
 	void Move(const FInputActionValue& value);
 	void Look(const FInputActionValue& value);
 
 	void StartMoveInput();
 	void EndMoveInput();
 
-	virtual void Dodge();
 	void CameraSetting();
-
-	void Jump();
 	void Landed(const FHitResult& Hit) override;
 
-	virtual void Interact();
-
-	/* PROTECTED FUNCTION */
-
-	/* Public VARIATION */
-public:
-
-	/* Public VARIATION */
-
-	/* Public FUNCTION */
+	/* ============================================================
+	 *  Public Utility
+	 * ============================================================ */
 public:
 	virtual bool IsPlayer_Implementation();
 	virtual TOptional<FVector> GetCharBoneLocation(FName BoneName);
@@ -148,43 +131,52 @@ public:
 	float GetRideDirection();
 	FVector GetInputDirection();
 
-
-	/* Public FUNCTION */
+	/* ============================================================
+	 *  Config
+	 * ============================================================ */
 #pragma region Init Data
 protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Config")
-		TObjectPtr<UPlayerConfig> Config;
+	TObjectPtr<UPlayerConfig> Config;
 
 	void ApplyConfig();
 #pragma endregion
 
+	/* ============================================================
+	 *  Input Config & Modifier
+	 * ============================================================ */
 #pragma region Input
 private:
 	UPROPERTY(EditAnywhere, Category = "Input")
-		TObjectPtr<UInputConfigDataAsset> InputConfig;
+	TObjectPtr<UInputConfigDataAsset> InputConfig;
 
 	FORCEINLINE void ModifierInput() { IsModifierInput = true; }
 	FORCEINLINE void ModifierInputEnd() { IsModifierInput = false; }
 
 	bool IsModifierInput = false;
-#pragma region Input
+#pragma endregion Input
 
+	/* ============================================================
+	 *  Stat
+	 * ============================================================ */
 #pragma region Status
 private:
 	UPROPERTY(VisibleAnywhere, Category = Stat)
-		TObjectPtr<UPlayerStatComponent> StatComponent;
+	TObjectPtr<UPlayerStatComponent> StatComponent;
 
 	bool IsBlockInput = false;
 
 public:
 	FORCEINLINE UPlayerStatComponent* GetStatComponent() const { return StatComponent; }
-
 #pragma endregion Status
 
+	/* ============================================================
+	 *  Equipment
+	 * ============================================================ */
 #pragma region Inventory & Equip
 private:
 	UPROPERTY(VisibleAnywhere, Category = Equip)
-		TObjectPtr<UEquipmentComponent> EquipmentComponent;
+	TObjectPtr<UEquipmentComponent> EquipmentComponent;
 
 public:
 	FORCEINLINE UEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
@@ -193,52 +185,39 @@ public:
 
 	virtual FAttackTraceSource GetAttackTraceSource(EAttackSourceType AttackSourceType) const override;
 	virtual FAttackDamageSource GetAttackDamageSource() const override;
-
 #pragma endregion Inventory & Equip
 
+	/* ============================================================
+	 *  Animation
+	 * ============================================================ */
 #pragma region Animation
 protected:
 	UPROPERTY(VisibleAnywhere, Category = Animation)
-		TObjectPtr<UPlayerBaseAnimInstance> CharacterBaseAnim;
-
+	TObjectPtr<UPlayerBaseAnimInstance> CharacterBaseAnim;
 #pragma endregion Animation
 
-
+	/* ============================================================
+	 *  State & Stance
+	 * ============================================================ */
 #pragma region State & Stance
-	// 'State' is the character's situation to distinguish the character's actions.
-	// 	it usually mean where the character is, like on riding, on ladder, on ground...
-
-	// 'Stance' is the specific behavior of a character within a state.
-	//	if character is on a ladder, 'Stance' indicates what the character is doing on the ladder, like climbup, just hanging...
-
-
-	////////////////////////////////////
-	// Variables For State & Stance
-	////////////////////////////////////	
 protected:
 	ERideStance CurRideStance = ERideStance::Riding;
 
-
-	////////////////////////////////////
-	// Methods For State & Stance
-	////////////////////////////////////
 public:
 	ERideStance GetCurRideStance();
 #pragma endregion State & Stance
 
+	/* ============================================================
+	 *  Ground Movement (Walk / Jog / Sprint)
+	 * ============================================================ */
 #pragma region Ground
 protected:
 	virtual void Walk();
-	//virtual void WalkEnd();
 	virtual void Jog();
 	virtual void Sprint();
-	//virtual void SprintEnd();
-	void EnterLocomotion();
-	void LeftLocomotion();
 
 public:
 	float GetDirection();
-
 	void SetRotationInputDirection_Implementation();
 
 private:
@@ -249,29 +228,35 @@ private:
 	float ForcedRotationSpeed = 720.0f;
 
 	UAnimMontage* RollMontage;
-
 #pragma endregion Ground
 
-
+	/* ============================================================
+	 *  Character Bone
+	 * ============================================================ */
 #pragma region Character Bone
 public:
 	TOptional<FVector> GetRideIKTargetLoc(EBodyType BoneType);
 #pragma endregion
 
+	/* ============================================================
+	 *  Ride
+	 * ============================================================ */
 #pragma region Ride
 private:
 	void MountTimer();
-
 	FTimerHandle MountTimerHandle;
-
-	void SpawnRide();
-	void DespawnRide_Implementation(FVector InitVelocity);
 
 	void CameraSettingTimer();
 	FTimerHandle CameraSettingTimerHandle;
 
 	void JumpDismountTimer();
 	FTimerHandle JumpDismountTimerHandle;
+
+	// ---- 입력 → 판단 ----
+	void SpawnRideInput();
+
+	// ---- 실행 ----
+	void ExecuteSpawnRide();
 
 protected:
 	void MountEnd();
@@ -285,23 +270,30 @@ public:
 	virtual FTransform GetSpringArmTransform_Implementation();
 	virtual float GetTargetArmLength_Implementation();
 	virtual FRotator GetControllerRotation_Implementation();
+	void DespawnRide_Implementation(FVector InitVelocity);
 
-	//void OnRideTurn(float TurnDirection);
-private:
-	bool CanRide;
 #pragma endregion Ride
 
+	/* ============================================================
+	 *  Status Component
+	 * ============================================================ */
 #pragma region Status
 public:
 	FORCEINLINE UPlayerStatusComponent* GetCharacterStatusComponent() const;
+
+	void OnActionFinished(bool bInterrupted);
+	void OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 #pragma endregion Status
 
+	/* ============================================================
+	 *  Interact
+	 * ============================================================ */
 #pragma region Interact
 protected:
 	void HandleArrivedInteractionPoint();
 
 	UPROPERTY(VisibleAnywhere, Category = Interact)
-		TObjectPtr<UInteractComponent> InteractComponent;
+	TObjectPtr<UInteractComponent> InteractComponent;
 
 public:
 	virtual void RegisterInteractableActor_Implementation(AActor* Interactable);
@@ -309,38 +301,47 @@ public:
 	virtual void EndInteraction_Implementation(AActor* Interactable);
 
 	FORCEINLINE UInteractComponent* GetInteractComponent() const { return InteractComponent; }
-#pragma endregion 
+#pragma endregion
 
+	/* ============================================================
+	 *  Combat — 입력(판단) / 실행 분리
+	 * ============================================================ */
 #pragma region Combat
 private:
 	UPROPERTY(VisibleAnywhere, Category = Combat)
-		TObjectPtr<UCombatComponent> CombatComponent;
+	TObjectPtr<UCombatComponent> CombatComponent;
 
-	//UPROPERTY(VisibleAnywhere, Category = Attack)
-		//TObjectPtr<UPlayerAttackComponent> AttackComponent;
-
-	virtual void Attack(FName AttackName);
+	// ---- 입력 → 판단 (RequestAction) ----
 	void AttackInput();
 	void AttackInputEnd();
 
+	void JumpInput();
+	void DodgeInput();
+	void BlockInput();
+	void BlockInputEnd();
+	void InteractInput();
+	//void ParryInput();
+
+	// ---- 실행 (순수 로직, 판단 없음) ----
+	void ExecuteAttack();
+	void ExecuteJump();
+	void ExecuteDodge();
+	void ExecuteBlock();
+	void ExecuteInteract();
+
+	// ---- 버퍼 소비 콜백 ----
+	void HandleBufferedAction(const FGameplayTag& ActionTag);
+
 	bool IsAttackInput;
 
-	void ChargeAttackTimer();
 	FTimerHandle AttackTimerHandle;
 	float AttackChargeTime = 0.0f;
 
 public:
 	FORCEINLINE UCombatComponent* GetCombatComponent() const { return CombatComponent; }
 	FORCEINLINE UPlayerAttackComponent* GetAttackComponent() const;
+
 #pragma region HitReaction
-protected:
-	void OnBlock();
-	void OffBlock();
-
-	void Parry();
-
-	void HandleHitAir();
-
 public:
 	virtual void OnHit_Implementation(const FAttackRequest& AttackInfo) override;
 	virtual void OnDeathEnd_Implementation() override;
@@ -349,25 +350,27 @@ public:
 	FORCEINLINE UPlayerHitReactionComponent* GetHitReactionComponent() const;
 #pragma endregion HitReaction
 
-
 #pragma endregion Combat
 
+	/* ============================================================
+	 *  LockOn
+	 * ============================================================ */
 #pragma region LockOn
 private:
 	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> LockOnAction;
+	TObjectPtr<UInputAction> LockOnAction;
 
 	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> LockOnSwitchLeftAction;
+	TObjectPtr<UInputAction> LockOnSwitchLeftAction;
 
 	UPROPERTY(EditAnywhere, Category = Input)
-		TObjectPtr<UInputAction> LockOnSwitchRightAction;
+	TObjectPtr<UInputAction> LockOnSwitchRightAction;
 
 	UPROPERTY(VisibleAnywhere, Category = "LockOn")
-		TObjectPtr<ULockOnComponent> LockOnComponent;
+	TObjectPtr<ULockOnComponent> LockOnComponent;
 
 	UPROPERTY(EditAnywhere, Category = "LockOn")
-		float LockOnTurnInterpSpeed = 12.f;
+	float LockOnTurnInterpSpeed = 12.f;
 
 	void ApplyLockOnRotation(float DeltaTime);
 	void SetLockOnMovementMode(bool bLockOn);
@@ -377,17 +380,5 @@ private:
 
 public:
 	FORCEINLINE ULockOnComponent* GetLockOnComponent() const { return LockOnComponent; }
-
 #pragma endregion LockOn
-
-/* ============================================================
- *  Cached Action Tags (매 프레임 RequestGameplayTag 호출 방지)
- * ============================================================ */
-private:
-	static const FGameplayTag ActionTag_Attack;
-	static const FGameplayTag ActionTag_Jump;
-	static const FGameplayTag ActionTag_Dodge;
-	static const FGameplayTag ActionTag_Block;
-	static const FGameplayTag ActionTag_Interact;
-	static const FGameplayTag ActionTag_Ride;
 };
