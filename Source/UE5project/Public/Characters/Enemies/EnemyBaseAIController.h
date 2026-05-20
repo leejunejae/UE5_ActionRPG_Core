@@ -184,37 +184,37 @@ protected:
     EAIBehaviorState CurrentState = EAIBehaviorState::Normal;
 
     UPROPERTY(EditDefaultsOnly, Category = "Threat")
-        float AlertThreshold = 0.0f;
+        float AlertThreshold = 5.0f;
 
     UPROPERTY(EditDefaultsOnly, Category = "Threat")
-        float CombatThreshold = 20.0f;
+        float CombatThreshold = 30.0f;
 
     UPROPERTY(EditDefaultsOnly, Category = "Threat")
         float MaxThreatScore = 100.0f;
 
     UPROPERTY(EditDefaultsOnly, Category = "Threat|Timer")
-        float MonitorInterval = 0.25f;
+        float MonitorInterval = 0.2f;
 
     UPROPERTY(EditDefaultsOnly, Category = "Threat|Memory")
-        float GraceTimeAfterForgotten = 3.0f;
+        float GraceTimeAfterForgotten = 4.0f;
 
     UPROPERTY(EditDefaultsOnly, Category = "Threat|Decay")
-        float ThreatDecayPerSec = 20.0f;
+        float ThreatDecayPerSec = 8.0f;
 
     UPROPERTY(EditDefaultsOnly, Category = "Threat|Weights")
-        float MaxDistanceThreat = 30.0f; // 0~SightRadius에서 최대 30
+        float MaxDistanceThreat = 20.0f; // 0~SightRadius에서 최대 30
 
     UPROPERTY(EditDefaultsOnly, Category = "Threat|Weights")
-        float ApproachingBonus = 8.0f;
+        float ApproachingBonus = 10.0f;
 
     UPROPERTY(EditDefaultsOnly, Category = "Threat|Weights")
-        float HearingBonus = 12.0f;
+        float HearingBonus = 15.0f;
 
     UPROPERTY(EditDefaultsOnly, Category = "Threat|Weights")
-        float DamageBonus = 40.0f; // 피격 즉시 Combat에 가깝게
+        float DamageBonus = 50.0f; // 피격 즉시 Combat
 
     UPROPERTY(EditDefaultsOnly, Category = "Threat|Switching")
-        float MinPrimaryHoldTime = 1.0f; // 최소 1초는 타겟 고정
+        float MinPrimaryHoldTime = 1.5f; // 최소 1초는 타겟 고정
 
     UPROPERTY(EditDefaultsOnly, Category = "Threat|Switching")
         float SwitchScoreMargin = 10.0f; // 새 타겟이 이만큼 더 높아야 교체
@@ -276,8 +276,4 @@ public:
     void EnterLockOn(AActor* Target);
     void ExitLockOn();
 #pragma endregion Lock On
-	//void OnRepeatTimer();
-
-	//FTimerHandle RepeatTimerHandle;
-	//float RepeatInterval;
 };

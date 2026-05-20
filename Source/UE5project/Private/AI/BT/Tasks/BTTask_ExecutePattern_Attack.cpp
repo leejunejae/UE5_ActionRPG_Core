@@ -22,14 +22,24 @@ EBTNodeResult::Type UBTTask_ExecutePattern_Attack::ExecuteTask(UBehaviorTreeComp
 
 	if (!EnemyController)
 	{
-		UE_LOG(Log_AI, Warning, TEXT("[BTTask_ExecutePattern_Chase] EnemyController Invalid"));
+		UE_LOG(Log_AI, Warning, TEXT("[BTTask_ExecutePattern_Reposition] EnemyController Invalid"));
 		return EBTNodeResult::Failed;
 	}
 
 	ACharacterBase* ControllingPawn = Cast<ACharacterBase>(EnemyController->GetPawn());
 	if (ControllingPawn == nullptr)
 	{
-		UE_LOG(Log_AI, Warning, TEXT("[BTTask_ExecutePattern_Chase] Owner Pawn Not Valid"));
+		UE_LOG(Log_AI, Warning, TEXT("[BTTask_ExecutePattern_Reposition] Owner Pawn Not Valid"));
+		return EBTNodeResult::Failed;
+	}
+
+	UBlackboardComponent* BB = OwnerComp.GetBlackboardComponent();
+	if (!BB) return EBTNodeResult::Failed;
+
+	AActor* Target = Cast<AActor>(BB->GetValueAsObject(EnemyController->Key_Target));
+	if (!Target)
+	{
+		UE_LOG(Log_AI, Warning, TEXT("[Reposition] No target"));
 		return EBTNodeResult::Failed;
 	}
 

@@ -348,8 +348,9 @@ void AEnemyBaseAIController::UpdateRuntimeEval(FThreatEntry& Entry, APawn* Contr
 
 void AEnemyBaseAIController::UpdateThreatScore(FThreatEntry& Entry, float DeltaSeconds)
 {
-    // 1) 기본 감쇠
-    Entry.ThreatScore -= ThreatDecayPerSec * DeltaSeconds;
+    // 1) 거리 비례 감쇠 (멀수록 빨리 잊음, 가까이서 보고 있으면 거의 안 잊음)
+    const float DecayAlpha = FMath::Clamp(Entry.Distance / SightRadiusForThreat, 0.f, 1.f);
+    Entry.ThreatScore -= ThreatDecayPerSec * DecayAlpha * DeltaSeconds;
 
     // 2) 거리 기반 (0~SightRadius)
     const float DistAlpha = 1.f - FMath::Clamp(Entry.Distance / SightRadiusForThreat, 0.f, 1.f);
@@ -374,15 +375,6 @@ void AEnemyBaseAIController::UpdateThreatScore(FThreatEntry& Entry, float DeltaS
 
     // 6) 클램프
     Entry.ThreatScore = FMath::Clamp(Entry.ThreatScore, 0.f, MaxThreatScore);
-    //UE_LOG(Log_AI, Log, TEXT("ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ"));
-    //UE_LOG(Log_AI, Log, TEXT("[EnemyBaseAIController] %s Figures involved in Threatscore : %f"), *Entry.Target->GetName(), Entry.ThreatScore);
-    //UE_LOG(Log_AI, Log, TEXT("[EnemyBaseAIController] DistanceThreat : %f"), DistanceThreat);
-    //UE_LOG(Log_AI, Log, TEXT("[EnemyBaseAIController] LOS : %f"), LOS);
-    //UE_LOG(Log_AI, Log, TEXT("[EnemyBaseAIController] Approaching : %f"), Approaching);
-    //UE_LOG(Log_AI, Log, TEXT("[EnemyBaseAIController] SenseBonus : %f"), SenseBonus);
-    //UE_LOG(Log_AI, Log, TEXT("[EnemyBaseAIController] AccumK : %f"), AccumK);
-    //UE_LOG(Log_AI, Log, TEXT("[EnemyBaseAIController] ThreatScore : %f"), Entry.ThreatScore);
-    //UE_LOG(Log_AI, Log, TEXT("ㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡㅡ"));
 }
 
 bool AEnemyBaseAIController::ShouldRemoveEntry(const FThreatEntry& Entry, float Now) const
