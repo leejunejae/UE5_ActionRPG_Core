@@ -12,6 +12,7 @@
 
 // 컴포넌트
 #include "Characters/Components/EquipmentComponent.h"
+#include "Characters/Player/Components/PlayerStatusComponent.h"
 
 void UPlayerBaseAnimInstance::NativeInitializeAnimation()
 {
@@ -83,8 +84,10 @@ void UPlayerBaseAnimInstance::HandleWeaponChange(EWeaponType WeaponData)
 	HitAir_End = TargetAnimSet->HitAir_End.IsNull() ? nullptr : TargetAnimSet->HitAir_End.LoadSynchronous();
 	GetUp = TargetAnimSet->GetUp.IsNull() ? nullptr : TargetAnimSet->GetUp.LoadSynchronous();
 	Guard = TargetAnimSet->Guard.IsNull() ? nullptr : TargetAnimSet->Guard.LoadSynchronous();
-	HitAir_Death = TargetAnimSet->HitAir_Death.IsNull() ? nullptr : TargetAnimSet->HitAir_Death.LoadSynchronous();
-	Ground_Death = TargetAnimSet->Ground_Death.IsNull() ? nullptr : TargetAnimSet->Ground_Death.LoadSynchronous();
+	GroundDeathMontage = TargetAnimSet->GroundDeathMontage.IsNull() ? nullptr : TargetAnimSet->GroundDeathMontage.LoadSynchronous();
+	AirDeathMontage = TargetAnimSet->AirDeathMontage.IsNull() ? nullptr : TargetAnimSet->AirDeathMontage.LoadSynchronous();
+	LadderDeathMontage = TargetAnimSet->LadderDeathMontage.IsNull() ? nullptr : TargetAnimSet->LadderDeathMontage.LoadSynchronous();
+	RideDeathMontage = TargetAnimSet->RideDeathMontage.IsNull() ? nullptr : TargetAnimSet->RideDeathMontage.LoadSynchronous();
 
 	float WeaponIKAlpha = TargetAnimSet->bUseWeaponIK ? 1.0f : 0.0f;
 	SetIKLayerAlpha_Native(FGameplayTag::RequestGameplayTag(FName("IK.Layer.Ground.HandWeapon")), ELimbList::HandL, WeaponIKAlpha);
@@ -94,6 +97,22 @@ void UPlayerBaseAnimInstance::HandleWeaponChange(EWeaponType WeaponData)
 	bInitAnimSet = true;
 
 	UE_LOG(Log_Anim_Equip, Log, TEXT("[PlayerBaseAnimInstance] Character ID : %s Anim Has been Set By Weapon Change"), *Character->GetName());
+}
+
+void UPlayerBaseAnimInstance::HandleDeathStarted()
+{
+	UCharacterStatusComponent* Status = Character->GetCharacterStatusComponent();
+	const FGameplayTag PrevState = Status->GetPreviousStateBeforeDeath();
+
+	UAnimMontage* Selected =
+		PrevState.MatchesTagExact(TAG_State_Ride) ? RideDeathMontage :
+		PrevState.MatchesTagExact(TAG_State_Ladder) ? LadderDeathMontage :
+		Status->IsInAir() ? AirDeathMontage : GroundDeathMontage;
+
+	if (!Selected) Selected = GroundDeathMontage;
+
+	if (Selected) Montage_Play(Selected);
+	else { Status->FinalizeDeath(); }
 }
 
 void UPlayerBaseAnimInstance::AnimNotify_NOT_MountEnd()

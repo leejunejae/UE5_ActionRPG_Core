@@ -8,7 +8,6 @@
 
 // 인터페이스
 #include "Combat/Interfaces/HitReactionInterface.h"
-#include "Characters/Interfaces/DeathInterface.h"
 #include "Combat/Interfaces/AttackSourceInterface.h"
 
 // 구조체, 자료형
@@ -25,11 +24,13 @@ class UCharacterStatusComponent;
 class UEnemyBaseAnimInstance;
 class AEnemyBaseAIController;
 
+class UWidgetComponent;
+class UOverheadHPWidget;
+
 DECLARE_DELEGATE(FOnSingleDelegate);
 
 UCLASS()
 class UE5PROJECT_API AEnemyBase : public ACharacterBase,
-	public IDeathInterface,
 	public IAttackSourceInterface
 {
 	GENERATED_BODY()
@@ -50,9 +51,6 @@ public:
 
 #pragma region Status
 public:
-	FOnDeathDelegate OnDeath;
-	virtual FOnDeathDelegate& GetOnDeathDelegate() override { return OnDeath; }
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stats")
 		float GuardNegation;
 
@@ -103,20 +101,33 @@ public:
 #pragma endregion Character_Data
 
 #pragma region Stat
-protected:
-	UPROPERTY(VisibleAnywhere, Category = Stat)
-		TObjectPtr<UCharacterStatComponent> StatComponent;
-
 public:
-	FORCEINLINE UCharacterStatComponent* GetStatComponent() const { return StatComponent; }
+	UCharacterStatComponent* GetStatComponent() const;
 
 #pragma endregion Stat
+
+#pragma region UI
+protected:
+	/** 머리 위 HP 바 위젯 컴포넌트 */
+	UPROPERTY(VisibleAnywhere, Category = "UI")
+	TObjectPtr<UWidgetComponent> HPBarWidgetComponent;
+
+	/** HP 바 위젯 클래스 (BP에서 WBP_OverheadHP 지정) */
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UOverheadHPWidget> HPBarWidgetClass;
+
+public:
+	/** PlayerController의 LockOnComponent가 호출 — 이 적이 락온되었는지 알림 */
+	void OnLockedOnByPlayer(bool bIsLockedOn);
+#pragma endregion UI
 
 
 #pragma region HitReaction
 public:
 	void OnHit_Implementation(const FAttackRequest& AttackInfo) override;
-	
+
+	void HandleDeathStarted() override;    // 진입: 입력 차단 + 이전 State 정리
+	void HandleDeathFinalized() override;  // 종료: 래그돌 + 소멸 (추후 GameOver UI 트리거 지점)
 #pragma endregion HitReaction
 
 #pragma region AI

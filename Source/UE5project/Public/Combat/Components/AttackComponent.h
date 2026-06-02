@@ -54,7 +54,7 @@ protected:
 
 public:	
 	void OnMontageEnded(UAnimMontage* Montage, bool bInterrupted);
-	virtual void ExecuteAttack(FName AttackName, float Playrate = 1.0f);
+	virtual const FBaseAttackData* ExecuteAttack(FName AttackName, float Playrate = 1.0f);
 	virtual void PlayAnimation(FAttackContext AttackInfo, int32 index, float Playrate = 1.0f);
 	virtual void ExecuteAttackTrace(float StartTime, float EndTime, bool bDrawDebug = false);
 

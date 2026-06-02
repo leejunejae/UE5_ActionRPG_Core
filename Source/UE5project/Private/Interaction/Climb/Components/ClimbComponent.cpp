@@ -5,11 +5,13 @@
 #include "Environment/Climbable/Interfaces/ClimbObjectInterface.h"
 #include "Interaction/Climb/Interfaces/LadderInterface.h"
 #include "Interaction/Interfaces/InteractInterface.h"
-#include "Characters/Interfaces/CharacterStatusInterface.h"
+#include "Characters/Components/CharacterStatusComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/CapsuleComponent.h"
-#include "GameFramework/Character.h"
+#include "Characters/CharacterBase.h"
+
 #include "Utils/CoreLog.h"
+#include "Utils/GameplayTagsBase.h"
 
 // Sets default values for this component's properties
 UClimbComponent::UClimbComponent()
@@ -288,9 +290,6 @@ bool UClimbComponent::RequestEnterLadder(AActor* TargetLadder)
 
 	ClimbLocation = MakeTuple(GetOwner()->GetActorLocation(), InitCharacterPosition);
 
-	//if(UActorComponent* StatusComp = Character->FindComponentByInterface(UCharacterStatusInterface::StaticClass()))
-		//ICharacterStatusInterface::Execute_SetCharacterState(StatusComp, ECharacterState::Ladder);
-
 	SetComponentTickEnabled(true);
 	bIsClimbing = true;
 
@@ -382,15 +381,12 @@ void UClimbComponent::EnterLadderFloat()
 
 void UClimbComponent::ExitLadderFloat()
 {
-	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
+	if (ACharacterBase* Character = Cast<ACharacterBase>(GetOwner()))
 	{
 		Character->GetCapsuleComponent()->IgnoreActorWhenMoving(ClimbObject, false);
 		Character->GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 		Character->GetCapsuleComponent()->SetCapsuleHalfHeight(90.0f);
 	}
-	
-	if (UActorComponent* StatusComp = GetOwner()->FindComponentByInterface(UCharacterStatusInterface::StaticClass()))
-		ICharacterStatusInterface::Execute_SetCharacterState(StatusComp, ECharacterState::Ground);
 
 	LimbToGripNode.Empty();
 	GripList1D.Empty();
@@ -399,6 +395,8 @@ void UClimbComponent::ExitLadderFloat()
 	AnimTime = 0.0f;
 	LadderStance = EClimbPhase::Idle;
 	SetComponentTickEnabled(false);
+
+	OnLadderExit.Broadcast();
 }
 
 void UClimbComponent::ClimbUpLadder()

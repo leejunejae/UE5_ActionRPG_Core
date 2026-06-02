@@ -16,13 +16,13 @@
 
 #include "Utils/CoreLog.h"
 
-void UPlayerAttackComponent::ExecuteAttack(FName AttackName, float Playrate)
+const FBaseAttackData* UPlayerAttackComponent::ExecuteAttack(FName AttackName, float Playrate)
 {
 	APlayerBase* Player = Cast<APlayerBase>(GetOwner());
 
-	if (!Player->GetEquipmentComponent()->GetEquipedWeapon()) return;
+	if (!Player->GetEquipmentComponent()->GetEquipedWeapon()) return nullptr;
 	
-	Super::ExecuteAttack(AttackName, Playrate);
+	return Super::ExecuteAttack(AttackName, Playrate);
 }
 
 void UPlayerAttackComponent::BeginPlay()

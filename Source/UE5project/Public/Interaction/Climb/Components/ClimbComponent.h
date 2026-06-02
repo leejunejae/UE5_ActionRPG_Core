@@ -30,6 +30,8 @@ public:
 	{}
 };
 
+DECLARE_MULTICAST_DELEGATE(FMultiDelegate);
+
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class UE5PROJECT_API UClimbComponent : public UActorComponent,
 	public IClimbInterface
@@ -71,7 +73,7 @@ public:
 	void DeRegisterClimbObject();
 	AActor* GetClimbObject();
 
-#pragma endregion
+#pragma endregion Climbable Object
 
 #pragma region Grip And FootHold
 protected:
@@ -127,7 +129,7 @@ public:
 	void SetMinGripInterval(float MinInterval);
 	void SetMaxGripInterval(float MaxInterval);
 
-#pragma endregion
+#pragma endregion Setting Value
 
 #pragma region Ladder Climbing
 public:	
@@ -137,11 +139,7 @@ public:
 	void ClimbDownLadder();
 	void ResetClimbState();
 
-	TOptional<FTransform> GetEnterTopPosition();
-	TOptional<FTransform> GetEnterBottomPosition();
-	TOptional<FTransform> GetInitTopPosition();
-	TOptional<FTransform> GetInitBottomPosition();
-	float GetLadderTopTransitionDistance();
+	FMultiDelegate OnLadderExit;
 
 private:
 	UPROPERTY(VisibleAnyWhere, Category = "ClimbState")
@@ -155,5 +153,5 @@ private:
 
 	FVector SetBoneIKTargetLadder(const FGripNode1D* TargetGrip, const FVector CurveValue, const float LimbXDistance = 0.0f, const FGripNode1D* StartGrip = nullptr, const float LimbYDistance = -15.0f, bool IsDebug = false);
 	FVector SetBoneIKTargetLadder(const FVector TargetLoc, const FVector CurveValue, const FVector StartLoc = FVector(), const float LimbXDistance = 0.0f, const float LimbYDistance = -15.0f, bool IsDebug = false);
-#pragma endregion
+#pragma endregion Ladder Climbing
 };

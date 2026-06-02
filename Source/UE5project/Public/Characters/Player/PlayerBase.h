@@ -159,16 +159,13 @@ private:
 	/* ============================================================
 	 *  Stat
 	 * ============================================================ */
-#pragma region Status
+#pragma region Stat
 private:
-	UPROPERTY(VisibleAnywhere, Category = Stat)
-	TObjectPtr<UPlayerStatComponent> StatComponent;
-
 	bool IsBlockInput = false;
 
 public:
-	FORCEINLINE UPlayerStatComponent* GetStatComponent() const { return StatComponent; }
-#pragma endregion Status
+	UPlayerStatComponent* GetStatComponent() const;
+#pragma endregion Stat
 
 	/* ============================================================
 	 *  Equipment
@@ -216,6 +213,10 @@ protected:
 	virtual void Jog();
 	virtual void Sprint();
 
+	UPROPERTY(EditAnywhere, Category = "Stats|Stamina")
+	float SprintStaminaPerSec = 12.0f;
+	UPROPERTY(EditAnywhere, Category = "Stats|Stamina")
+	float DodgeStaminaBase = 20.f;
 public:
 	float GetDirection();
 	void SetRotationInputDirection_Implementation();
@@ -283,6 +284,8 @@ public:
 
 	void OnActionFinished(bool bInterrupted);
 	void OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+
+	void OnStateChanged(const FGameplayTag NewState);
 #pragma endregion Status
 
 	/* ============================================================
@@ -344,8 +347,9 @@ public:
 #pragma region HitReaction
 public:
 	virtual void OnHit_Implementation(const FAttackRequest& AttackInfo) override;
-	virtual void OnDeathEnd_Implementation() override;
-	virtual void OnDeath();
+
+	void HandleDeathStarted() override;    // 진입: 입력 차단 + 이전 State 정리
+	void HandleDeathFinalized() override;  // 종료: 래그돌 + 소멸 (추후 GameOver UI 트리거 지점)
 
 	FORCEINLINE UPlayerHitReactionComponent* GetHitReactionComponent() const;
 #pragma endregion HitReaction

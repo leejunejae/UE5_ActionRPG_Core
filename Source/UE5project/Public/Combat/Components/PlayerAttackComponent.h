@@ -19,7 +19,7 @@ class UE5PROJECT_API UPlayerAttackComponent : public UAttackComponent
 public:
 	void SetCurAttackContextSet(EWeaponType WeaponData);//EWeaponType WeaponType);
 
-	void ExecuteAttack(FName AttackName, float Playrate = 1.0f) override;
+	const FBaseAttackData* ExecuteAttack(FName AttackName, float Playrate = 1.0f) override;
 
 	FORCEINLINE void SetAttackDA(const UDataAsset* AttackDA) { AttackListDA = AttackDA; }
 

@@ -3,6 +3,7 @@
 
 #include "Characters/Player/Components/LockOnComponent.h"
 #include "GameFramework/Character.h"
+#include "Characters/Enemies/EnemyBase.h" 
 #include "GameFramework/PlayerController.h"
 #include "Components/SphereComponent.h"
 #include "Kismet/GameplayStatics.h"
@@ -171,7 +172,7 @@ bool ULockOnComponent::ToggleLockOn()
 	TWeakObjectPtr<AActor> Best = FindBestTarget();
 	if (Best.IsValid())
 	{
-		LockedOnTarget = Best;
+		SetLockedOnTarget(Best.Get());
 		TimeSinceLOSLost = 0.f;
 		TimeSinceOffscreen = 0.f;
 		return true;
@@ -182,9 +183,9 @@ bool ULockOnComponent::ToggleLockOn()
 
 void ULockOnComponent::ClearLockOn()
 {
-	LockedOnTarget.Reset();
-	TimeSinceLOSLost = 0.f;
-	TimeSinceOffscreen = 0.f;
+    SetLockedOnTarget(nullptr);  // 변경 (Reset 대신)
+    TimeSinceLOSLost = 0.f;
+    TimeSinceOffscreen = 0.f;
 }
 
 bool ULockOnComponent::HasLineOfSight(AActor* Target) const
@@ -209,6 +210,28 @@ bool ULockOnComponent::HasLineOfSight(AActor* Target) const
 
 	// 무엇이든 막히면 LOS false
 	return !bHit;
+}
+
+void ULockOnComponent::SetLockedOnTarget(AActor* NewTarget)
+{
+	AActor* OldTarget = LockedOnTarget.Get();
+	if (OldTarget == NewTarget) return;
+
+	LockedOnTarget = NewTarget;
+
+	// 이전 타겟이 적이면 락온 해제 알림
+	if (AEnemyBase* OldEnemy = Cast<AEnemyBase>(OldTarget))
+	{
+		OldEnemy->OnLockedOnByPlayer(false);
+	}
+
+	// 새 타겟이 적이면 락온 시작 알림
+	if (AEnemyBase* NewEnemy = Cast<AEnemyBase>(NewTarget))
+	{
+		NewEnemy->OnLockedOnByPlayer(true);
+	}
+
+	OnLockOnTargetChanged.Broadcast(NewTarget);
 }
 
 bool ULockOnComponent::IsTargetStillValid(AActor* Target) const
@@ -357,7 +380,7 @@ bool ULockOnComponent::SwitchTarget(bool bRight)
 	TWeakObjectPtr<AActor> Next = FindSwitchTarget(bRight);
 	if (Next.IsValid())
 	{
-		LockedOnTarget = Next;
+		SetLockedOnTarget(Next.Get());  // 변경
 		TimeSinceLOSLost = 0.f;
 		TimeSinceOffscreen = 0.f;
 		return true;

@@ -9,12 +9,28 @@
 /**
  * 
  */
+
+class UPlayerHUDWidget;
+
 UCLASS()
 class UE5PROJECT_API AControllerBase : public APlayerController
 {
 	GENERATED_BODY()
-	
+
 public:
-	virtual void PostInitializeComponents() override;
-	virtual void OnPossess(APawn* aPawn) override;
+	/** HUD에 띄울 위젯 클래스 (블루프린트에서 WBP_PlayerHUD로 지정) */
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UPlayerHUDWidget> PlayerHUDClass;
+
+protected:
+	virtual void BeginPlay() override;
+	virtual void OnPossess(APawn* InPawn) override;
+
+private:
+	void InitializeFullScreenUI();
+	void CreatePlayerHUD();
+	void BindHUDToPawn(APawn* InPawn);
+
+	UPROPERTY()
+	TObjectPtr<UPlayerHUDWidget> PlayerHUDWidget;
 };

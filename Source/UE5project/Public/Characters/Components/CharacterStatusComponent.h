@@ -7,7 +7,6 @@
 #include "GameplayTagContainer.h"
 
 #include "Characters/Data/StatusData.h"
-#include "Characters/Interfaces/CharacterStatusInterface.h"
 #include "Characters/Player/ActionWindowRules.h"
 
 #include "CharacterStatusComponent.generated.h"
@@ -30,7 +29,6 @@ struct FBufferedAction
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class UE5PROJECT_API UCharacterStatusComponent : public UActorComponent
-	, public ICharacterStatusInterface
 {
 	GENERATED_BODY()
 
@@ -42,22 +40,24 @@ protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
 
+#pragma region State and Action Window
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Windows")
 		TObjectPtr<UActionWindowRules> WindowRules = nullptr;
 
-	// 버퍼 유효 시간(엘든링 느낌: 0.15~0.25)
+	// 버퍼 유효 시간
 	UPROPERTY(EditAnywhere, Category = "Buffer")
 		float BufferDuration = 0.18f;
 
 	// ---- State ----
 	void SetState(const FGameplayTag& NewStateTag);
-	FGameplayTag GetState() const { return CurrentStateTag; }
+	FGameplayTag GetCurrentState() const { return CurrentStateTag; }
 
-	// ---- Action (교체 철학) ----
+	// ---- Action ----
 	void SwitchAction(const FGameplayTag& NewActionTag); // 행동 교체(이전 행동 윈도우 무효)
 	FGameplayTag GetCurrentAction() const { return CurrentActionTag; }
 	void ClearAction(); // 행동 종료시 설정 초기화
+	bool IsWindowOpen(const FGameplayTag& WindowTag) const { return WindowTag.IsValid() && OpenWindows.Contains(WindowTag);} // 윈도우 확인
 
 	// ---- Window control (Notify에서 호출) ----
 	void OpenWindow(const FGameplayTag& WindowTag);
@@ -91,31 +91,23 @@ private:
 	void PruneExpiredBufferedActions();
 	void TryConsumeBufferedActions();
 
+#pragma endregion State and Action Window
 public:
-	FORCEINLINE bool IsDead() const { return bIsDead; }
-
 	bool IsInAir() const;
 
-	void ExecuteDeath();
+#pragma region Death
+	// ---- Death ----
+	void EnterDeath();      // 사망 진입: 이전 State 캡처 → State.Dead 전이 → OnDeathStarted
+	void FinalizeDeath();   // 사망 모션 종료(노티파이): OnDeathFinalized
 
-	FOnMultiDelegate OnDeath;
+	bool IsDead() const;    // State.Dead (flat, exact)
+	FGameplayTag GetPreviousStateBeforeDeath() const { return PrevStateBeforeDeath; }
 
-protected:
-	TWeakObjectPtr<ACharacter> CachedCharacter;
+	FOnMultiDelegate OnDeathStarted;    // 진입: 모션 재생 / 입력 차단 / 이전 State 정리
+	FOnMultiDelegate OnDeathFinalized;  // 종료: 래그돌 / GameOver 트리거
 
-	bool bIsDead = false;
-
-#pragma region Ground
-public:
-	FORCEINLINE EGroundStance GetGroundStance_Native() const { return GroundStance; }
-	FORCEINLINE void SetGroundStance_Native(EGroundStance NewStance) { GroundStance = NewStance; }
-
-	EGroundStance GetGroundStance_Implementation() const { return GroundStance; }
-	void SetGroundStance_Implementation(EGroundStance NewStance) { GroundStance = NewStance; }
-
-	bool CanTransitionGroundStance(EGroundStance DestStance, EGroundStance TargetStance);
 private:
-	UPROPERTY(VisibleAnywhere, Category = "Stance")
-	EGroundStance GroundStance;
-#pragma endregion Ground
+	FGameplayTag PrevStateBeforeDeath;
+	bool bDeathFinalized = false;
+#pragma endregion Death
 };

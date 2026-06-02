@@ -16,24 +16,23 @@
 #include "Combat/Components/HitReactionComponent.h"
 #include "Characters/Components/CharacterStatusComponent.h"
 
-#include "Core/Subsystems/GameInstanceSystem/EnemyDataSubsystem.h"
 #include "Core/Subsystems/GameInstanceSystem/NPCAnimRegistrySubsystem.h"
 
 #include "Utils/CoreLog.h"
-
-#include "Characters/Enemies/EnemyBase.h"
+#include "Utils/GameplayTagsBase.h"
 
 #include "Blueprint/AIBlueprintHelperLibrary.h"
 
+#include "Components/WidgetComponent.h"
+#include "UI/OverheadHPWidget.h"
+
 // Sets default values
 AEnemyBase::AEnemyBase(const FObjectInitializer& ObjectInitializer)
-	: Super(ObjectInitializer)
+	: Super(ObjectInitializer
+		.SetDefaultSubobjectClass<UCharacterStatComponent>(TEXT("StatComponent")))
 {
  	// Set this character to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = true;
-
-	StatComponent = CreateDefaultSubobject<UCharacterStatComponent>(TEXT("StatComponent"));
-	StatComponent->bAutoActivate = true;
 
 	MainWeapon = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MainWeapon"));
 	MainWeapon->SetupAttachment(GetMesh());
@@ -51,8 +50,36 @@ AEnemyBase::AEnemyBase(const FObjectInitializer& ObjectInitializer)
 	GetMesh()->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 
 	bUseControllerRotationYaw = false;
-	GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.0f, 0.0f);
+	//GetCharacterMovement()->RotationRate = FRotator(0.0f, 540.0f, 0.0f);
 	GetCharacterMovement()->bOrientRotationToMovement = true;
+
+	GetCharacterMovement()->MaxAcceleration = 1024.f;      // 기본 2048, 절반으로 → 더 부드러운 가속
+	GetCharacterMovement()->BrakingDecelerationWalking = 1024.f;  // 기본 2048, 절반
+	GetCharacterMovement()->BrakingFriction = 2.f;         // 기본 0
+	GetCharacterMovement()->bUseSeparateBrakingFriction = true;
+
+	HPBarWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("HPBarWidget"));
+	HPBarWidgetComponent->SetupAttachment(GetMesh());  // 또는 GetRootComponent()
+	HPBarWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);  // 카메라 향함, 거리 무관 크기 유지
+	HPBarWidgetComponent->SetDrawSize(FVector2D(200.0f, 20.0f));
+	HPBarWidgetComponent->SetRelativeLocation(FVector(0.0f, 0.0f, 220.0f));  // 머리 위 (필요에 따라 조정)
+	HPBarWidgetComponent->SetVisibility(true);  // 컴포넌트 자체는 항상 활성, 위젯이 보이고 숨길 뿐
+	static ConstructorHelpers::FClassFinder<UOverheadHPWidget> HPWidgetFinder(
+		TEXT("/Game/08_UI/Screens/WBP_OverheadHP"));
+
+	UE_LOG(Log_Character_Enemy, Warning, TEXT("[EnemyBase Ctor] FClassFinder Succeeded: %d"),
+		HPWidgetFinder.Succeeded());
+
+	if (HPWidgetFinder.Succeeded())
+	{
+		HPBarWidgetClass = HPWidgetFinder.Class;
+		UE_LOG(Log_Character_Enemy, Warning, TEXT("[EnemyBase Ctor] HPBarWidgetClass set: %s"),
+			HPBarWidgetClass ? *HPBarWidgetClass->GetName() : TEXT("NULL"));
+	}
+	else
+	{
+		UE_LOG(Log_Character_Enemy, Error, TEXT("[EnemyBase Ctor] FClassFinder FAILED for path: /Game/08_UI/Screens/WBP_OverheadHP"));
+	}
 
 	TeamID = 1;
 }
@@ -94,7 +121,25 @@ void AEnemyBase::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
 
-	//CharacterBaseAnim = Cast<UEnemyBaseAnimInstance>(GetMesh()->GetAnimInstance());
+	UE_LOG(Log_Character_Enemy, Warning, TEXT("[EnemyBase] PostInitializeComponents - WidgetComp: %s, WidgetClass: %s"),
+		HPBarWidgetComponent ? TEXT("OK") : TEXT("NULL"),
+		HPBarWidgetClass ? TEXT("OK") : TEXT("NULL"));
+
+	if (HPBarWidgetComponent && HPBarWidgetClass)
+	{
+		HPBarWidgetComponent->SetWidgetClass(HPBarWidgetClass);
+		HPBarWidgetComponent->InitWidget();
+
+		UUserWidget* UW = HPBarWidgetComponent->GetUserWidgetObject();
+
+		if (UOverheadHPWidget* OverheadHP = Cast<UOverheadHPWidget>(UW))
+		{
+			if (UStatComponent* Stat = GetStatComponent())
+			{
+				OverheadHP->BindToStatComponent(Stat);
+			}
+		}
+	}
 }
 
 bool AEnemyBase::ApplyEnemyInfo(const FEnemyInfo* Info)
@@ -239,7 +284,8 @@ bool AEnemyBase::ApplyEnemyStats(const FEnemyStats* Stat)
 	RuntimeStats.StaminaAttackPower = Stat->StaminaAttackPower;
 	RuntimeStats.Stance.InitResource(Stat->Stance);
 
-	StatComponent->InitializeNPCStats(RuntimeStats);
+	GetStatComponent()->InitializeNPCStats(RuntimeStats);
+	GetStatComponent()->BroadcastResourceStat(EResourceStatType::Health, RuntimeStats.BaseStats.Health);
 
 	return true;
 }
@@ -270,9 +316,22 @@ FAttackTraceSource AEnemyBase::GetAttackTraceSource(EAttackSourceType AttackSour
 FAttackDamageSource AEnemyBase::GetAttackDamageSource() const
 {
 	FAttackDamageSource OutData;
+	
+	OutData.AttackRating = GetStatComponent()->GetNPCStats().PhysicalAttackPower;
+	OutData.PoiseRating = GetStatComponent()->GetNPCStats().PoiseAttackPower;
+	OutData.StanceRating = GetStatComponent()->GetNPCStats().StaminaAttackPower;
 
-	//OutData.AttackRating = StatComponent->GetCommonStats().
-	return FAttackDamageSource();
+	return OutData;
+}
+
+void AEnemyBase::OnLockedOnByPlayer(bool bIsLockedOn)
+{
+	if (!HPBarWidgetComponent) return;
+
+	if (UOverheadHPWidget* OverheadHP = Cast<UOverheadHPWidget>(HPBarWidgetComponent->GetUserWidgetObject()))
+	{
+		OverheadHP->OnLockOnChanged(bIsLockedOn);
+	}
 }
 
 void AEnemyBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
@@ -280,8 +339,6 @@ void AEnemyBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 	float HitAngle = HitReactionComponent->CalculateHitAngle(AttackInfo.HitPoint);
 	
 	EHitResponse Response = HitReactionComponent->EvaluateHitResponse(AttackInfo);
-	//FHitReactionRequest InputReaction = { Response, HitAngle };
-	//HitReactionComponent->ExecuteHitResponse(InputReaction);
 
 	UE_LOG(Log_Hit, Log, TEXT("[EnemyBase] %s was hit by attack that required a %s"), *this->GetName(), *StaticEnum<EHitResponse>()->GetNameStringByValue((int64)Response));
 
@@ -297,28 +354,27 @@ void AEnemyBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 		{
 			UE_LOG(Log_Hit, Log, TEXT("[EnemyBase] %s stagger occurred"), *Owner->GetName());
 			FHitReactionRequest InputReaction = { Response,HitAngle };
+			GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
+			GetHitReactionComponent()->ExecuteHitResponse(InputReaction);
 			HitReactionComponent->ExecuteHitResponse(InputReaction);
-			if (AEnemyBaseAIController* AI = Cast<AEnemyBaseAIController>(GetController()))
-			{
-
-			}
 		}
 		break;
 	}
-	case EHitResponse::None:
+	case EHitResponse::HitAir:
 	{
 		GetStatComponent()->ApplyDamage(AttackInfo.Damage, AttackInfo.AttackType);
 		GetStatComponent()->ChangePoise(AttackInfo.PoiseDamage, EStatChangeType::Damage);
 		if (GetStatComponent()->GetNPCStats().BaseStats.Poise.Current <= 0.0f || CharacterStatusComponent->IsDead())
 		{
 			CharacterBaseAnim->SetHitAir(true);
+			GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
 		}
 		break;
 	}
 	case EHitResponse::Block:
 	case EHitResponse::BlockLarge:
 	{
-		bool IsStaminaEnough = StatComponent->ChangeStance(AttackInfo.StanceDamage, EStatChangeType::Damage);
+		bool IsStaminaEnough = GetStatComponent()->ChangeStance(AttackInfo.StanceDamage, EStatChangeType::Damage);
 		if (IsStaminaEnough)
 		{
 			float ApplyNegationDamage = AttackInfo.Damage * (1.0f - GuardNegation / 100.0f);
@@ -339,8 +395,34 @@ void AEnemyBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 	}
 }
 
+void AEnemyBase::HandleDeathStarted()
+{
+	Super::HandleDeathStarted();
+
+	if (AAIController* AI = Cast<AAIController>(GetController()))
+	{
+		AI->UnPossess();   // OnUnPossess → StopHostileMonitoring + 타겟 정리, 회전 정지
+		AI->Destroy();
+	}
+}
+
+void AEnemyBase::HandleDeathFinalized()
+{
+	Super::HandleDeathFinalized(); // 캡슐 콜리전 off
+	SetLifeSpan(5.0f);             // 시체 소멸(또는 디졸브 후 Destroy)
+	// 루트 드랍 / 타겟 목록에서 제거 등
+}
+
 void AEnemyBase::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
 
+}
+
+/* ============================================================
+ *  Component Getters
+ * ============================================================ */
+UCharacterStatComponent* AEnemyBase::GetStatComponent() const
+{
+	return Cast<UCharacterStatComponent>(StatComponent);
 }

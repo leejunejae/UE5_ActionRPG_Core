@@ -27,31 +27,14 @@ protected:
 protected:
 	UPROPERTY(Transient)
 		TObjectPtr<AEnemyBase> Enemy = nullptr;
-#pragma region Animation Data
-private:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
-		FAnimDataSet Locomotion;
-	/*
+#pragma region Animation Dat
+protected:
+	void HandleDeathStarted() override;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
 		TObjectPtr<UBlendSpace> Locomotion_BS = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
-		TObjectPtr<UAnimSequence> Locomotion_Idle = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
-		TMap<FPhaseAnimByCardinal Locomotion_Phase;
-
-	/*
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
-		TObjectPtr<UBlendSpace1D> Locomotion_WalkSlowBS = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
-		TObjectPtr<UBlendSpace1D> Locomotion_WalkBS = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
-		TObjectPtr<UBlendSpace1D> Locomotion_JogBS = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
-		TObjectPtr<UBlendSpace1D> Locomotion_RunBS = nullptr;
-	
-		
-		*/
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true)) 
+		TObjectPtr<UAnimMontage> DeathMontage = nullptr;
 #pragma endregion Animation Data
 };

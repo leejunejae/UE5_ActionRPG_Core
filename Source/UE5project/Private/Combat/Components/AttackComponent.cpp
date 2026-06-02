@@ -60,38 +60,42 @@ void UAttackComponent::BeginPlay()
 	}
 }
 
-void UAttackComponent::ExecuteAttack(FName AttackName, float Playrate)
+const FBaseAttackData* UAttackComponent::ExecuteAttack(FName AttackName, float Playrate)
 {
 	bool CanPlayAttack = false;
+	int32 CandidateIndex = ComboIndex;
+	FAttackContext CandidateContext = CurAttackContext;
 
-	// 실행중인 공격이 있으면 실행중인 공격과 입력이 같은지 확인	
 	if (CurAttackContext.AttackName == AttackName)
 	{
 		CanPlayAttack = true;
-		// 다음 콤보가 있으면 ComboIndex증가 아니면 첫콤보로 초기화
-		ComboIndex = CurAttackContext.AttackDetail.IsValidIndex(ComboIndex + 1) ? ComboIndex + 1 : 0;
+		CandidateIndex = CurAttackContext.AttackDetail.IsValidIndex(ComboIndex + 1) ? ComboIndex + 1 : 0;
 	}
 	else
 	{
-		if (CurAttackContextSet->Contexts.IsEmpty()) return;
+		if (CurAttackContextSet->Contexts.IsEmpty()) return nullptr;
 		FAttackContext DataForFind;
 		DataForFind.AttackName = AttackName;
 		const FAttackContext* FoundData = CurAttackContextSet->Contexts.Find(DataForFind);
-		CurAttackContext = FoundData ? *FoundData : FAttackContext{};
+		CandidateContext = FoundData ? *FoundData : FAttackContext{};
 
-		if (CurAttackContext.Anim && !CurAttackContext.AttackDetail.IsEmpty())
+		if (CandidateContext.Anim && !CandidateContext.AttackDetail.IsEmpty())
 		{
 			CanPlayAttack = true;
-			ComboIndex = 0;
+			CandidateIndex = 0;
 		}
 	}
 
-	if (CanPlayAttack)
-	{
-		LastTraceTime = 0.0f;
-		HitActorListCurrentAttack.Empty();
-		PlayAnimation(CurAttackContext, ComboIndex, Playrate);
-	}
+	if (!CanPlayAttack || !CandidateContext.AttackDetail.IsValidIndex(CandidateIndex)) return nullptr;
+
+	CurAttackContext = CandidateContext;
+	ComboIndex = CandidateIndex;
+
+	LastTraceTime = 0.0f;
+	HitActorListCurrentAttack.Empty();
+	PlayAnimation(CurAttackContext, ComboIndex, Playrate);
+
+	return &CurAttackContext.AttackDetail[ComboIndex]; // 실행한 단계 데이터
 }
 
 void UAttackComponent::PlayAnimation(FAttackContext AttackInfo, int32 index, float Playrate)

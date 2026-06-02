@@ -3,7 +3,6 @@
 
 #include "AI/BT/Tasks/BTTask_ExecutePattern_Reposition.h"
 #include "Characters/Enemies/EnemyBaseAIController.h"
-#include "BehaviorTree/BlackboardComponent.h"
 
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -77,7 +76,6 @@ EBTNodeResult::Type UBTTask_ExecutePattern_Reposition::ExecuteTask(UBehaviorTree
 
 	// --- 5. 분기: TowardTarget(Engage)이면 Actor 추적, 아니면 Location 이동 ---
 	FAIMoveRequest MoveReq;
-	MoveReq.SetAcceptanceRadius(Data.AcceptanceRadius);
 	MoveReq.SetUsePathfinding(true);
 	MoveReq.SetCanStrafe(true);
 
@@ -85,6 +83,7 @@ EBTNodeResult::Type UBTTask_ExecutePattern_Reposition::ExecuteTask(UBehaviorTree
 	{
 		// Engage: Actor 추적
 		MoveReq.SetGoalActor(Target);
+		MoveReq.SetAcceptanceRadius(Data.TargetDistance);
 
 		UE_LOG(Log_AI, Log, TEXT("[Task_Reposition] %s | Engage -> %s (Radius: %.0f)"),
 			*PatternID.ToString(), *Target->GetName(), Data.AcceptanceRadius);
@@ -111,7 +110,7 @@ EBTNodeResult::Type UBTTask_ExecutePattern_Reposition::ExecuteTask(UBehaviorTree
 		}
 
 		MoveReq.SetGoalLocation(NewLocation);
-
+		MoveReq.SetAcceptanceRadius(Data.AcceptanceRadius);
 		UE_LOG(Log_AI, Log, TEXT("[Task_Reposition] %s | Fixed -> %s (Radius: %.0f)"),
 			*PatternID.ToString(), *NewLocation.ToString(), Data.AcceptanceRadius);
 	}

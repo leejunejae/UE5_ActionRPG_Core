@@ -7,6 +7,7 @@
 #include "Combat/Components/AttackComponent.h"
 #include "Combat/Components/HitReactionComponent.h"
 #include "Characters/Components/CharacterStatusComponent.h"
+#include "Characters/Components/StatComponent.h"
 #include "Interaction/Climb/Components/ClimbComponent.h"
 #include "Characters/Rideable/Ride.h"
 #include "Utils/CoreLog.h"
@@ -27,6 +28,9 @@ ACharacterBase::ACharacterBase(const FObjectInitializer& ObjectInitializer)
 	CharacterStatusComponent = CreateDefaultSubobject<UCharacterStatusComponent>(TEXT("CharacterStatusComponent"));
 	CharacterStatusComponent->bAutoActivate = true;
 
+	StatComponent = CreateDefaultSubobject<UStatComponent>(TEXT("StatComponent"));
+	StatComponent->bAutoActivate = true;
+
 	ClimbComponent = CreateDefaultSubobject<UClimbComponent>(TEXT("ClimbComponent"));
 	ClimbComponent->bAutoActivate = true;
 
@@ -38,9 +42,6 @@ ACharacterBase::ACharacterBase(const FObjectInitializer& ObjectInitializer)
 	GetCharacterMovement()->bEnablePhysicsInteraction = false;
 
 	TeamID = 0;
-	//GetCharacterMovement()->bPushForceOnCharacter = false;
-	//AutoPossessAI = EAutoPossessAI::PlacedInWorldOrSpawned;
-	//AIControllerClass = AAIController::StaticClass(); // 커스텀 컨트롤러가 있으면 그걸로
 }
 
 // Called when the game starts or when spawned
@@ -60,6 +61,16 @@ void ACharacterBase::Tick(float DeltaTime)
 void ACharacterBase::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
+	if (GetCharacterStatusComponent())
+	{
+		GetCharacterStatusComponent()->OnDeathStarted.AddUObject(this, &ACharacterBase::HandleDeathStarted);
+		GetCharacterStatusComponent()->OnDeathFinalized.AddUObject(this, &ACharacterBase::HandleDeathFinalized);
+	}
+
+	if (GetHitReactionComponent())
+	{
+		GetHitReactionComponent()->HitEndDelegate.AddUObject(GetCharacterStatusComponent(), &UCharacterStatusComponent::ClearAction);
+	}
 }
 
 void ACharacterBase::SetCurLocomotionGait(ELocomotionGait NewGait)
@@ -82,4 +93,15 @@ void ACharacterBase::SetCurLocomotionGait(ELocomotionGait NewGait)
 ARide* ACharacterBase::GetCurrentRide()
 {
 	return Ride;
+}
+
+
+void ACharacterBase::HandleDeathStarted()
+{
+
+}
+
+void ACharacterBase::HandleDeathFinalized()
+{
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision); // 공용
 }

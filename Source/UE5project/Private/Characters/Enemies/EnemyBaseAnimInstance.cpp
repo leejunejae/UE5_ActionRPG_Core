@@ -4,6 +4,9 @@
 #include "Characters/Enemies/EnemyBaseAnimInstance.h"
 #include "Characters/Enemies/EnemyBase.h"
 #include "Animation/Mode/AnimMode_Ground_NPC.h"
+
+#include "Characters/Player/Components/PlayerStatusComponent.h"
+
 #include "Utils/CoreLog.h"
 #include "Utils/GameplayTagsBase.h"
 
@@ -45,16 +48,11 @@ void UEnemyBaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 void UEnemyBaseAnimInstance::InitAnimationData(FAnimDataSet AnimData)
 {
-	UE_LOG(Log_Spawn_NPC, Log, TEXT("[EnemyBaseAnimInstance] Init Animation Data"));
-	Locomotion = AnimData;
-	/*
 	Locomotion_BS = AnimData.Locomotion_CycleBS;
-	Locomotion_Idle = AnimData.Locomotion_Idle;
-	Locomotion_Phase = AnimData.LocomotionPhaseAnim;
-	/*
-	Locomotion_WalkSlowBS = AnimData.Locomotion_WalkSlowBS.LoadSynchronous();
-	Locomotion_WalkBS = AnimData.Locomotion_WalkBS.LoadSynchronous();
-	Locomotion_JogBS = AnimData.Locomotion_JogBS.LoadSynchronous();
-	Locomotion_RunBS = AnimData.Locomotion_RunBS.LoadSynchronous();
-	*/
+	DeathMontage = AnimData.DeathMontage;
+}
+
+void UEnemyBaseAnimInstance::HandleDeathStarted()
+{
+	Montage_Play(DeathMontage);
 }

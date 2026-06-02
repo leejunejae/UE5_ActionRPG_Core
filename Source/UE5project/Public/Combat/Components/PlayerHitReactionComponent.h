@@ -18,8 +18,6 @@ class UE5PROJECT_API UPlayerHitReactionComponent : public UHitReactionComponent
 
 public:
 	UPlayerHitReactionComponent();
-
-	EHitResponse EvaluateHitResponse(const FAttackRequest& AttackRequest) override;
 	
 protected:
 	// Called when the game starts

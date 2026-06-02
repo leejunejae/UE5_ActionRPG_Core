@@ -160,11 +160,16 @@ void UPlayerStatComponent::InitializeStats()
 			UE_LOG(LogTemp, Warning, TEXT("Vigor is Unloaded"));
 		}
 	}
+
+	BroadcastResourceStat(EResourceStatType::Health, PlayerStats.BaseStats.Health);
+	BroadcastResourceStat(EResourceStatType::Stamina, PlayerStats.Stamina);
+	BroadcastResourceStat(EResourceStatType::Focus, PlayerStats.Focus);
 }
 
 void UPlayerStatComponent::ChangeMaxStamina(const float Amount)
 {
 	PlayerStats.Stamina.Max += Amount;
+	BroadcastResourceStat(EResourceStatType::Stamina, PlayerStats.Stamina);
 }
 
 bool UPlayerStatComponent::ChangeStamina(const float Amount, const EStatChangeType SPChangeType)
@@ -176,6 +181,7 @@ bool UPlayerStatComponent::ChangeStamina(const float Amount, const EStatChangeTy
 	{
 	case EStatChangeType::Damage:
 		bChangeSuccess = PlayerStats.Stamina.Current >= Delta;
+		if (Delta > 0.f) TimeSinceStaminaSpend = 0.f;   // ← 핵심: 소모 시 회복 딜레이 리셋
 		break;
 	case EStatChangeType::Heal:
 		bChangeSuccess = (PlayerStats.Stamina.Current + Delta) <= PlayerStats.Stamina.Max;
@@ -185,7 +191,23 @@ bool UPlayerStatComponent::ChangeStamina(const float Amount, const EStatChangeTy
 
 	PlayerStats.Stamina.Current = FMath::Clamp(PlayerStats.Stamina.Current - Delta, 0.0f, PlayerStats.Stamina.Max);
 
+	BroadcastResourceStat(EResourceStatType::Stamina, PlayerStats.Stamina);
+
 	return bChangeSuccess;
+}
+
+void UPlayerStatComponent::TickStaminaRegen(float DeltaTime)
+{
+	TimeSinceStaminaSpend += DeltaTime;
+
+	if (PlayerStats.Stamina.Current >= PlayerStats.Stamina.Max) return;
+	if (TimeSinceStaminaSpend < StaminaRegenDelay) return;
+
+	PlayerStats.Stamina.Current = FMath::Clamp(
+		PlayerStats.Stamina.Current + StaminaRegenRate * DeltaTime,
+		0.f, PlayerStats.Stamina.Max);
+
+	BroadcastResourceStat(EResourceStatType::Stamina, PlayerStats.Stamina);
 }
 
 float UPlayerStatComponent::GetAttributesRequirementRatio_Implementation(const FCharacterAttributes& RequireStats) const

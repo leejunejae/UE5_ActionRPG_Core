@@ -37,15 +37,11 @@ struct FAnimDataSet
 public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
         TObjectPtr<UBlendSpace> Locomotion_CycleBS;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        TObjectPtr<UAnimSequence> Locomotion_Idle;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        TMap<ELocomotionGait, FPhaseAnimByCardinal> LocomotionPhaseAnim;
-
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
         TObjectPtr<UHitReactionDataAsset> HitReactionAnimSet;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+        TObjectPtr<UAnimMontage> DeathMontage;
 };
 
 USTRUCT(BlueprintType)
@@ -108,11 +104,16 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
         TSoftObjectPtr<UAnimSequence> GetUp;
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        TSoftObjectPtr<UAnimSequence> HitAir_Death;
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        TSoftObjectPtr<UAnimSequence> Ground_Death;
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
         TSoftObjectPtr<UAnimSequence> Guard;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Death") 
+        TSoftObjectPtr<UAnimMontage> GroundDeathMontage;
+    UPROPERTY(EditDefaultsOnly, Category = "Death") 
+        TSoftObjectPtr<UAnimMontage> AirDeathMontage;
+    UPROPERTY(EditDefaultsOnly, Category = "Death") 
+        TSoftObjectPtr<UAnimMontage> LadderDeathMontage;
+    UPROPERTY(EditDefaultsOnly, Category = "Death") 
+        TSoftObjectPtr<UAnimMontage> RideDeathMontage;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IK")
         bool bUseWeaponIK = false;

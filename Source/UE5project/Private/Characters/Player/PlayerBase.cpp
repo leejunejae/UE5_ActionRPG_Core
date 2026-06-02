@@ -61,14 +61,12 @@
  * ============================================================ */
 APlayerBase::APlayerBase(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer
-		.SetDefaultSubobjectClass<UPlayerAttackComponent>(TEXT("AttackComponent"))
-		.SetDefaultSubobjectClass<UPlayerHitReactionComponent>(TEXT("HitReactionComponent"))
-		.SetDefaultSubobjectClass<UPlayerStatusComponent>(TEXT("CharacterStatusComponent")))
+	.SetDefaultSubobjectClass<UPlayerAttackComponent>(TEXT("AttackComponent"))
+	.SetDefaultSubobjectClass<UPlayerHitReactionComponent>(TEXT("HitReactionComponent"))
+	.SetDefaultSubobjectClass<UPlayerStatusComponent>(TEXT("CharacterStatusComponent"))
+	.SetDefaultSubobjectClass<UPlayerStatComponent>(TEXT("StatComponent")))
 {
 	PrimaryActorTick.bCanEverTick = true;
-
-	StatComponent = CreateDefaultSubobject<UPlayerStatComponent>(TEXT("StatComponent"));
-	StatComponent->bAutoActivate = true;
 
 	EquipmentComponent = CreateDefaultSubobject<UEquipmentComponent>(TEXT("EquipmentComponent"));
 	EquipmentComponent->bAutoActivate = true;
@@ -150,7 +148,6 @@ void APlayerBase::BeginPlay()
 	{
 		DefaultWidget = CreateWidget<UDefaultWidget>(PlayerController, DefaultWidgetClass);
 	}
-	StatComponent->InitializeStats();
 
 	InitSpringArmLocation = SpringArm->GetRelativeLocation();
 }
@@ -190,6 +187,19 @@ void APlayerBase::Tick(float DeltaTime)
 
 		ApplyLockOnRotation(DeltaTime);
 	}
+
+	if (GetStatComponent())
+	{
+		if (CurLocomotionGait == ELocomotionGait::Sprint && GetVelocity().SizeSquared() > 100.f)
+		{
+			GetStatComponent()->ChangeStamina(SprintStaminaPerSec * DeltaTime, EStatChangeType::Damage);
+			if (GetStatComponent()->GetStamina() <= 0.f)
+				Jog();   // 바닥나면 조그로 강제 전환
+		}
+
+		GetStatComponent()->TickStaminaRegen(DeltaTime);
+	}
+
 
 	// 디버그 드로잉 (기존 유지)
 	FVector LastInputDirection = GetLastMovementInputVector().GetSafeNormal();
@@ -320,12 +330,14 @@ void APlayerBase::PostInitializeComponents()
 
 	if (GetCharacterStatusComponent())
 	{
-		GetCharacterStatusComponent()->OnDeath.AddUObject(this, &APlayerBase::OnDeath);
-
 		// ★ 버퍼에서 소비된 행동의 실제 실행을 위한 바인딩
 		GetCharacterStatusComponent()->OnActionConsumed.BindUObject(this, &APlayerBase::HandleBufferedAction);
-		GetAttackComponent()->OnAttackFinished.AddUObject(this, &APlayerBase::OnActionFinished);
+
+		if(GetAttackComponent()) GetAttackComponent()->OnAttackFinished.AddUObject(this, &APlayerBase::OnActionFinished);
+		if(GetClimbComponent()) GetClimbComponent()->OnLadderExit.AddUObject(this, &APlayerBase::OnStateChanged, TAG_State_Ground.GetTag());
 	}
+
+	if(GetStatComponent()) GetStatComponent()->InitializeStats();
 }
 
 /* ============================================================
@@ -364,7 +376,7 @@ void APlayerBase::Move(const FInputActionValue& value)
 
 	const FVector2D DirectionValue = value.Get<FVector2D>();
 
-	if(GetCharacterStatusComponent()->GetState() == TAG_State_Ground)
+	if(GetCharacterStatusComponent()->GetCurrentState() == TAG_State_Ground)
 	{
 		const FRotator Rotation = GetControlRotation();
 		const FRotator YawRotation(0, Rotation.Yaw, 0);
@@ -384,7 +396,7 @@ void APlayerBase::Move(const FInputActionValue& value)
 		AddMovementInput(UKismetMathLibrary::GetForwardVector(YawRotation), MovementScale.Y);
 		AddMovementInput(UKismetMathLibrary::GetRightVector(YawRotation), MovementScale.X);
 	}
-	else if(GetCharacterStatusComponent()->GetState() == TAG_State_Ladder)
+	else if(GetCharacterStatusComponent()->GetCurrentState() == TAG_State_Ladder)
 	{
 		IsMovementInput = FMath::IsNearlyZero(DirectionValue.Y) ? false : true;
 		if (!IsMovementInput) return;
@@ -415,10 +427,11 @@ void APlayerBase::EndMoveInput()
  * ============================================================ */
 void APlayerBase::AttackInput()
 {
-	UE_LOG(Log_Player_Input, Error, TEXT("[APlayerBase] Input AttackInput"));
+	if (GetStatComponent()->GetStamina() <= 0.f) return;
+
 	if (GetCharacterStatusComponent()->RequestAction(TAG_Action_Attack))
 	{
-		UE_LOG(Log_Player_Input, Error, TEXT("[APlayerBase] Can Attack Action"));
+		UE_LOG(Log_Character_Player_Input, Error, TEXT("[APlayerBase] Can Attack Action"));
 		ExecuteAttack(); // 즉시 가능하면 바로 실행
 	}
 	// else: 버퍼에 저장됨 → Window 열리면 HandleBufferedAction → ExecuteAttack
@@ -439,6 +452,8 @@ void APlayerBase::JumpInput()
 
 void APlayerBase::DodgeInput()
 {
+	if (GetStatComponent()->GetStamina() <= 0.f) return;
+
 	if (GetCharacterStatusComponent()->RequestAction(TAG_Action_Dodge))
 	{
 		ExecuteDodge();
@@ -454,7 +469,6 @@ void APlayerBase::BlockInput()
 void APlayerBase::BlockInputEnd()
 {
 	IsBlockInput = false;
-	GetCharacterStatusComponent()->SetGroundStance_Native(EGroundStance::Normal);
 	OnActionFinished(false);
 }
 
@@ -477,7 +491,15 @@ void APlayerBase::ExecuteAttack()
 	GetCharacterStatusComponent()->SwitchAction(TAG_Action_Attack);
 
 	IsAttackInput = true;
-	GetAttackComponent()->ExecuteAttack(FName("DefaultCombo"));
+	const FBaseAttackData* Played = GetAttackComponent()->ExecuteAttack(FName("DefaultCombo"));
+	if (Played)
+	{
+		if (const FWeaponSetsInfo* Weapon = GetEquipmentComponent()->GetEquipedWeapon())
+		{
+			const float Cost = Weapon->StaminaCost * Played->StaminaCostMultiplier;
+			GetStatComponent()->ChangeStamina(Cost, EStatChangeType::Damage);
+		}
+	}
 }
 
 void APlayerBase::ExecuteJump()
@@ -491,7 +513,6 @@ void APlayerBase::ExecuteJump()
 	}
 	else
 	{
-		GetCharacterStatusComponent()->SetGroundStance_Native(EGroundStance::Jump);
 		Super::Jump();
 	}
 }
@@ -499,6 +520,12 @@ void APlayerBase::ExecuteJump()
 void APlayerBase::ExecuteDodge()
 {
 	GetCharacterStatusComponent()->SwitchAction(TAG_Action_Dodge);
+
+	const FPlayerStats Stats = GetStatComponent()->GetCharacterStats_Native();
+	const float LoadRatio = Stats.EquipLoad.Max > KINDA_SMALL_NUMBER
+		? FMath::Clamp(Stats.EquipLoad.Current / Stats.EquipLoad.Max, 0.f, 1.f) : 0.f;
+	const float Cost = DodgeStaminaBase * (1.0f + LoadRatio);  // 무부하 ×1 ~ 만적재 ×2
+	GetStatComponent()->ChangeStamina(Cost, EStatChangeType::Damage);
 
 	const FRotator Rotation = GetControlRotation();
 	const FRotator YawRotation(0, Rotation.Yaw, 0);
@@ -552,8 +579,6 @@ void APlayerBase::ExecuteDodge()
 	CharacterBaseAnim->Montage_Play(RollMontage);
 	CharacterBaseAnim->Montage_JumpToSection(RollDirectionName, RollMontage);
 
-	CharacterStatusComponent->SetGroundStance_Native(EGroundStance::Dodge);
-
 	FOnMontageEnded EndDelegate;
 	EndDelegate.BindUObject(this, &APlayerBase::OnDodgeMontageEnded);
 	CharacterBaseAnim->Montage_SetEndDelegate(EndDelegate, RollMontage);
@@ -564,19 +589,17 @@ void APlayerBase::ExecuteBlock()
 	GetCharacterStatusComponent()->SwitchAction(TAG_Action_Guard);
 
 	IsBlockInput = true;
-	GetCharacterStatusComponent()->SetGroundStance_Native(EGroundStance::Block);
 }
 
 void APlayerBase::ExecuteInteract()
 {
-	GetCharacterStatusComponent()->SwitchAction(TAG_Action_Interact);
-
 	if (IsInteraction)
 	{
 		GetController()->SetIgnoreMoveInput(false);
 		GetController()->StopMovement();
 		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 		IsInteraction = false;
+		GetCharacterStatusComponent()->ClearAction();
 		return;
 	}
 	else
@@ -586,6 +609,7 @@ void APlayerBase::ExecuteInteract()
 		if (!InteractTargetValid)
 			return;
 
+		GetCharacterStatusComponent()->SwitchAction(TAG_Action_Interact);
 		GetController()->SetIgnoreMoveInput(true);
 		IsInteraction = InteractComponent->MovetoInteractPos();
 	}
@@ -621,13 +645,17 @@ void APlayerBase::OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 	OnActionFinished(bInterrupted);
 }
 
+void APlayerBase::OnStateChanged(const FGameplayTag NewState)
+{
+	GetCharacterStatusComponent()->SetState(NewState);
+}
+
 /* ============================================================
  *  Landed
  * ============================================================ */
 void APlayerBase::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
-	GetCharacterStatusComponent()->SetGroundStance_Native(EGroundStance::Normal);
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	OnActionFinished(false);
 }
@@ -650,6 +678,8 @@ void APlayerBase::Jog()
 
 void APlayerBase::Sprint()
 {
+	if (GetStatComponent()->GetStamina() <= 0.f) { Jog(); return; }
+
 	CurLocomotionGait = ELocomotionGait::Sprint;
 	if (!LockOnComponent->IsLockedOn())
 	{
@@ -821,7 +851,7 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 		if (GetStatComponent()->GetCommonStats().GetPoise() <= 0.0f && !GetCharacterStatusComponent()->IsDead())
 		{
 			FHitReactionRequest InputReaction = { Response, HitAngle };
-			GetCharacterStatusComponent()->SetGroundStance_Native(EGroundStance::Hit);
+			GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
 			GetHitReactionComponent()->ExecuteHitResponse(InputReaction);
 		}
 		break;
@@ -833,7 +863,7 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 		if (GetStatComponent()->GetCommonStats().GetPoise() <= 0.0f || GetCharacterStatusComponent()->IsDead())
 		{
 			CharacterBaseAnim->SetHitAir(true);
-			GetCharacterStatusComponent()->SetGroundStance_Native(EGroundStance::Hit);
+			GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
 		}
 		break;
 	}
@@ -850,7 +880,7 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 		}
 
 		float ApplyGuardBoost = AttackInfo.StanceDamage * (1.0f - GuardBoost / 100.0f);
-		bool IsStaminaEnough = StatComponent->ChangeStamina(ApplyGuardBoost, EStatChangeType::Damage);
+		bool IsStaminaEnough = GetStatComponent()->ChangeStamina(ApplyGuardBoost, EStatChangeType::Damage);
 		if (IsStaminaEnough)
 		{
 			float ApplyNegationDamage = AttackInfo.Damage * (1.0f - GuardNegation / 100.0f);
@@ -858,6 +888,7 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 			if (!GetCharacterStatusComponent()->IsDead())
 			{
 				FHitReactionRequest InputReaction = { Response, HitAngle };
+				GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
 				GetHitReactionComponent()->ExecuteHitResponse(InputReaction);
 			}
 		}
@@ -865,24 +896,43 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 		{
 			StatComponent->ApplyDamage(AttackInfo.Damage, AttackInfo.AttackType);
 			Response = Response == EHitResponse::Block ? EHitResponse::BlockBreak : EHitResponse::BlockStun;
+			FHitReactionRequest InputReaction = { Response, HitAngle };
+			GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
+			GetHitReactionComponent()->ExecuteHitResponse(InputReaction);
 		}
 		break;
 	}
 	}
 }
 
-void APlayerBase::OnDeathEnd_Implementation()
+void APlayerBase::HandleDeathStarted()
 {
-	GetMesh()->SetCollisionProfileName(TEXT("Ragdoll"));
-	GetMesh()->SetSimulatePhysics(true);
-	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-	SetLifeSpan(5.0f);
+	// 입력 차단
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		DisableInput(PC);
+	}
+
+	// 이전 State별 뒷정리
+	const FGameplayTag PrevState = GetCharacterStatusComponent()->GetPreviousStateBeforeDeath();
+
+	if (PrevState.MatchesTagExact(TAG_State_Ride))
+	{
+		// 탈것 위에서 사망 → 낙마(탈것 디스폰 + 컨트롤/콜리전 복구)
+		IPlayerInterface::Execute_DespawnRide(this, GetVelocity());
+	}
+	else if (PrevState.MatchesTagExact(TAG_State_Ladder))
+	{
+		// 사다리에서 사망 → 사다리 디태치
+		// TODO: ClimbComponent의 실제 탈출 API로 연결 (RequestEnterLadder의 짝)
+		// 예: GetClimbComponent()->RequestExitLadder();
+	}
+	// State.Ground / 그 외: 별도 정리 없음
 }
 
-void APlayerBase::OnDeath()
+void APlayerBase::HandleDeathFinalized()
 {
-	APlayerController* MyController = Cast<APlayerController>(GetController());
-	DisableInput(MyController);
+	Super::HandleDeathFinalized(); // 캡슐 콜리전 off
 }
 
 /* ============================================================
@@ -1051,6 +1101,11 @@ UPlayerHitReactionComponent* APlayerBase::GetHitReactionComponent() const
 UPlayerStatusComponent* APlayerBase::GetCharacterStatusComponent() const
 {
 	return Cast<UPlayerStatusComponent>(CharacterStatusComponent);
+}
+
+UPlayerStatComponent* APlayerBase::GetStatComponent() const
+{
+	return Cast<UPlayerStatComponent>(StatComponent);
 }
 
 /* ============================================================

@@ -18,25 +18,23 @@ void UAnimMode_Ground::Tick(float DeltaSeconds)
 	if (!Character.IsValid() || !AnimInst.IsValid()) return;
 
 	// 상태/스탠스
-	AnimInst->CurLocomotionGait = Character->GetCurLocomotionGait();                 // :contentReference[oaicite:9]{index=9}
-	AnimInst->CharacterGroundState = Character->GetCharacterStatusComponent()->GetGroundStance_Native();
+	AnimInst->CurLocomotionGait = Character->GetCurLocomotionGait();
 
 	// 이동량
-	AnimInst->Speed = Character->GetVelocity().Length();                     // :contentReference[oaicite:10]{index=10}
 	AnimInst->Direction = ComputeCurrentDirection();
 	if (bFirstTick) { OnModeEnter(); bFirstTick = false; }
 
 
 	// 점프/낙하/착지 판정
-	AnimInst->IsInAir = Character->GetMovementComponent()->IsFalling();          // :contentReference[oaicite:11]{index=11}
+	AnimInst->IsInAir = Character->GetMovementComponent()->IsFalling();         
 	AnimInst->IsJumping = AnimInst->IsFalling = AnimInst->IsLanding = false;
 	if (AnimInst->IsInAir)
 	{
-		Character->GetVelocity().Z > 0 ? AnimInst->IsJumping = true : AnimInst->IsFalling = true; // :contentReference[oaicite:12]{index=12}
+		Character->GetVelocity().Z > 0 ? AnimInst->IsJumping = true : AnimInst->IsFalling = true; 
 	}
 
 	// 런/조그 블렌드, 가속/퀵턴, 등
-	AnimInst->MovementAlpha = FMath::GetRangePct(400.f, 600.f, AnimInst->Speed);          // :contentReference[oaicite:14]{index=14}
+	AnimInst->MovementAlpha = FMath::GetRangePct(400.f, 600.f, AnimInst->Speed);
 
 	// 발 IK
 	UpdateFootIK(DeltaSeconds, AnimInst->Speed);
@@ -55,7 +53,6 @@ float UAnimMode_Ground::ComputeCurrentDirection()
 TTuple<FVector, float> UAnimMode_Ground::FootTrace(
 	USkeletalMeshComponent* Mesh, UCapsuleComponent* Capsule, FName Socket)
 {
-	// 원 FootTrace 로직을 모드로 이동:contentReference[oaicite:5]{index=5}
 	const FVector FootLoc = Mesh->GetSocketLocation(Socket);
 	const FVector Start(FootLoc.X, FootLoc.Y, Mesh->GetOwner()->GetActorLocation().Z);
 	const FVector End = Start - FVector(0, 0, Capsule->GetScaledCapsuleHalfHeight() + TraceDistance);

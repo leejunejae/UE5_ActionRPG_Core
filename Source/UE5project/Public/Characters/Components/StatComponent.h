@@ -5,16 +5,15 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Characters/Data/CharacterStatData.h"
-#include "Characters/Interfaces/DeathInterface.h"
 #include "Combat/Data/CombatData.h"
 
 #include "StatComponent.generated.h"
 
 DECLARE_MULTICAST_DELEGATE(FOnStatCompMultiDel);
+DECLARE_MULTICAST_DELEGATE_ThreeParams(FOnResourceStatChanged, EResourceStatType, float, float);
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
-class UE5PROJECT_API UStatComponent : public UActorComponent,
-	public IDeathInterface
+class UE5PROJECT_API UStatComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
@@ -27,11 +26,11 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
-	FOnDeathDelegate OnDeath;
 	virtual FCharacterStats& GetCommonStats() { return BaseStats; }
-	virtual FOnDeathDelegate& GetOnDeathDelegate() override { return OnDeath; }
 
 	FOnStatCompMultiDel PoiseBreakDelegate;
+
+	FOnResourceStatChanged OnResourceStatChanged;
 
 public:
 	void ChangeMaxHealth(const float Amount);
@@ -39,6 +38,8 @@ public:
 	bool ApplyDamage(const float Amount, const EDamageType AttackType);
 	bool Heal(const float Amount);
 	void ChangePoise(const float Amount, const EStatChangeType PoiseChangeType);
+
+	void BroadcastResourceStat(EResourceStatType StatType, const FResourceStat& Resource);
 
 protected:
 	FCharacterStats BaseStats;

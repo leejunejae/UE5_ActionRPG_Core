@@ -35,30 +35,30 @@ void UCharacterBaseAnimInstance::NativeInitializeAnimation()
 
 	if (Character)
 	{
-		Character->GetCharacterStatusComponent()->OnDeath.AddUObject(this, &UCharacterBaseAnimInstance::HandleDeath);
-	}
+		Character->GetCharacterStatusComponent()->OnDeathStarted.AddUObject(this, &UCharacterBaseAnimInstance::HandleDeathStarted);
 
-	AnimModeMap.Empty();
-	AnimModeMap.Add(TAG_State_Ground, NewObject<UAnimMode_Ground>(this));
-	AnimModeMap.Add(TAG_State_Ladder, NewObject<UAnimMode_Ladder>(this));
+		AnimModeMap.Empty();
+		AnimModeMap.Add(TAG_State_Ground, NewObject<UAnimMode_Ground>(this));
+		AnimModeMap.Add(TAG_State_Ladder, NewObject<UAnimMode_Ladder>(this));
 
-	IKPhase.Add(FGameplayTag::RequestGameplayTag(TEXT("IK.Phase.Ground")), 1.0f);
-	IKPhase.Add(FGameplayTag::RequestGameplayTag(TEXT("IK.Phase.Ladder")), 0.0f);
+		IKPhase.Add(FGameplayTag::RequestGameplayTag(TEXT("IK.Phase.Ground")), 1.0f);
+		IKPhase.Add(FGameplayTag::RequestGameplayTag(TEXT("IK.Phase.Ladder")), 0.0f);
 
-	for (auto& Pair : AnimModeMap)
-	{
-		if (!IsValid(Pair.Value))
+		for (auto& Pair : AnimModeMap)
 		{
-			// 무효 엔트리 발견 시 재빌드 or 건너뛰기
-			// 여기선 안전하게 스킵
-			continue;
+			if (!IsValid(Pair.Value))
+			{
+				// 무효 엔트리 발견 시 재빌드 or 건너뛰기
+				// 여기선 안전하게 스킵
+				continue;
+			}
+
+			Pair.Value->Character = Character;
+			Pair.Value->AnimInst = this;
 		}
 
-		Pair.Value->Character = Character;
-		Pair.Value->AnimInst = this;
+		SwitchAnimMode(TAG_State_Ground);
 	}
-
-	SwitchAnimMode(TAG_State_Ground);
 }
 
 void UCharacterBaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
@@ -66,29 +66,26 @@ void UCharacterBaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	Super::NativeUpdateAnimation(DeltaSeconds);
 	if (Character)
 	{
-		CurrentState = Character->GetCharacterStatusComponent()->GetState();
+		CurrentState = Character->GetCharacterStatusComponent()->GetCurrentState();
 
 		if (!CurrentMode || AnimModeMap.FindRef(CurrentState) != CurrentMode)
 		{
 			SwitchAnimMode(CurrentState);
 		}
 
-		if (CurrentMode)
-		{
+		if (CurrentMode && !Character->GetCharacterStatusComponent()->IsDead())
 			CurrentMode->Tick(DeltaSeconds);
-		}
 	}
 }
 
 void UCharacterBaseAnimInstance::SwitchAnimMode(const FGameplayTag TargetMode)
 {
-	if (CurrentMode)
-		CurrentMode->OnModeExit();
+	UAnimModeBase* NextMode = AnimModeMap.FindRef(TargetMode);
+	if (!NextMode || CurrentMode == NextMode) return;
 
-	if (CurrentMode = AnimModeMap[TargetMode])
-	{
-		CurrentMode->OnModeEnter();
-	}
+	if (CurrentMode) CurrentMode->OnModeExit();
+	CurrentMode = NextMode;
+	CurrentMode->OnModeEnter();
 }
 
 TTuple<FVector, float> UCharacterBaseAnimInstance::FootTrace(FName SocketName)
@@ -142,6 +139,11 @@ void UCharacterBaseAnimInstance::SetHitAir(bool HitState)
 void UCharacterBaseAnimInstance::ResetHitAir_Implementation()
 {
 	SetHitAir(false);
+}
+
+void UCharacterBaseAnimInstance::HandleDeathStarted()
+{
+	
 }
 
 void UCharacterBaseAnimInstance::AnimNotify_NOT_EnableRootLock()

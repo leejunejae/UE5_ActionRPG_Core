@@ -21,7 +21,4 @@ class UDeathInterface : public UInterface
 class UE5PROJECT_API IDeathInterface
 {
 	GENERATED_BODY()
-
-public:
-	virtual FOnDeathDelegate& GetOnDeathDelegate() = 0;
 };

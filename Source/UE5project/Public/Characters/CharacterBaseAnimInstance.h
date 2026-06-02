@@ -63,11 +63,6 @@ protected:
 
 #pragma endregion Animation Mode
 
-#pragma region State & Stance
-private:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Combat, Meta = (AllowPrivateAccess = true))
-		EGroundStance CharacterGroundState;
-
 #pragma region State & Stance_IK
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = IK)
@@ -248,15 +243,14 @@ public:
 	void SetHitAir(bool HitState);
 	void ResetHitAir_Implementation() override;
 
-protected:
-	FORCEINLINE void HandleDeath() { bIsDead = true; }
-
 private:
 	UPROPERTY(BlueprintReadOnly, Category = HitReaction, Meta = (AllowPrivateAccess = true))
 		bool bIsHitAir = false;
 
-	UPROPERTY(BlueprintReadOnly, Category = HitReaction, Meta = (AllowPrivateAccess = true))
-		bool bIsDead = false;
-
 #pragma endregion HitReaction
+
+#pragma region Death
+protected:
+	virtual void HandleDeathStarted();
+#pragma endregion Death
 };

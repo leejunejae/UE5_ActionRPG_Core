@@ -39,8 +39,6 @@ enum class EHitResponse : uint8
 	BlockBreak UMETA(DisplayName = "BlockBreak"),
 	BlockStun UMETA(DisplayName = "BlockStun"),
 	Parry UMETA(DisplayName = "Parry"),
-	Death UMETA(DislplayName = "Death"),
-	DeathLarge UMETA(DislplayName = "DeathLarge"),
 };
 /*
 * 공격 데이터 자료형

@@ -7,9 +7,9 @@
 #include "Engine/DataTable.h"
 #include "CharacterStatData.generated.h"
 
-/**
- * 
- */
+/* ============================================================
+ *  Attribute - 플레이어 캐릭터 영구 능력치
+ * ============================================================ */
 UENUM(BlueprintType)
 enum class EAttributeType : uint8
 {
@@ -155,6 +155,19 @@ struct FCharacterAttributes
 	float GetRequirementAttributeRate(const FCharacterAttributes& Requirement) const;
 };
 
+/* ============================================================
+ *  Resources - 런타임 스탯
+ * ============================================================ */
+
+// 스탯 소모를 나타내기 위한 리소스 타입 정의(Enemy가 사용하는 Stance의 경우 표시되지 않으므로 제외)
+UENUM(BlueprintType)
+enum class EResourceStatType : uint8
+{
+	Health,
+	Stamina,
+	Focus
+};
+
 USTRUCT(BlueprintType)
 struct FResourceStat
 {
@@ -236,6 +249,9 @@ struct FNPCStats
 		FCharacterStats BaseStats;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+		FResourceStat Stance;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		float PhysicalAttackPower = 0.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
@@ -246,9 +262,6 @@ struct FNPCStats
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		float StaminaAttackPower = 0.f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		FResourceStat Stance;
 
 public:
 	FORCEINLINE float GetStance() const { return Stance.Current; }

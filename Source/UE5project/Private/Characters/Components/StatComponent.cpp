@@ -31,6 +31,7 @@ void UStatComponent::BeginPlay()
 void UStatComponent::ChangeMaxHealth(const float Amount)
 {
 	GetCommonStats().Health.Max += Amount;
+	BroadcastResourceStat(EResourceStatType::Health, GetCommonStats().Health);
 }
 
 void UStatComponent::ChangeMaxPoise(const float Amount)
@@ -56,13 +57,14 @@ bool UStatComponent::ApplyDamage(const float Amount, const EDamageType AttackTyp
 	}
 
 	Stats.Health.Current = FMath::Clamp(Stats.Health.Current - Delta, 0.0f, Stats.Health.Max);
+
+	BroadcastResourceStat(EResourceStatType::Health, Stats.Health);
 	
 	if (Stats.Health.Current <= 0.0f)
 	{
-		OnDeath.ExecuteIfBound();
 		if (UCharacterStatusComponent* StatusComp = GetOwner()->FindComponentByClass<UCharacterStatusComponent>())
 		{
-			StatusComp->ExecuteDeath();
+			StatusComp->EnterDeath();
 		}
 		return false;
 	}
@@ -75,6 +77,8 @@ bool UStatComponent::Heal(const float Amount)
 	FCharacterStats& Stats = GetCommonStats();
 
 	Stats.Health.Current = FMath::Clamp(Stats.GetHealth() + Amount, 0.0f, Stats.GetMaxHealth());
+
+	BroadcastResourceStat(EResourceStatType::Health, Stats.Health);
 
 	return true;
 }
@@ -105,4 +109,9 @@ void UStatComponent::ChangePoise(const float Amount, const EStatChangeType Poise
 		if(AActor* Owner = GetOwner())UE_LOG(Log_Hit, Log, TEXT("[StatComponent] %s Poise has been broken"), *Owner->GetName());
 		PoiseBreakDelegate.Broadcast();
 	}
+}
+
+void UStatComponent::BroadcastResourceStat(EResourceStatType StatType, const FResourceStat& Resource)
+{
+	OnResourceStatChanged.Broadcast(StatType, Resource.Current, Resource.Max);
 }

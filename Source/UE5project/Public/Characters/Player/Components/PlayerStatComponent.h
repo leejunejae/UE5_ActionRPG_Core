@@ -26,6 +26,9 @@ public:
 
 	void ChangeMaxStamina(const float Amount);
 	bool ChangeStamina(const float Amount, const EStatChangeType SPChangeType);
+	void TickStaminaRegen(float DeltaTime);
+	FORCEINLINE float GetStamina() const { return PlayerStats.Stamina.Current; }
+	FORCEINLINE float GetMaxStamina() const { return PlayerStats.Stamina.Max; }
 
 	FORCEINLINE FPlayerStats GetCharacterStats_Native() const { return PlayerStats; }
 
@@ -43,4 +46,12 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats") // 특성값과 장비를 비롯한 요소로 결정되는 수치화된 캐릭터의 능력
 		FPlayerStats PlayerStats;
+
+	UPROPERTY(EditAnywhere, Category = "Stats|Stamina")
+	float StaminaRegenRate = 30.f;    // 초당 회복량
+	UPROPERTY(EditAnywhere, Category = "Stats|Stamina")
+	float StaminaRegenDelay = 1.0f;   // 소모 후 회복 시작까지 지연(초)
+
+private:
+	float TimeSinceStaminaSpend = 10.f;   // 시작 시 바로 회복 가능하도록 큰 값
 };

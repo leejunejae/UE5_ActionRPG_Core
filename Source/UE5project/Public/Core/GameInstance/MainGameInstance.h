@@ -10,7 +10,7 @@
  * 
  */
 
-class UWeaponDataAsset;
+class UWeaponDataAsset;;
 
 UCLASS()
 class UE5PROJECT_API UMainGameInstance : public UGameInstance
@@ -19,4 +19,5 @@ class UE5PROJECT_API UMainGameInstance : public UGameInstance
 
 public:
 	virtual void Init() override;
+
 };

@@ -19,6 +19,7 @@
 class UAttackComponent;
 class UHitReactionComponent;
 class UCharacterStatusComponent;
+class UStatComponent;
 class UClimbComponent;
 
 class ARide;
@@ -97,6 +98,15 @@ public:
 	FORCEINLINE UCharacterStatusComponent* GetCharacterStatusComponent() const { return CharacterStatusComponent; }
 #pragma endregion Status
 
+#pragma region Stat
+protected:
+	UPROPERTY(VisibleAnywhere, Category = Stat)
+	TObjectPtr<UStatComponent> StatComponent;
+
+public:
+	FORCEINLINE UStatComponent* GetStatComponent() const { return StatComponent; }
+#pragma endregion Stat
+
 #pragma region Ladder
 protected:
 	UPROPERTY(VisibleAnywhere, Category = Climb)
@@ -136,4 +146,9 @@ protected:
 public:
 	ARide* GetCurrentRide();
 #pragma endregion Ride
+
+#pragma region Death
+	virtual void HandleDeathStarted();    // 진입: 입력 차단 + 이전 State 정리
+	virtual void HandleDeathFinalized();
+#pragma endregion Death
 };

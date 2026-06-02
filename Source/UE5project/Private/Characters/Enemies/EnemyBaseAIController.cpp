@@ -73,7 +73,6 @@ void AEnemyBaseAIController::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	//UE_LOG(Log_AI, Log, TEXT("[EnemyBaseAIController] %s ThreatScore to %f"), *GetNameSafe(GetPawn()), ThreatScore);
 }
 
 void AEnemyBaseAIController::OnPossess(APawn* InPawn)
@@ -584,7 +583,7 @@ void AEnemyBaseAIController::EnterLockOn(AActor* Target)
     ACharacter* OwnerCharacter = Cast<ACharacter>(GetPawn());
     if (!OwnerCharacter) return;
 
-    OwnerCharacter->bUseControllerRotationYaw = true;
+    OwnerCharacter->GetCharacterMovement()->bUseControllerDesiredRotation = true;
     OwnerCharacter->GetCharacterMovement()->bOrientRotationToMovement = false;
 
     SetFocus(Target, EAIFocusPriority::Gameplay);
@@ -597,6 +596,6 @@ void AEnemyBaseAIController::ExitLockOn()
 
     ClearFocus(EAIFocusPriority::Gameplay);
 
-    OwnerCharacter->bUseControllerRotationYaw = false;
+    OwnerCharacter->GetCharacterMovement()->bUseControllerDesiredRotation = false;
     OwnerCharacter->GetCharacterMovement()->bOrientRotationToMovement = true;
 }

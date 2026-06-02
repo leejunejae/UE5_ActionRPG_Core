@@ -14,6 +14,8 @@ void UAnimMode_Ground_NPC::Tick(float DeltaSeconds)
 	auto* Ch = Cast<AEnemyBase>(Character.Get());
 	auto* Anim = Cast<UEnemyBaseAnimInstance>(AnimInst.Get());
 
+	AnimInst->Speed = FMath::FInterpTo(AnimInst->Speed, Character->GetVelocity().Length(),DeltaSeconds, 8.0f);
+
 	// 가속 확인
 	FVector WorldAcceleration = Character->GetCharacterMovement()->GetCurrentAcceleration() * FVector(1.0f, 1.0f, 0.0f);
 	FVector LocalAcceleration = Character->GetActorRotation().UnrotateVector(WorldAcceleration);

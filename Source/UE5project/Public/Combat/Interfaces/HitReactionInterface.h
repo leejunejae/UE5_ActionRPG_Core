@@ -23,18 +23,6 @@ class UE5PROJECT_API IHitReactionInterface
 
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
-	//UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
-		//float GetHealth();
-
-	//UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
-		//float GetMaxHealth();
-
-	//UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
-		//float Heal(float amount);
-
-	//UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
-		//void TakeDamage(FAttackInfo DamageInfo);
-
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 		void OnHit(const FAttackRequest& AttackInfo);
 

@@ -4,7 +4,6 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimNotifies/AnimNotify.h"
-#include "Characters/Interfaces/CharacterStatusInterface.h"
 #include "AN_SetPlayerGroundState.generated.h"
 
 /**
@@ -17,7 +16,4 @@ class UE5PROJECT_API UAN_SetPlayerGroundState : public UAnimNotify
 	
 public:
 	virtual void Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation) override;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Notify")
-		EGroundStance NewState;
 };

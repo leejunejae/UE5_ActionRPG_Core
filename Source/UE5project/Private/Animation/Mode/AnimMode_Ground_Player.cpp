@@ -26,6 +26,8 @@ void UAnimMode_Ground_Player::Tick(float DeltaSeconds)
 	auto* Ch = Cast<APlayerBase>(Character.Get());
 	auto* Anim = Cast<UPlayerBaseAnimInstance>(AnimInst.Get());
 
+	AnimInst->Speed = Character->GetVelocity().Length();
+
 	// 가속 확인
 	FVector WorldAcceleration = Character->GetCharacterMovement()->GetCurrentAcceleration() * FVector(1.0f, 1.0f, 0.0f);
 	FVector LocalAcceleration = Character->GetActorRotation().UnrotateVector(WorldAcceleration);

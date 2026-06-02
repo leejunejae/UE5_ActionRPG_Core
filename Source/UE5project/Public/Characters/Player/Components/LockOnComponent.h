@@ -6,6 +6,8 @@
 #include "Components/ActorComponent.h"
 #include "LockOnComponent.generated.h"
 
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnLockOnTargetChanged, AActor*);
+
 class USphereComponent;
 class APlayerController;
 
@@ -43,6 +45,9 @@ public:
 	/** 락온 강제 해제 */
 	void ClearLockOn();
 
+public:
+	FOnLockOnTargetChanged OnLockOnTargetChanged;
+
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
@@ -74,6 +79,9 @@ private:
 	// ---- Validity / 유지 ----
 	bool IsTargetStillValid(AActor* Target) const;
 	bool HasLineOfSight(AActor* Target) const;
+
+	/** LockedOnTarget을 변경하면서 자동으로 델리게이트 브로드캐스트 */
+	void SetLockedOnTarget(AActor* NewTarget);
 
 private:
 

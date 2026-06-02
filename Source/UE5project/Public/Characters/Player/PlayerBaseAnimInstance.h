@@ -72,9 +72,13 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
 		TObjectPtr<UAnimSequence> Guard = nullptr;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
-		TObjectPtr<UAnimSequence> HitAir_Death = nullptr;
+		TObjectPtr<UAnimMontage> GroundDeathMontage = nullptr;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
-		TObjectPtr<UAnimSequence> Ground_Death = nullptr;
+		TObjectPtr<UAnimMontage> AirDeathMontage = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
+		TObjectPtr<UAnimMontage> LadderDeathMontage = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
+		TObjectPtr<UAnimMontage> RideDeathMontage = nullptr;
 
 	bool bInitAnimSet = false;
 
@@ -95,6 +99,10 @@ private:
 		bool IsMovementInput;
 #pragma endregion Input
 
+#pragma region Death
+		void HandleDeathStarted() override;
+#pragma endregion Death
+
 #pragma region Ride
 public:
 	FOnAnimInstanceMulDel OnMountEnd;
@@ -106,5 +114,5 @@ private:
 
 	UFUNCTION()
 		void AnimNotify_NOT_DisMountEnd();
-#pragma endregion 
+#pragma endregion Ride
 };

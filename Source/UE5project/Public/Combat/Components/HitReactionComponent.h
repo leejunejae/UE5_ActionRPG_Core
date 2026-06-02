@@ -11,7 +11,8 @@
 
 #include "HitReactionComponent.generated.h"
 
-DECLARE_MULTICAST_DELEGATE(FOnHitReactionMulDel);
+DECLARE_MULTICAST_DELEGATE(FMultiDelegate);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnParryDelegate, FAttackRequest);
 
 class ICharacterStatusInterface;
 
@@ -41,20 +42,16 @@ public:
 
 	void OnHitReactionEnded(UAnimMontage* Montage, bool bInterrupted);
 	
-	FOnHitReactionMulDel HitEndDelegate;
-	FOnHitReactionMulDel HitStartDelegate;
+	FMultiDelegate HitEndDelegate;
+	FMultiDelegate HitStartDelegate;
+	FOnParryDelegate ParryDelegate;
 	
 private:
 	UPROPERTY(VisibleAnywhere, Meta = (AllowPrivateAccess = true))
 		UHitReactionDataAsset* HitReactionDataAsset;
 
 	FHitReactionInfo CurHitReaction = FHitReactionInfo();
-	//UAnimInstance* AnimInstance;
 
 	FOnMontageEnded HitMontageEndDelegate;
 	FOnMontageBlendingOutStarted HitMontageBlendingOutDelegate;
-
-protected:
-	TWeakObjectPtr<ACharacter> CachedCharacter;
-	TScriptInterface<ICharacterStatusInterface> CachedPlayerStatus;
 };

@@ -2,15 +2,17 @@
 
 
 #include "Animation/Notifies/AN_DeathFinished.h"
-#include "Combat/Interfaces/HitReactionInterface.h"
+#include "Characters/CharacterBase.h"
+#include "Characters/Components/CharacterStatusComponent.h"
 
 void UAN_DeathFinished::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation)
 {
 	if (!MeshComp)return;
 
-	AActor* Owner = MeshComp->GetOwner();
-	if (Owner && Owner->GetClass()->ImplementsInterface(UHitReactionInterface::StaticClass()))
+	ACharacterBase* Owner = Cast<ACharacterBase>(MeshComp->GetOwner());
+	if (Owner)
 	{
-		IHitReactionInterface::Execute_OnDeathEnd(Owner);
+		if (UCharacterStatusComponent* StatusComp = Owner->GetCharacterStatusComponent())
+			StatusComp->FinalizeDeath();
 	}
 }

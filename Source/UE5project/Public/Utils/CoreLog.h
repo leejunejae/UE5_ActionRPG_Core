@@ -27,9 +27,15 @@ DECLARE_LOG_CATEGORY_EXTERN(Log_Equip_Weapon, Log, All);
 DECLARE_LOG_CATEGORY_EXTERN(Log_AI, Log, All);
 DECLARE_LOG_CATEGORY_EXTERN(Log_AI_Task, Log, All);
 DECLARE_LOG_CATEGORY_EXTERN(Log_AI_Task_Combat, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(Log_AI_Task_Combat_Alert, Log, All);
 
-DECLARE_LOG_CATEGORY_EXTERN(Log_Player, Log, All);
-DECLARE_LOG_CATEGORY_EXTERN(Log_Player_Input, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(Log_Character_Player, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(Log_Character_Player_Input, Log, All);
+
+DECLARE_LOG_CATEGORY_EXTERN(Log_Character_Enemy, Log, All);
+
+DECLARE_LOG_CATEGORY_EXTERN(Log_UI, Log, All);
+
 /**
  * 
  */

@@ -4,6 +4,7 @@
 #include "AI/CombatDecisionComponent.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "AI/CombatDecisionLog.h"
+#include "AI/CombatPatternData.h"
 #include "Utils/CoreLog.h"
 
 UCombatDecisionComponent::UCombatDecisionComponent()

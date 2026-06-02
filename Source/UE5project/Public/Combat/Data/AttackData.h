@@ -62,13 +62,13 @@ public:
 		EAttackSourceType AttackSource;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float DamageMultiplier;
-
+		float DamageMultiplier = 1.0f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float PoiseDamageMultiplier;
-
+		float PoiseDamageMultiplier = 1.0f;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float StanceDamageMultiplier;
+		float StanceDamageMultiplier = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+		float StaminaCostMultiplier = 1.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		bool CanBlocked;

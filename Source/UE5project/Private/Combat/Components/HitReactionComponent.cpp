@@ -2,11 +2,12 @@
 
 
 #include "Combat/Components/HitReactionComponent.h"
-#include "GameFramework/Character.h"
+#include "Characters/CharacterBase.h"
 #include "Characters/Components/CharacterStatusComponent.h"
 #include "Characters/Interfaces/CharacterStatusInterface.h"
 #include "Characters/Data/StatusData.h"
 #include "Utils/CoreLog.h"
+#include "Utils/GameplayTagsBase.h"
 
 // Sets default values for this component's properties
 UHitReactionComponent::UHitReactionComponent()
@@ -22,26 +23,6 @@ UHitReactionComponent::UHitReactionComponent()
 void UHitReactionComponent::BeginPlay()
 {
 	Super::BeginPlay();
-
-	CachedCharacter = Cast<ACharacter>(GetOwner());
-
-	if (!CachedCharacter.IsValid())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Owner Character Not Valid"));
-		return;
-	}
-	
-	for (UActorComponent* Comp : CachedCharacter->GetComponents())
-	{
-		if (Comp->GetClass()->ImplementsInterface(UCharacterStatusInterface::StaticClass()))
-			CachedPlayerStatus = TScriptInterface<ICharacterStatusInterface>(Comp);;
-	}
-
-	if (!CachedPlayerStatus.GetObject() || !CachedPlayerStatus.GetInterface())
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Character Status Component Not Valid"));
-		return;
-	}
 }
 
 void UHitReactionComponent::InitializeComponentLogic()
@@ -103,7 +84,6 @@ void UHitReactionComponent::ExecuteHitResponse(const FHitReactionRequest Reactio
 void UHitReactionComponent::PlayReaction(const FHitReactionInfo HitReaction, const FName SectionName)
 {
 	UAnimInstance* AnimInstance = Cast<ACharacter>(GetOwner())->GetMesh()->GetAnimInstance();
-		//GetOwner()->GetComponentByClass<USkeletalMeshComponent>()->GetAnimInstance();
 
 	if (!AnimInstance) return;
 
@@ -123,16 +103,12 @@ void UHitReactionComponent::PlayReaction(const FHitReactionInfo HitReaction, con
 
 	AnimInstance->Montage_JumpToSection(FoundData->SectionName);
 
-	//if (HitMontageEndDelegate.IsBound())
-		//HitMontageEndDelegate.Unbind();
 
 	if (HitMontageBlendingOutDelegate.IsBound())
 		HitMontageBlendingOutDelegate.Unbind();
 
-	//HitMontageEndDelegate.BindUObject(this, &UHitReactionComponent::OnHitReactionEnded);
 	HitMontageBlendingOutDelegate.BindUObject(this, &UHitReactionComponent::OnHitReactionEnded);
 
-	//AnimInstance->Montage_SetEndDelegate(HitMontageEndDelegate, HitReaction.Anim);
 	AnimInstance->Montage_SetBlendingOutDelegate(HitMontageBlendingOutDelegate, HitReaction.Anim);
 }
 
@@ -160,41 +136,44 @@ float UHitReactionComponent::CalculateHitAngle(const FVector HitPoint)
 
 EHitResponse UHitReactionComponent::EvaluateHitResponse(const FAttackRequest& AttackRequest)
 {
-	const EGroundStance CombatState = ICharacterStatusInterface::Execute_GetGroundStance(CachedPlayerStatus.GetObject());
+	ACharacterBase* OwnerCharacter = Cast<ACharacterBase>(GetOwner());
+	if (!OwnerCharacter) return AttackRequest.Response;
 
-	if (CombatState == EGroundStance::Invincible) return EHitResponse::None;
+	UCharacterStatusComponent* Status = OwnerCharacter->GetCharacterStatusComponent();
+	if (!Status) return AttackRequest.Response;
 
+	const FGameplayTag& ActionTag = Status->GetCurrentAction();
 	EHitResponse FinalResponse = AttackRequest.Response;
 
-	switch (CombatState)
+	// === 공중 피격 우선 ===
+	if (Status->IsInAir())
 	{
-	case EGroundStance::Hit:
-	{
-		FinalResponse = EHitResponse::NoStagger;
-		break;
+		return EHitResponse::HitAir;
 	}
-	case EGroundStance::Invincible:
-	{
-		FinalResponse = EHitResponse::None;
-		break;
-	}
-	case EGroundStance::Jump:
-	{
-		FinalResponse = EHitResponse::HitAir;
-		break;
-	}
-	case EGroundStance::Dodge:
+
+	// === 회피 ===
+	if (ActionTag.MatchesTagExact(TAG_Action_Dodge))
 	{
 		if (AttackRequest.CanAvoid)
-		{
-			FinalResponse = EHitResponse::None;
-		}
-		break;
+			return EHitResponse::None;
 	}
-	case EGroundStance::Block:
+
+	// === 패리 (플레이어 / NPC CounterStance 공통) ===
+	if (ActionTag.MatchesTagExact(TAG_Action_Parry))
 	{
-		float HitAngle = CalculateHitAngle(AttackRequest.HitPoint);
-		if (AttackRequest.CanBlocked && (FMath::Abs(HitAngle) <= 60.0f))
+		const float HitAngle = CalculateHitAngle(AttackRequest.HitPoint);
+		if (AttackRequest.CanParried && FMath::Abs(HitAngle) <= 60.0f)
+		{
+			ParryDelegate.Broadcast(AttackRequest);
+			return EHitResponse::None;
+		}
+	}
+
+	// === 가드 ===
+	if (ActionTag.MatchesTagExact(TAG_Action_Guard))
+	{
+		const float HitAngle = CalculateHitAngle(AttackRequest.HitPoint);
+		if (AttackRequest.CanBlocked && FMath::Abs(HitAngle) <= 60.0f)
 		{
 			switch (AttackRequest.Response)
 			{
@@ -207,18 +186,6 @@ EHitResponse UHitReactionComponent::EvaluateHitResponse(const FAttackRequest& At
 				break;
 			}
 		}
-		break;
-	}
-	case EGroundStance::Parry:
-	{
-		float HitAngle = CalculateHitAngle(AttackRequest.HitPoint);
-		if (AttackRequest.CanParried && (HitAngle >= -60.0f || HitAngle <= 60.0f))
-		{
-			FinalResponse = EHitResponse::None;
-			// 패링시 발동될 델리게이트 추가
-		}
-		break;
-	}
 	}
 
 	return FinalResponse;

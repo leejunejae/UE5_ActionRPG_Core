@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "BehaviorTree/BTTaskNode.h"
-#include "Combat/Data/CombatDecisionData.h"
+#include "AI/CombatPatternData.h"  
 #include "Navigation/PathFollowingComponent.h"
 #include "BTTask_ExecutePattern_Reposition.generated.h"
 
@@ -44,7 +44,6 @@ private:
     // ============================================================
 
     void ApplyMovementSettings(class ACharacter* Character, const FRepositionData& Data);
-    void RestoreMovementSettings(class ACharacter* Char);
 
     // ============================================================
     // 콜백

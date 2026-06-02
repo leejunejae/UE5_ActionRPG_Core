@@ -15,49 +15,51 @@ using namespace CustomMath::Spatial;
 UBTService_UpdateCombatState::UBTService_UpdateCombatState()
 {
 	NodeName = TEXT("UpdateCombatState");
-	bNotifyTick = true;
+	Interval = 0.5f;                    // 진행 중 패턴 적절성 확인 주기
+	RandomDeviation = 0.1f;             // 여러 적의 Tick 싱크 방지
 
+	bNotifyTick = true;
+	bCallTickOnSearchStart = true;      // Task 종료 직후 즉시 재평가
 }
 
 void UBTService_UpdateCombatState::TickNode(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
 {
 	Super::TickNode(OwnerComp, NodeMemory, DeltaSeconds);
 	
-	AEnemyBaseAIController* EnemyController = Cast<AEnemyBaseAIController>(OwnerComp.GetAIOwner());
-	UBlackboardComponent* Blackboard = OwnerComp.GetBlackboardComponent();
-	const UDataTable* CombatPatternDT = EnemyController->GetCombatPatternData();
-	AEnemyBase* Enemy = Cast<AEnemyBase>(EnemyController->GetPawn());
-	UWorld* World = GetWorld();
+    AEnemyBaseAIController* EnemyController = Cast<AEnemyBaseAIController>(OwnerComp.GetAIOwner());
+    UBlackboardComponent* Blackboard = OwnerComp.GetBlackboardComponent();
+    UWorld* World = GetWorld();
 
-	if (!EnemyController)
-	{
-		UE_LOG(Log_AI, Warning, TEXT("[EnemyBaseAIController] EnemyController Invalid"));
-		return;
-	}
+    if (!EnemyController)
+    {
+        UE_LOG(Log_AI, Warning, TEXT("[BTService_UpdateCombatState] EnemyController Invalid"));
+        return;
+    }
+    if (!Blackboard)
+    {
+        UE_LOG(Log_AI, Warning, TEXT("[BTService_UpdateCombatState] %s Blackboard Not Set"), *EnemyController->GetName());
+        return;
+    }
+    if (!World)
+    {
+        UE_LOG(Log_AI, Warning, TEXT("[BTService_UpdateCombatState] World Not Valid"));
+        return;
+    }
 
-	if (!Enemy)
-	{
-		UE_LOG(Log_AI, Warning, TEXT("[EnemyBaseAIController] %s Owner Character Not Valid"), *EnemyController->GetName());
-		return;
-	}
+    AEnemyBase* Enemy = Cast<AEnemyBase>(EnemyController->GetPawn());
+    const UDataTable* CombatPatternDT = EnemyController->GetCombatPatternData();
 
-	if (!Blackboard)
-	{
-		UE_LOG(Log_AI, Warning, TEXT("[EnemyBaseAIController] %s Blackboard Not Set"), *EnemyController->GetName());
-		return;
-	}
+    if (!Enemy)
+    {
+        UE_LOG(Log_AI, Warning, TEXT("[BTService_UpdateCombatState] %s Owner Character Not Valid"), *EnemyController->GetName());
+        return;
+    }
+    if (!CombatPatternDT)
+    {
+        UE_LOG(Log_AI, Warning, TEXT("[BTService_UpdateCombatState] CombatPattern Invalid"));
+        return;
+    }
 
-	if(!World)
-	{
-		UE_LOG(Log_AI, Warning, TEXT("[EnemyBaseAIController] World Not Valid"));
-		return;
-	}
-
-	if (!CombatPatternDT)
-	{
-		UE_LOG(Log_AI, Warning, TEXT("[EnemyBaseAIController] CombatPattern Invalid"));
-		return;
-	}
 
 	FCombatContext Context;
 

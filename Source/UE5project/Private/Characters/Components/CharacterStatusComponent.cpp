@@ -9,6 +9,7 @@
 
 // 유틸리티
 #include "Utils/CoreLog.h"
+#include "Utils/GameplayTagsBase.h"
 
 UCharacterStatusComponent::UCharacterStatusComponent()
 {
@@ -17,14 +18,6 @@ UCharacterStatusComponent::UCharacterStatusComponent()
 void UCharacterStatusComponent::BeginPlay()
 {
 	Super::BeginPlay();
-
-	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
-	{
-		if (UHitReactionComponent* HitComp = Character->FindComponentByClass<UHitReactionComponent>())
-		{
-			HitComp->HitEndDelegate.AddUObject(this, &UCharacterStatusComponent::SetGroundStance_Native, EGroundStance::Normal);
-		}
-	}
 
 	CurrentStateTag = FGameplayTag::RequestGameplayTag(TEXT("State.Ground"));
 	CurrentActionTag = FGameplayTag(); // 비어있음
@@ -57,11 +50,11 @@ void UCharacterStatusComponent::ApplyCloseOnActionBegin(const FGameplayTag& Acti
 	if (!WindowRules || !ActionTag.IsValid())
 		return;
 
-	UE_LOG(Log_Player_Input, Error, TEXT("[CharacterStatusComponent] Apply Close Action Begin"));
+	UE_LOG(Log_Character_Player_Input, Error, TEXT("[CharacterStatusComponent] Apply Close Action Begin"));
 
 	if (const FGameplayTagContainer* CloseSet = WindowRules->CloseOnActionBegin.Find(ActionTag))
 	{
-		UE_LOG(Log_Player_Input, Error, TEXT("[CharacterStatusComponent] Close Window Set By Action Valid"));
+		UE_LOG(Log_Character_Player_Input, Error, TEXT("[CharacterStatusComponent] Close Window Set By Action Valid"));
 		for (const FGameplayTag& W : *CloseSet)
 			OpenWindows.Remove(W);
 	}
@@ -99,6 +92,7 @@ void UCharacterStatusComponent::ClearAction()
 {
 	CurrentActionTag = FGameplayTag();
 	ResetWindowsToStateDefaults();
+	UE_LOG(Log_Character_Player, Error, TEXT("[StatusComp] ClearAction"));
 }
 
 void UCharacterStatusComponent::OpenWindow(const FGameplayTag& WindowTag)
@@ -121,8 +115,7 @@ bool UCharacterStatusComponent::CanTryAction(const FGameplayTag& ActionTag) cons
 {
 	if (!ActionTag.IsValid()) return true;
 
-	// Dead 상태면 전부 불가(원하면 Rules로만 통제해도 됨)
-	if (CurrentStateTag.MatchesTagExact(FGameplayTag::RequestGameplayTag(TEXT("State.Dead"))))
+	if (CurrentStateTag.MatchesTagExact(TAG_State_Dead))
 		return false;
 
 	const FGameplayTag Window = ToWindowTag(ActionTag);
@@ -144,14 +137,14 @@ bool UCharacterStatusComponent::RequestAction(const FGameplayTag& ActionTag, int
 {
 	if (!ActionTag.IsValid())
 	{
-		UE_LOG(Log_Player_Input, Error, TEXT("[CharacterStatusComponent] ActionTag Invalid"));
+		UE_LOG(Log_Character_Player_Input, Error, TEXT("[CharacterStatusComponent] ActionTag Invalid"));
 		return false;
 	}
 
 	// 가능하면 즉시 교체 실행
 	if (CanTryAction(ActionTag))
 	{
-		UE_LOG(Log_Player_Input, Error, TEXT("[CharacterStatusComponent] CanTryAction"));
+		UE_LOG(Log_Character_Player_Input, Error, TEXT("[CharacterStatusComponent] CanTryAction"));
 		SwitchAction(ActionTag);
 		return true;
 	}
@@ -221,14 +214,33 @@ bool UCharacterStatusComponent::IsInAir() const
 	return false;
 }
 
-void UCharacterStatusComponent::ExecuteDeath()
+void UCharacterStatusComponent::EnterDeath()
 {
-	bIsDead = true;
-	OnDeath.Broadcast();
+	if (IsDead()) return; // 중복 진입 방지
+
+	// 사망 직전 State 보존 (모션 선택 + 뒷정리 분기용)
+	PrevStateBeforeDeath = CurrentStateTag;
+
+	// 진행 중 액션/입력 버퍼 정리
+	CurrentActionTag = FGameplayTag();
+	BufferedActions.Reset();
+	OpenWindows.Reset();
+
+	// State.Dead 전이 → ResetWindowsToStateDefaults가 윈도우 전부 닫음
+	SetState(TAG_State_Dead);
+
+	OnDeathStarted.Broadcast();
 }
 
-bool UCharacterStatusComponent::CanTransitionGroundStance(EGroundStance DestStance, EGroundStance TargetStance)
+void UCharacterStatusComponent::FinalizeDeath()
 {
+	if (!IsDead() || bDeathFinalized) return; // Dead 상태에서 1회만
+	bDeathFinalized = true;
 
-	return false;
+	OnDeathFinalized.Broadcast();
+}
+
+bool UCharacterStatusComponent::IsDead() const
+{
+	return CurrentStateTag.MatchesTagExact(TAG_State_Dead);
 }
