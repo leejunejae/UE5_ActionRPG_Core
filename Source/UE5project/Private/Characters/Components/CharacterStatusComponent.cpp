@@ -240,6 +240,26 @@ void UCharacterStatusComponent::FinalizeDeath()
 	OnDeathFinalized.Broadcast();
 }
 
+void UCharacterStatusComponent::EnterRespawn()
+{
+	if (!IsDead()) return;  // Dead 상태에서만 부활 가능
+
+	// 사망 플래그 초기화
+	bDeathFinalized = false;
+
+	// 이전 State로 복귀 (저장된 PrevState 또는 기본값 Ground)
+	FGameplayTag TargetState = TAG_State_Ground;
+
+	SetState(TargetState);
+
+	OnRespawnStarted.Broadcast();
+}
+
+void UCharacterStatusComponent::FinalizeRespawn()
+{
+	OnRespawnFinalized.Broadcast();
+}
+
 bool UCharacterStatusComponent::IsDead() const
 {
 	return CurrentStateTag.MatchesTagExact(TAG_State_Dead);

@@ -5,8 +5,7 @@
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
 #include "Engine/DataAsset.h"
-
-#include "Combat/Data/DataAsset/PlayerAttackDataAsset.h"
+#include "Combat/Data/AttackData.h"
 #include "AttackComponent.generated.h"
 
 class UPBEHAnimInstance;

@@ -242,7 +242,7 @@ void APlayerBase::ApplyConfig()
 	GetCharacterStatusComponent()->WindowRules = Config->WindowRules;
 	GetMesh()->SetSkeletalMesh(Config->Mesh);
 	GetMesh()->SetAnimInstanceClass(Config->AnimBP);
-	HitReactionComponent->SetHitReactionDA(Config->HitReactData);
+	GetHitReactionComponent()->SetHitReactionListDA(Config->HitReactData);
 	GetAttackComponent()->SetAttackDA(Config->AttackData);
 }
 
@@ -933,6 +933,31 @@ void APlayerBase::HandleDeathStarted()
 void APlayerBase::HandleDeathFinalized()
 {
 	Super::HandleDeathFinalized(); // 캡슐 콜리전 off
+}
+
+void APlayerBase::HandleRespawnStarted()
+{
+	// 1. 메시 복구 (래그돌 안 쓰는 정책이면 사실 거의 안 필요하지만 안전 차원)
+	GetMesh()->SetSimulatePhysics(false);
+
+	// 2. 체력/스태미나/포커스 풀로 복원
+	if (UPlayerStatComponent* PlayerStat = GetStatComponent())
+	{
+		PlayerStat->InitializeStats();
+	}
+
+	// 부활 몽타주 재생은 AnimInstance가 OnRespawnStarted 듣고 알아서 처리
+	// 몽타주 끝 노티파이가 FinalizeRespawn 호출
+}
+
+void APlayerBase::HandleRespawnFinalized()
+{
+	Super::HandleRespawnFinalized();  // 캡슐 콜리전 복구
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		EnableInput(PC);
+	}
 }
 
 /* ============================================================

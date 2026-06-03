@@ -22,6 +22,7 @@ void UPlayerBaseAnimInstance::NativeInitializeAnimation()
 	if (Player)
 	{
 		Player->GetEquipmentComponent()->OnWeaponChangedDelegate.AddUObject(this, &UPlayerBaseAnimInstance::HandleWeaponChange);
+		Player->GetCharacterStatusComponent()->OnRespawnStarted.AddUObject(this, &UPlayerBaseAnimInstance::HandleRespawnStarted);
 	}
 
 	UAnimMode_Ride* RideMode = NewObject<UAnimMode_Ride>(this);
@@ -88,11 +89,10 @@ void UPlayerBaseAnimInstance::HandleWeaponChange(EWeaponType WeaponData)
 	AirDeathMontage = TargetAnimSet->AirDeathMontage.IsNull() ? nullptr : TargetAnimSet->AirDeathMontage.LoadSynchronous();
 	LadderDeathMontage = TargetAnimSet->LadderDeathMontage.IsNull() ? nullptr : TargetAnimSet->LadderDeathMontage.LoadSynchronous();
 	RideDeathMontage = TargetAnimSet->RideDeathMontage.IsNull() ? nullptr : TargetAnimSet->RideDeathMontage.LoadSynchronous();
-
+	SpawnMontage = TargetAnimSet->SpawnMontage.IsNull() ? nullptr : TargetAnimSet->SpawnMontage.LoadSynchronous();
+	
 	float WeaponIKAlpha = TargetAnimSet->bUseWeaponIK ? 1.0f : 0.0f;
 	SetIKLayerAlpha_Native(FGameplayTag::RequestGameplayTag(FName("IK.Layer.Ground.HandWeapon")), ELimbList::HandL, WeaponIKAlpha);
-
-	UE_LOG(Log_Anim_Equip, Log, TEXT("WeaponIKAlpha = %f"), WeaponIKAlpha);
 
 	bInitAnimSet = true;
 
@@ -113,6 +113,22 @@ void UPlayerBaseAnimInstance::HandleDeathStarted()
 
 	if (Selected) Montage_Play(Selected);
 	else { Status->FinalizeDeath(); }
+}
+
+void UPlayerBaseAnimInstance::HandleRespawnStarted()
+{
+	UCharacterStatusComponent* Status = Player->GetCharacterStatusComponent();
+	if (!Status) return;
+
+	if (SpawnMontage)
+	{
+		Montage_Play(SpawnMontage);
+	}
+	else
+	{
+		// 부활 몽타주 없으면 즉시 FinalizeRespawn
+		Status->FinalizeRespawn();
+	}
 }
 
 void UPlayerBaseAnimInstance::AnimNotify_NOT_MountEnd()

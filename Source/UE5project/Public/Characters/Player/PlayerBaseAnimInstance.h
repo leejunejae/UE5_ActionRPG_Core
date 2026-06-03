@@ -79,6 +79,8 @@ private:
 		TObjectPtr<UAnimMontage> LadderDeathMontage = nullptr;
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
 		TObjectPtr<UAnimMontage> RideDeathMontage = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Anim, Meta = (AllowPrivateAccess = true))
+		TObjectPtr<UAnimMontage> SpawnMontage = nullptr;
 
 	bool bInitAnimSet = false;
 
@@ -100,8 +102,15 @@ private:
 #pragma endregion Input
 
 #pragma region Death
-		void HandleDeathStarted() override;
+protected:
+	void HandleDeathStarted() override;
 #pragma endregion Death
+
+#pragma region Spawn
+protected:
+	// 기존 HandleDeathStarted 옆에
+	void HandleRespawnStarted();
+#pragma region Spawn
 
 #pragma region Ride
 public:

@@ -351,6 +351,12 @@ public:
 	void HandleDeathStarted() override;    // 진입: 입력 차단 + 이전 State 정리
 	void HandleDeathFinalized() override;  // 종료: 래그돌 + 소멸 (추후 GameOver UI 트리거 지점)
 
+	void HandleRespawnStarted() override;
+	void HandleRespawnFinalized() override;
+
+private:
+	FTimerHandle RespawnFinalizeTimerHandle;
+
 	FORCEINLINE UPlayerHitReactionComponent* GetHitReactionComponent() const;
 #pragma endregion HitReaction
 

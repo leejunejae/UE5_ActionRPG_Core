@@ -29,8 +29,22 @@ protected:
 private:
 	void InitializeFullScreenUI();
 	void CreatePlayerHUD();
-	void BindHUDToPawn(APawn* InPawn);
+	void BindHUDToPawn();
+
+	void BindToPlayerDeath();
+	void UnbindFromPlayerDeath();
+	void HandlePlayerDeathFinalized();
 
 	UPROPERTY()
 	TObjectPtr<UPlayerHUDWidget> PlayerHUDWidget;
+
+#pragma region Respawn
+public:
+	/** 플레이어 부활 요청 (GameOverWidget에서 호출) */
+	UFUNCTION(BlueprintCallable, Category = "Player")
+	void RespawnPlayer();
+
+private:
+	void HandlePlayerRespawnFinalized();
+#pragma endregion Respawn
 };

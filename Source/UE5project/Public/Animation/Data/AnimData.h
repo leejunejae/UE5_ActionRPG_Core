@@ -115,6 +115,9 @@ public:
     UPROPERTY(EditDefaultsOnly, Category = "Death") 
         TSoftObjectPtr<UAnimMontage> RideDeathMontage;
 
+    UPROPERTY(EditDefaultsOnly, Category = "Spawn")
+        TSoftObjectPtr<UAnimMontage> SpawnMontage;
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "IK")
         bool bUseWeaponIK = false;
 };

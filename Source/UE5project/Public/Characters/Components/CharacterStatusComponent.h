@@ -99,12 +99,18 @@ public:
 	// ---- Death ----
 	void EnterDeath();      // 사망 진입: 이전 State 캡처 → State.Dead 전이 → OnDeathStarted
 	void FinalizeDeath();   // 사망 모션 종료(노티파이): OnDeathFinalized
-
 	bool IsDead() const;    // State.Dead (flat, exact)
 	FGameplayTag GetPreviousStateBeforeDeath() const { return PrevStateBeforeDeath; }
 
 	FOnMultiDelegate OnDeathStarted;    // 진입: 모션 재생 / 입력 차단 / 이전 State 정리
 	FOnMultiDelegate OnDeathFinalized;  // 종료: 래그돌 / GameOver 트리거
+
+	// ---- Respawn ----
+	void EnterRespawn();      // 부활 진입: State 복귀 → OnRespawnStarted
+	void FinalizeRespawn();   // 부활 종료(연출 끝): OnRespawnFinalized
+
+	FOnMultiDelegate OnRespawnStarted;    // 진입: 파티클 시작 등
+	FOnMultiDelegate OnRespawnFinalized;  // 종료: 입력 활성화, UI 복귀
 
 private:
 	FGameplayTag PrevStateBeforeDeath;

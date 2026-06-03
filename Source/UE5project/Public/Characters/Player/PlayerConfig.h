@@ -13,7 +13,7 @@
 class UActionWindowRules;
 class UInputConfigDataAsset;
 class UPlayerAttackDataAsset;
-class UHitReactionDataAsset;
+class UPlayerHitReactionDataAsset;
 
 UCLASS()
 class UE5PROJECT_API UPlayerConfig : public UDataAsset
@@ -25,5 +25,5 @@ public:
 	UPROPERTY(EditAnywhere) TSubclassOf<UAnimInstance> AnimBP;
 	UPROPERTY(EditAnywhere) TObjectPtr<UActionWindowRules> WindowRules;
 	UPROPERTY(EditAnywhere) TObjectPtr<UPlayerAttackDataAsset> AttackData;
-	UPROPERTY(EditAnywhere) TObjectPtr<UHitReactionDataAsset> HitReactData;
+	UPROPERTY(EditAnywhere) TObjectPtr<UPlayerHitReactionDataAsset> HitReactData;
 };

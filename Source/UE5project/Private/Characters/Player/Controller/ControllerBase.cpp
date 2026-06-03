@@ -6,6 +6,7 @@
 #include "UI/PlayerHUDWidget.h"
 #include "Characters/Player/PlayerBase.h"
 #include "Characters/Player/Components/PlayerStatComponent.h"
+#include "Characters/Player/Components/PlayerStatusComponent.h"
 
 void AControllerBase::BeginPlay()
 {
@@ -16,13 +17,8 @@ void AControllerBase::BeginPlay()
 
     InitializeFullScreenUI();
     CreatePlayerHUD();
-
-    // 이미 Possess된 Pawn이 있으면 바로 연결
-    // (BeginPlay 전에 OnPossess가 끝났을 수 있음)
-    if (APawn* CurrentPawn = GetPawn())
-    {
-        BindHUDToPawn(CurrentPawn);
-    }
+    BindHUDToPawn();
+    BindToPlayerDeath();
 }
 
 void AControllerBase::OnPossess(APawn* InPawn)
@@ -32,7 +28,42 @@ void AControllerBase::OnPossess(APawn* InPawn)
     // BeginPlay 이후에 새 Pawn으로 갈아탈 경우 대응
     if (PlayerHUDWidget && InPawn)
     {
-        BindHUDToPawn(InPawn);
+        BindHUDToPawn();
+        BindToPlayerDeath();
+    }
+}
+
+void AControllerBase::BindToPlayerDeath()
+{
+    APlayerBase* PlayerChar = Cast<APlayerBase>(GetPawn());
+    if (!PlayerChar) return;
+
+    if (UPlayerStatusComponent* StatusComp = PlayerChar->GetCharacterStatusComponent())
+    {
+        StatusComp->OnDeathFinalized.AddUObject(
+            this, &AControllerBase::HandlePlayerDeathFinalized);
+    }
+}
+
+void AControllerBase::UnbindFromPlayerDeath()
+{
+    APlayerBase* PlayerChar = Cast<APlayerBase>(GetPawn());
+    if (!PlayerChar) return;
+
+    if (UPlayerStatusComponent* StatusComp = PlayerChar->GetCharacterStatusComponent())
+    {
+        StatusComp->OnDeathFinalized.RemoveAll(this);
+    }
+}
+
+void AControllerBase::HandlePlayerDeathFinalized()
+{
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (UUIManagerSubsystem* UIMgr = GI->GetSubsystem<UUIManagerSubsystem>())
+        {
+            UIMgr->SetScreenState(EGameScreenState::GameOver);
+        }
     }
 }
 
@@ -60,16 +91,54 @@ void AControllerBase::CreatePlayerHUD()
     }
 }
 
-void AControllerBase::BindHUDToPawn(APawn* InPawn)
+void AControllerBase::BindHUDToPawn()
 {
     if (!PlayerHUDWidget) return;
-    if (!InPawn) return;
 
-    APlayerBase* PlayerChar = Cast<APlayerBase>(InPawn);
+    APlayerBase* PlayerChar = Cast<APlayerBase>(GetPawn());
     if (!PlayerChar) return;
 
     if (UPlayerStatComponent* StatComp = PlayerChar->GetStatComponent())
     {
         PlayerHUDWidget->BindToStatComponent(StatComp);
+    }
+}
+
+void AControllerBase::RespawnPlayer()
+{
+    APlayerBase* PlayerChar = Cast<APlayerBase>(GetPawn());
+    if (!PlayerChar) return;
+
+    UCharacterStatusComponent* StatusComp = PlayerChar->GetCharacterStatusComponent();
+    if (!StatusComp) return;
+
+    // 부활 완료 시 UI를 InGame으로 돌리기 위해 OnRespawnFinalized 구독
+    // (1회만 듣고 해제할 거라 람다 + Handle 패턴은 안 씀, 단순 AddUObject)
+    StatusComp->OnRespawnFinalized.AddUObject(
+        this, &AControllerBase::HandlePlayerRespawnFinalized);
+
+    // 부활 진입
+    StatusComp->EnterRespawn();
+}
+
+void AControllerBase::HandlePlayerRespawnFinalized()
+{
+    // UI를 InGame으로 복귀
+    if (UGameInstance* GI = GetGameInstance())
+    {
+        if (UUIManagerSubsystem* UIMgr = GI->GetSubsystem<UUIManagerSubsystem>())
+        {
+            UIMgr->SetScreenState(EGameScreenState::InGame);
+        }
+    }
+
+    // 중복 구독 방지를 위해 해제
+    APlayerBase* PlayerChar = Cast<APlayerBase>(GetPawn());
+    if (PlayerChar)
+    {
+        if (UCharacterStatusComponent* StatusComp = PlayerChar->GetCharacterStatusComponent())
+        {
+            StatusComp->OnRespawnFinalized.RemoveAll(this);
+        }
     }
 }

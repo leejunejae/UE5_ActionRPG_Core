@@ -65,6 +65,9 @@ void ACharacterBase::PostInitializeComponents()
 	{
 		GetCharacterStatusComponent()->OnDeathStarted.AddUObject(this, &ACharacterBase::HandleDeathStarted);
 		GetCharacterStatusComponent()->OnDeathFinalized.AddUObject(this, &ACharacterBase::HandleDeathFinalized);
+
+		GetCharacterStatusComponent()->OnRespawnStarted.AddUObject(this, &ACharacterBase::HandleRespawnStarted);
+		GetCharacterStatusComponent()->OnRespawnFinalized.AddUObject(this, &ACharacterBase::HandleRespawnFinalized);
 	}
 
 	if (GetHitReactionComponent())
@@ -104,4 +107,14 @@ void ACharacterBase::HandleDeathStarted()
 void ACharacterBase::HandleDeathFinalized()
 {
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision); // 공용
+}
+
+void ACharacterBase::HandleRespawnStarted()
+{
+}
+
+void ACharacterBase::HandleRespawnFinalized()
+{
+	// 사망 시 껐던 캡슐 콜리전 복구
+	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 }

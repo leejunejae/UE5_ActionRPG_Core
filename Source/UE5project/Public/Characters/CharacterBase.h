@@ -148,7 +148,11 @@ public:
 #pragma endregion Ride
 
 #pragma region Death
+protected:
 	virtual void HandleDeathStarted();    // 진입: 입력 차단 + 이전 State 정리
 	virtual void HandleDeathFinalized();
+
+	virtual void HandleRespawnStarted();
+	virtual void HandleRespawnFinalized();
 #pragma endregion Death
 };

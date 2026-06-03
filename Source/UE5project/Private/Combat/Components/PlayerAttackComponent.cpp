@@ -2,18 +2,9 @@
 
 
 #include "Combat/Components/PlayerAttackComponent.h"
-
 #include "Characters/Player/PlayerBase.h"
 #include "Characters/Components/EquipmentComponent.h"
-
-#include "Utils/AnimBoneDataRegistryRoot.h"
-#include "Engine/StaticMeshSocket.h"
-#include "Combat/Interfaces/HitReactionInterface.h"
-#include "PhysicalMaterials/PhysicalMaterial.h"
-
-#include "NiagaraSystem.h"
-#include "NiagaraComponent.h"
-
+#include "Combat/Data/DataAsset/PlayerAttackDataAsset.h"
 #include "Utils/CoreLog.h"
 
 const FBaseAttackData* UPlayerAttackComponent::ExecuteAttack(FName AttackName, float Playrate)
@@ -34,19 +25,15 @@ void UPlayerAttackComponent::BeginPlay()
 	WeaponChangeSig.AddUObject(this, &UPlayerAttackComponent::SetCurAttackContextSet);
 }
 
-void UPlayerAttackComponent::SetCurAttackContextSet(EWeaponType WeaponData)
+void UPlayerAttackComponent::SetCurAttackContextSet(EWeaponType WeaponType)
 {
-	const EWeaponType WeaponType = WeaponData;
-	const UPlayerAttackDataAsset* TypedAsset = Cast<UPlayerAttackDataAsset>(AttackListDA);
-
-	if (!TypedAsset)
+	if(!AttackList)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("AttackListDA 캐스팅 실패"));
+		UE_LOG(Log_Equip_Weapon, Warning, TEXT("[UPlayerAttackComponent] Player Attack Data Not Valid"));
 		return;
 	}
 
-	const FAttackContextSet* ContextSet = TypedAsset->FindPlayerAttackContext(WeaponType, /*bLogNotFound=*/true);
-
+	const FAttackContextSet* ContextSet = AttackList->FindPlayerAttackContext(WeaponType, /*bLogNotFound=*/true);
 
 	if(APlayerBase* Player = Cast<APlayerBase>(GetOwner()))
 		UE_LOG(Log_Attack, Log, TEXT("[PlayerAttackComponent] %s "), *Player->GetName());
