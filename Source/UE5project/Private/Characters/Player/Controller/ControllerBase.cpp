@@ -16,9 +16,7 @@ void AControllerBase::BeginPlay()
     if (!IsLocalPlayerController()) return;
 
     InitializeFullScreenUI();
-    CreatePlayerHUD();
-    BindHUDToPawn();
-    BindToPlayerDeath();
+    SetupForPlayerPawn();
 }
 
 void AControllerBase::OnPossess(APawn* InPawn)
@@ -26,11 +24,7 @@ void AControllerBase::OnPossess(APawn* InPawn)
     Super::OnPossess(InPawn);
 
     // BeginPlay 이후에 새 Pawn으로 갈아탈 경우 대응
-    if (PlayerHUDWidget && InPawn)
-    {
-        BindHUDToPawn();
-        BindToPlayerDeath();
-    }
+    SetupForPlayerPawn();
 }
 
 void AControllerBase::BindToPlayerDeath()
@@ -40,8 +34,8 @@ void AControllerBase::BindToPlayerDeath()
 
     if (UPlayerStatusComponent* StatusComp = PlayerChar->GetCharacterStatusComponent())
     {
-        StatusComp->OnDeathFinalized.AddUObject(
-            this, &AControllerBase::HandlePlayerDeathFinalized);
+        StatusComp->OnDeathFinalized.RemoveAll(this);
+        StatusComp->OnDeathFinalized.AddUObject(this, &AControllerBase::HandlePlayerDeathFinalized);
     }
 }
 
@@ -102,6 +96,16 @@ void AControllerBase::BindHUDToPawn()
     {
         PlayerHUDWidget->BindToStatComponent(StatComp);
     }
+}
+
+void AControllerBase::SetupForPlayerPawn()
+{
+    // PlayerBase가 아니면(StartupMap 등) HUD를 만들지 않음
+    if (!Cast<APlayerBase>(GetPawn())) return;
+
+    CreatePlayerHUD();
+    BindHUDToPawn();
+    BindToPlayerDeath();
 }
 
 void AControllerBase::RespawnPlayer()

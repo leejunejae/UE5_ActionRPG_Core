@@ -59,13 +59,11 @@ void UGameOverWidget::OnRestartClicked()
 
 void UGameOverWidget::OnMainMenuClicked()
 {
-    // Step 5에서 OpenLevel(StartupMap) 추가
-    // 일단은 Startup 상태로
     if (UGameInstance* GI = GetGameInstance())
     {
         if (UUIManagerSubsystem* UIMgr = GI->GetSubsystem<UUIManagerSubsystem>())
         {
-            UIMgr->SetScreenState(EGameScreenState::Startup);
+            UIMgr->TravelToStartupMap();
         }
     }
 }

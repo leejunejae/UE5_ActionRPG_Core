@@ -47,6 +47,8 @@ void UFullScreenWidget::ShowWidget()
             UIMgr->NotifyWidgetShown();
         }
     }
+
+    OnShowAnimation();  // BP에서 구현하면 페이드인, 없으면 그냥 표시
 }
 
 void UFullScreenWidget::HideWidget()
@@ -54,6 +56,12 @@ void UFullScreenWidget::HideWidget()
     // 이미 숨겨진 상태면 중복 알림 방지
     if (GetVisibility() == ESlateVisibility::Collapsed) return;
 
+    OnHideAnimation();
+}
+
+void UFullScreenWidget::FinishHideWidget()
+{
+    // OnHideAnimation 끝난 후 실제 숨김
     Super::HideWidget();
 
     if (UGameInstance* GI = GetGameInstance())
@@ -63,6 +71,12 @@ void UFullScreenWidget::HideWidget()
             UIMgr->NotifyWidgetHidden();
         }
     }
+}
+
+void UFullScreenWidget::OnHideAnimation_Implementation()
+{
+    // 기본 구현: 애니메이션 없이 즉시 숨김 (기존 동작)
+    FinishHideWidget();
 }
 
 void UFullScreenWidget::HandleScreenStateChanged(EGameScreenState NewState)

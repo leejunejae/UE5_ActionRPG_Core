@@ -19,4 +19,12 @@ public:
 	/** 게임 시작 시 생성할 전체 화면 위젯 클래스들 (시작 화면, 로딩 화면 등) */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI")
 	TArray<TSubclassOf<UFullScreenWidget>> FullScreenWidgetClasses;
+
+	/** 시작 화면 레벨 (캐릭터 없는 빈 레벨) */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Level")
+	TSoftObjectPtr<UWorld> StartupMap;
+
+	/** "게임 시작" 시 진입할 기본 게임플레이 레벨 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Level")
+	TSoftObjectPtr<UWorld> DefaultGameMap;
 };

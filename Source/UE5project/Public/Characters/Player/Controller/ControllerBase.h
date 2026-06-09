@@ -30,6 +30,7 @@ private:
 	void InitializeFullScreenUI();
 	void CreatePlayerHUD();
 	void BindHUDToPawn();
+	void SetupForPlayerPawn();
 
 	void BindToPlayerDeath();
 	void UnbindFromPlayerDeath();
