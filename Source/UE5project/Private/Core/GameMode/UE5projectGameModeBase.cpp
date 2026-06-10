@@ -4,7 +4,6 @@
 #include "Core/GameMode/UE5projectGameModeBase.h"
 #include "Characters/Player/Warrior/FallenKnight.h"
 #include "Characters/Player/Controller/ControllerBase.h"
-#include "UI/DefaultWidget.h"
 
 AUE5projectGameModeBase::AUE5projectGameModeBase()
 {

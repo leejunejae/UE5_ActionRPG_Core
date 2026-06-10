@@ -38,16 +38,6 @@ void UGameOverWidget::NativeDestruct()
 
 void UGameOverWidget::OnRestartClicked()
 {
-    // Step 5에서 진짜 부활 로직 추가
-    // 일단은 단순히 InGame 상태로 복귀
-    if (UGameInstance* GI = GetGameInstance())
-    {
-        if (UUIManagerSubsystem* UIMgr = GI->GetSubsystem<UUIManagerSubsystem>())
-        {
-            UIMgr->SetScreenState(EGameScreenState::InGame);
-        }
-    }
-
     if (APlayerController* PC = GetOwningPlayer())
     {
         if (AControllerBase* ControllerBase = Cast<AControllerBase>(PC))

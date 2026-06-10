@@ -27,6 +27,13 @@ void AControllerBase::OnPossess(APawn* InPawn)
     SetupForPlayerPawn();
 }
 
+void AControllerBase::OnUnPossess()
+{
+    UnbindFromPlayerDeath();
+
+    Super::OnUnPossess();
+}
+
 void AControllerBase::BindToPlayerDeath()
 {
     APlayerBase* PlayerChar = Cast<APlayerBase>(GetPawn());

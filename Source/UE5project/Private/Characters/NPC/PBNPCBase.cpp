@@ -32,11 +32,6 @@ APBNPCBase::APBNPCBase()
 	InteractTrigger->SetRelativeLocation(FVector(0.0f, 30.0f, 110.0f));
 	InteractTrigger->SetBoxExtent(FVector(100.0f, 100.0f, 100.0f));
 
-	//static ConstructorHelpers::FClassFinder<UScriptWidget> ScriptWidget(TEXT("/Game/00_Character/Data/ScriptWidget_BP.ScriptWidget_BP_C"));
-	//if (!ensure(ScriptWidget.Class != nullptr)) return;
-
-	//DialogueWidgetClass = ScriptWidget.Class;
-
 	Tags.Add("NPC");
 }
 
@@ -50,23 +45,7 @@ void APBNPCBase::PostInitializeComponents()
 
 void APBNPCBase::Interact_Implementation(ACharacter* InteractActor)
 {
-	/*
-	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
-	if (PlayerController)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("StartDialogue1"));
-		if (DialogueWidgetClass)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("StartDialogue2"));
-			// Widget 인스턴스를 생성합니다.
 
-			DialogueWidget = CreateWidget<UScriptWidget>(PlayerController, DialogueWidgetClass);
-			DialogueWidget->SetScriptWidget(this);
-			DialogueComponent->SetIsDialogue(true);
-			//PlayerController->SetInputMode(FInputModeGameAndUI());
-		}
-	}
-	*/
 }
 
 void APBNPCBase::EndInteract_Implementation()

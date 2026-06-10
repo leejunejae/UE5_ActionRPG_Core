@@ -24,10 +24,6 @@
 #include "Kismet/KismetTextLibrary.h"
 #include "Kismet/KismetMathLibrary.h"
 
-// UI
-#include "UI/DefaultWidget.h"
-#include "Blueprint/UserWidget.h"
-
 // 애니메이션
 #include "Characters/Player/PlayerBaseAnimInstance.h"
 
@@ -86,9 +82,6 @@ APlayerBase::APlayerBase(const FObjectInitializer& ObjectInitializer)
 
 	GetCapsuleComponent()->SetCapsuleHalfHeight(90.0f);
 
-	static ConstructorHelpers::FClassFinder<UDefaultWidget> Class_DefaultWidget(TEXT("/Game/00_Character/Data/DefaultWidget_BP"));
-	if (Class_DefaultWidget.Succeeded()) DefaultWidgetClass = Class_DefaultWidget.Class;
-
 	static ConstructorHelpers::FObjectFinder<UAnimMontage> RollMontageAsset(TEXT("/Game/04_Animations/Player/SSH/Roll/Normal/Roll_Montage.Roll_Montage"));
 	if (RollMontageAsset.Succeeded())
 	{
@@ -142,11 +135,6 @@ void APlayerBase::BeginPlay()
 		{
 			SubSystem->AddMappingContext(InputConfig->DefaultContext, 0);
 		}
-	}
-
-	if (DefaultWidgetClass)
-	{
-		DefaultWidget = CreateWidget<UDefaultWidget>(PlayerController, DefaultWidgetClass);
 	}
 
 	InitSpringArmLocation = SpringArm->GetRelativeLocation();

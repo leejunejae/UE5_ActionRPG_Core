@@ -38,8 +38,6 @@ class UInteractComponent;
 class ULockOnComponent;
 
 class UPlayerConfig;
-
-class UDefaultWidget;
 class APlayerRide;
 
 struct FGameplayTag;
@@ -70,12 +68,6 @@ public:
 	 *  Private Variables
 	 * ============================================================ */
 private:
-	UPROPERTY(EditAnywhere)
-	TSubclassOf<UDefaultWidget> DefaultWidgetClass;
-
-	UPROPERTY(EditAnywhere)
-	TObjectPtr<UDefaultWidget> DefaultWidget;
-
 	float YAxisScale;
 	float DebugUpdateInterval = 0.1f;
 	float TimeSinceLastDebugUpdate = 0.0f;
