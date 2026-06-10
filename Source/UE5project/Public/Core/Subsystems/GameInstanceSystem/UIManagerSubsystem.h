@@ -73,7 +73,6 @@ private:
     float MinLoadingScreenTime = 5.0f;
 
     float LoadingScreenStartTime = 0.0f;
-    bool bMapLoadComplete = false;
     FTimerHandle MinTimeTimerHandle;
 
     bool bWidgetsCreated = false;

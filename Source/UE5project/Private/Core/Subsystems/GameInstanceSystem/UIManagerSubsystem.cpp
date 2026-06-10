@@ -202,8 +202,6 @@ void UUIManagerSubsystem::HandleMapPreloadComplete(EAsyncLoadingResult::Type Res
         return;
     }
 
-    bMapLoadComplete = true;
-
     UWorld* World = GetGameInstance()->GetWorld();
     if (!World) { DoTravelToNewGameMap(); return; }
 
