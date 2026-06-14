@@ -27,6 +27,7 @@ DEFINE_LOG_CATEGORY(Log_AI_Task_Combat_Alert);
 
 DEFINE_LOG_CATEGORY(Log_Character_Player);
 DEFINE_LOG_CATEGORY(Log_Character_Player_Input);
+DEFINE_LOG_CATEGORY(Log_Character_Player_Stat);
 
 DEFINE_LOG_CATEGORY(Log_Character_Enemy);
 

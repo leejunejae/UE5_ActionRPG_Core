@@ -4,12 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "Core/Subsystems/GameInstanceSystem/UIManagerSubsystem.h"
 #include "ControllerBase.generated.h"
 
 /**
  * 
  */
 
+class UGameMenuWidget;
+class UInGameMenuInputConfigDataAsset;
 class UPlayerHUDWidget;
 
 UCLASS()
@@ -27,18 +30,50 @@ protected:
 	virtual void OnPossess(APawn* InPawn) override;
 	virtual void OnUnPossess() override;
 
+#pragma region Screen
 private:
 	void InitializeFullScreenUI();
-	void CreatePlayerHUD();
-	void BindHUDToPawn();
-	void SetupForPlayerPawn();
 
 	void BindToPlayerDeath();
 	void UnbindFromPlayerDeath();
 	void HandlePlayerDeathFinalized();
+#pragma endregion Screen
+
+#pragma region HUD
+private:
+	void CreatePlayerHUD();
+	void BindHUDToPawn();
+	void SetupForPlayerPawn();
 
 	UPROPERTY()
 	TObjectPtr<UPlayerHUDWidget> PlayerHUDWidget;
+#pragma endregion HUD
+
+#pragma region InGame Menu
+public:
+	UPROPERTY(EditDefaultsOnly, Category = "UI")
+	TSubclassOf<UGameMenuWidget> GameMenuClass;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	TObjectPtr<UInGameMenuInputConfigDataAsset> InGameMenuInputConfig;
+
+protected:
+	virtual void SetupInputComponent() override;
+
+private:
+	void CreateGameMenu();
+	void ToggleMenuTab(EGameMenuTab Tab);
+
+	void Input_OpenStatus();
+	void Input_OpenEquipment();
+	void Input_OpenInventory();
+	void Input_OpenOptions();
+	void Input_OpenSkills();
+	void Input_OpenMap();
+
+	UPROPERTY()
+	TObjectPtr<UGameMenuWidget> GameMenuWidget;
+#pragma endregion InGame Menu
 
 #pragma region Respawn
 public:

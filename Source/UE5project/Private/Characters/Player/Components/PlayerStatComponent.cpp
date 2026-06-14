@@ -2,6 +2,7 @@
 
 
 #include "Characters/Player/Components/PlayerStatComponent.h"
+#include "Utils/CoreLog.h"
 
 UPlayerStatComponent::UPlayerStatComponent()
 {
@@ -34,18 +35,6 @@ UPlayerStatComponent::UPlayerStatComponent()
 	{
 		AttributeTables.Add(EAttributeType::Dexterity, DexterityDT_Asset.Object);
 	}
-
-	static ConstructorHelpers::FObjectFinder<UDataTable> IntelligenceDT_Asset(TEXT("DataTable'/Game/00_Character/Data/Stat/Attribute_Intelligence_DT.Attribute_Intelligence_DT'"));
-	if (IntelligenceDT_Asset.Succeeded())
-	{
-		AttributeTables.Add(EAttributeType::Intelligence, IntelligenceDT_Asset.Object);
-	}
-
-	static ConstructorHelpers::FObjectFinder<UDataTable> VigorDT_Asset(TEXT("DataTable'/Game/00_Character/Data/Stat/Attribute_Vigor_DT.Attribute_Vigor_DT'"));
-	if (VigorDT_Asset.Succeeded())
-	{
-		AttributeTables.Add(EAttributeType::Vigor, VigorDT_Asset.Object);
-	}
 }
 
 void UPlayerStatComponent::InitializeStats()
@@ -62,7 +51,7 @@ void UPlayerStatComponent::InitializeStats()
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Vitality is Unloaded"));
+			UE_LOG(Log_Character_Player_Stat, Warning, TEXT("Vitality row not found: %s"), *RowName);
 		}
 	}
 
@@ -78,7 +67,7 @@ void UPlayerStatComponent::InitializeStats()
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Endurance is Unloaded"));
+			UE_LOG(Log_Character_Player_Stat, Warning, TEXT("Endurance row not found: %s"), *RowName);
 		}
 	}
 
@@ -89,76 +78,49 @@ void UPlayerStatComponent::InitializeStats()
 
 		if (MentalityDTRow)
 		{
-			PlayerStats.Focus.Max = MentalityDTRow->FP;
+			PlayerStats.Focus.Max = MentalityDTRow->Focus;
 			PlayerStats.Focus.Current = PlayerStats.Focus.Max;
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Mentality is Unloaded"));
+			UE_LOG(Log_Character_Player_Stat, Warning, TEXT("Mentality row not found: %s"), *RowName);
 		}
 	}
 
 	if (AttributeTables.Contains(EAttributeType::Strength))
 	{
 		FString RowName = FString::Printf(TEXT("Strength_%d"), BaseAttributes.Strength);
-		const FAttribute_Strength* StrengthDTRow = AttributeTables[EAttributeType::Strength]->FindRow<FAttribute_Strength>(FName(*RowName), TEXT(""));
-
-		if (StrengthDTRow)
+		const FAttribute_Strength* Row = AttributeTables[EAttributeType::Strength]->FindRow<FAttribute_Strength>(FName(*RowName), TEXT(""));
+		if (Row)
 		{
-			PlayerStats.BaseStats.PhysicalDefense = StrengthDTRow->PhysicalDefense;
+			PlayerStats.CombatStats.StrengthAttackBonus = Row->PhysicalAttackBonus;
+			PlayerStats.BaseStats.Poise.InitResource(Row->PoiseMax);
+			PlayerStats.EquipLoad.Max = Row->EquipLoadMax;
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Strength is Unloaded"));
+			UE_LOG(Log_Character_Player_Stat, Warning, TEXT("Strength row not found: %s"), *RowName);
 		}
 	}
 
 	if (AttributeTables.Contains(EAttributeType::Dexterity))
 	{
 		FString RowName = FString::Printf(TEXT("Dexterity_%d"), BaseAttributes.Dexterity);
-		const FAttribute_Dexterity* DexterityDTRow = AttributeTables[EAttributeType::Dexterity]->FindRow<FAttribute_Dexterity>(FName(*RowName), TEXT(""));
-
-		if (DexterityDTRow)
+		const FAttribute_Dexterity* Row = AttributeTables[EAttributeType::Dexterity]->FindRow<FAttribute_Dexterity>(FName(*RowName), TEXT(""));
+		if (Row)
 		{
-			PlayerStats.BaseStats.Poise.Max = DexterityDTRow->Poise;
-			PlayerStats.BaseStats.Poise.Current = PlayerStats.BaseStats.Poise.Max;
-			PlayerStats.Evasion = DexterityDTRow->Evasion;
+			PlayerStats.CombatStats.DexterityAttackBonus = Row->PhysicalAttackBonus;
+			PlayerStats.CombatStats.StaminaRegenBonus = Row->StaminaRegenBonus;
 		}
 		else
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Dexterity is Unloaded"));
+			UE_LOG(Log_Character_Player_Stat, Warning, TEXT("Dexterity row not found: %s"), *RowName);
 		}
 	}
 
-	if (AttributeTables.Contains(EAttributeType::Intelligence))
+	if (!AttributeTables.Contains(EAttributeType::Affinity))
 	{
-		FString RowName = FString::Printf(TEXT("Intelligence_%d"), BaseAttributes.Intelligence);
-		const FAttribute_Intelligence* IntelligenceDTRow = AttributeTables[EAttributeType::Intelligence]->FindRow<FAttribute_Intelligence>(FName(*RowName), TEXT(""));
-
-		if (IntelligenceDTRow)
-		{
-			PlayerStats.BaseStats.MagicDefense = IntelligenceDTRow->MagicDefense;
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Intelligence is Unloaded"));
-		}
-	}
-
-	if (AttributeTables.Contains(EAttributeType::Vigor))
-	{
-		FString RowName = FString::Printf(TEXT("Vigor_%d"), BaseAttributes.Vigor);
-		const FAttribute_Vigor* VigorDTRow = AttributeTables[EAttributeType::Vigor]->FindRow<FAttribute_Vigor>(FName(*RowName), TEXT(""));
-
-		if (VigorDTRow)
-		{
-			PlayerStats.EquipLoad.Max = VigorDTRow->EquipLoad;
-			PlayerStats.BaseStats.Resistance = VigorDTRow->Resistance;
-		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Vigor is Unloaded"));
-		}
+		UE_LOG(Log_Character_Player_Stat, Warning, TEXT("Affinity DataTable not loaded"));
 	}
 
 	BroadcastResourceStat(EResourceStatType::Health, PlayerStats.BaseStats.Health);
@@ -203,8 +165,11 @@ void UPlayerStatComponent::TickStaminaRegen(float DeltaTime)
 	if (PlayerStats.Stamina.Current >= PlayerStats.Stamina.Max) return;
 	if (TimeSinceStaminaSpend < StaminaRegenDelay) return;
 
+	// 기본 회복량 + 지구력 보너스
+	const float EffectiveRegenRate = StaminaRegenRate + PlayerStats.CombatStats.StaminaRegenBonus;
+
 	PlayerStats.Stamina.Current = FMath::Clamp(
-		PlayerStats.Stamina.Current + StaminaRegenRate * DeltaTime,
+		PlayerStats.Stamina.Current + EffectiveRegenRate * DeltaTime,
 		0.f, PlayerStats.Stamina.Max);
 
 	BroadcastResourceStat(EResourceStatType::Stamina, PlayerStats.Stamina);

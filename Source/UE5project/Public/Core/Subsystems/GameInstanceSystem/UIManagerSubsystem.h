@@ -19,6 +19,17 @@ enum class EGameScreenState : uint8
     GameOver    UMETA(DisplayName = "GameOver")
 };
 
+UENUM(BlueprintType)
+enum class EGameMenuTab : uint8
+{
+    Status      UMETA(DisplayName = "Status"),
+    Equipment   UMETA(DisplayName = "Equipment"),
+    Inventory   UMETA(DisplayName = "Inventory"),
+    Skills      UMETA(DisplayName = "Skills"),
+    Map         UMETA(DisplayName = "Map"),
+    Options     UMETA(DisplayName = "Options"),
+};
+
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnScreenStateChanged, EGameScreenState, NewState);
 
 UCLASS()

@@ -2,6 +2,7 @@
 
 
 #include "Characters/Components/EquipmentComponent.h"
+#include "Characters/Player/Components/PlayerStatComponent.h"
 
 #include "GameFramework/Character.h"
 #include "Kismet/GameplayStatics.h"
@@ -162,18 +163,44 @@ FAttackTraceSource UEquipmentComponent::GetAttackTraceSource(EAttackSourceType A
 FAttackDamageSource UEquipmentComponent::GetAttackDamageSource() const
 {
 	FAttackDamageSource OutData;
+	if (!EquipedWeapon) return OutData;
 
-	OutData.AttackRating = EquipedWeapon->AttackPower;
-	OutData.PoiseRating = EquipedWeapon->PoisePower;
-	OutData.StanceRating = EquipedWeapon->StancePower;
-
+	// 1. 요구치 충족률 계산 (기존 로직 유지)
+	float PerformanceRatio = 1.0f;
 	if (CachedStat)
 	{
-		float PerformanceRatio = IStatInterface::Execute_GetWeaponPerformanceRatio(CachedStat.GetObject(), EquipedWeapon->RequiredStats.ToCharacterStats());
-		OutData.AttackRating *= PerformanceRatio;
-		OutData.PoiseRating *= PerformanceRatio;
-		OutData.StanceRating *= PerformanceRatio;
+		PerformanceRatio = IStatInterface::Execute_GetWeaponPerformanceRatio(
+			CachedStat.GetObject(),
+			EquipedWeapon->RequiredStats.ToCharacterStats());
 	}
+
+	// 2. 특성 보정값 읽기 (근력/민첩 공격력 보정)
+	float StrengthBonus = 0.f;
+	float DexterityBonus = 0.f;
+	float AffinityBonus = 0.f;
+	if (CachedStat)
+	{
+		// UPlayerStatComponent만 FPlayerCombatStats를 가짐
+		// IStatInterface를 통해 캐스트 없이 접근하려면 인터페이스 확장이 필요하므로
+		// 여기서는 직접 캐스트 (EquipmentComponent는 항상 플레이어에 붙어있음)
+		if (const UPlayerStatComponent* PlayerStat = Cast<UPlayerStatComponent>(CachedStat.GetObject()))
+		{
+			const FPlayerCombatStats& Combat = PlayerStat->GetCharacterStats_Native().CombatStats;
+			StrengthBonus = Combat.StrengthAttackBonus;
+			DexterityBonus = Combat.DexterityAttackBonus;
+		}
+	}
+
+	// 3. 최종 공격력 계산
+	// AttackRating = (무기 기본공격력 × 요구치 충족률)
+	//              + (특성 보정값 × 등급 배율)
+	const float BaseAttack = EquipedWeapon->AttackPower * PerformanceRatio;
+	const float AttributeAttack = EquipedWeapon->CalcAttributeAttackBonus(StrengthBonus, DexterityBonus, AffinityBonus);
+	OutData.AttackRating = BaseAttack + AttributeAttack;
+
+	// Poise/Stance는 요구치 충족률만 적용 (특성 보정 없음)
+	OutData.PoiseRating = EquipedWeapon->PoisePower * PerformanceRatio;
+	OutData.StanceRating = EquipedWeapon->StancePower * PerformanceRatio;
 
 	return OutData;
 }

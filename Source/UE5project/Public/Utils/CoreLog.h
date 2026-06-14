@@ -32,6 +32,7 @@ DECLARE_LOG_CATEGORY_EXTERN(Log_AI_Task_Combat_Alert, Log, All);
 
 DECLARE_LOG_CATEGORY_EXTERN(Log_Character_Player, Log, All);
 DECLARE_LOG_CATEGORY_EXTERN(Log_Character_Player_Input, Log, All);
+DECLARE_LOG_CATEGORY_EXTERN(Log_Character_Player_Stat, Log, All);
 
 DECLARE_LOG_CATEGORY_EXTERN(Log_Character_Enemy, Log, All);
 

@@ -8,6 +8,11 @@
 #include "Characters/Player/Components/PlayerStatComponent.h"
 #include "Characters/Player/Components/PlayerStatusComponent.h"
 
+#include "UI/GameMenuWidget.h"
+#include "Characters/Player/Controller/InGameMenuInputConfigDataAsset.h"
+#include "EnhancedInputComponent.h"
+#include "EnhancedInputSubsystems.h"
+
 void AControllerBase::BeginPlay()
 {
     Super::BeginPlay();
@@ -16,6 +21,7 @@ void AControllerBase::BeginPlay()
     if (!IsLocalPlayerController()) return;
 
     InitializeFullScreenUI();
+    CreateGameMenu();
     SetupForPlayerPawn();
 }
 
@@ -33,6 +39,78 @@ void AControllerBase::OnUnPossess()
 
     Super::OnUnPossess();
 }
+
+void AControllerBase::SetupInputComponent()
+{
+    Super::SetupInputComponent();
+
+    if (!InGameMenuInputConfig) return;
+
+    // Enhanced Input 서브시스템에 메뉴 IMC 등록
+    // Priority 1 — PlayerBase의 게임플레이 IMC(Priority 0)보다 높게 설정해
+    // 메뉴 키가 게임플레이 입력보다 먼저 처리되도록 함
+    if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+        ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
+    {
+        if (InGameMenuInputConfig->MenuContext)
+        {
+            Subsystem->AddMappingContext(InGameMenuInputConfig->MenuContext, 1);
+        }
+    }
+
+    UEnhancedInputComponent* EIC = CastChecked<UEnhancedInputComponent>(InputComponent);
+    if (!EIC) return;
+
+    if (InGameMenuInputConfig->IA_OpenStatus)
+        EIC->BindAction(InGameMenuInputConfig->IA_OpenStatus, ETriggerEvent::Started, this, &AControllerBase::Input_OpenStatus);
+    if (InGameMenuInputConfig->IA_OpenEquipment)
+        EIC->BindAction(InGameMenuInputConfig->IA_OpenEquipment, ETriggerEvent::Started, this, &AControllerBase::Input_OpenEquipment);
+    if (InGameMenuInputConfig->IA_OpenInventory)
+        EIC->BindAction(InGameMenuInputConfig->IA_OpenInventory, ETriggerEvent::Started, this, &AControllerBase::Input_OpenInventory);
+    if (InGameMenuInputConfig->IA_OpenOptions)
+        EIC->BindAction(InGameMenuInputConfig->IA_OpenOptions, ETriggerEvent::Started, this, &AControllerBase::Input_OpenOptions);
+    if (InGameMenuInputConfig->IA_OpenSkills)
+        EIC->BindAction(InGameMenuInputConfig->IA_OpenSkills, ETriggerEvent::Started, this, &AControllerBase::Input_OpenSkills);
+    if (InGameMenuInputConfig->IA_OpenMap)
+        EIC->BindAction(InGameMenuInputConfig->IA_OpenMap, ETriggerEvent::Started, this, &AControllerBase::Input_OpenMap);
+}
+
+void AControllerBase::CreateGameMenu()
+{
+    if (!GameMenuClass || GameMenuWidget) return;
+
+    GameMenuWidget = CreateWidget<UGameMenuWidget>(this, GameMenuClass);
+    if (GameMenuWidget)
+    {
+        GameMenuWidget->AddToViewport(5); // HUD(ZOrder 0)보다 위
+    }
+}
+
+void AControllerBase::ToggleMenuTab(EGameMenuTab Tab)
+{
+    if (!GameMenuWidget) return;
+
+    if (!GameMenuWidget->IsOpen())
+    {
+        GameMenuWidget->OpenToTab(Tab);
+    }
+    else if (GameMenuWidget->GetActiveTab() == Tab)
+    {
+        GameMenuWidget->CloseMenu();
+    }
+    else
+    {
+        // 이미 열려있고 다른 탭 → 탭만 전환 (닫았다 열지 않음)
+        GameMenuWidget->OpenToTab(Tab);
+    }
+}
+
+void AControllerBase::Input_OpenStatus() { ToggleMenuTab(EGameMenuTab::Status); }
+void AControllerBase::Input_OpenEquipment() { ToggleMenuTab(EGameMenuTab::Equipment); }
+void AControllerBase::Input_OpenInventory() { ToggleMenuTab(EGameMenuTab::Inventory); }
+void AControllerBase::Input_OpenSkills() { ToggleMenuTab(EGameMenuTab::Skills); }
+void AControllerBase::Input_OpenMap() { ToggleMenuTab(EGameMenuTab::Map); }
+void AControllerBase::Input_OpenOptions() { ToggleMenuTab(EGameMenuTab::Options); }
 
 void AControllerBase::BindToPlayerDeath()
 {

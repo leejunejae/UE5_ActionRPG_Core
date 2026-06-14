@@ -5,7 +5,7 @@
 void UStartupScreenWidget::NativeConstruct()
 {
     Super::NativeConstruct();
-    bIsFocusable = true;  // 키보드 입력 수신 활성화
+    SetIsFocusable(true);
 }
 
 void UStartupScreenWidget::ShowWidget()

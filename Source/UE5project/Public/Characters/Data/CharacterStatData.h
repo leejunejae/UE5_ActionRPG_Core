@@ -13,15 +13,15 @@
 UENUM(BlueprintType)
 enum class EAttributeType : uint8
 {
-	Vitality,
-	Endurance,
-	Mentality,
-	Strength,
-	Dexterity,
-	Intelligence,
-	Vigor
+	Vitality,		// 생명력 — HP Max
+	Endurance,		// 지구력 — Stamina Max
+	Mentality,		// 정신력 — Focus Max
+	Strength,		// 근력   — 공격력 보정, 강인도 Max, 장비 하중 Max, 중량 무기 요구치
+	Dexterity,		// 민첩   — 공격력 보정, 경량 무기 요구치, Stamina 회복 속도
+	Affinity		// 자연친화 — 자연물 계열 무기 요구치, 스킬 트리 관련 (추후 확장)
 };
 
+// ── 생명력 ──────────────────────────────────────────────────
 USTRUCT(BlueprintType)
 struct FAttribute_Vitality : public FTableRowBase
 {
@@ -34,6 +34,7 @@ struct FAttribute_Vitality : public FTableRowBase
 		float HP = 0.f;
 };
 
+// ── 지구력 ──────────────────────────────────────────────────
 USTRUCT(BlueprintType)
 struct FAttribute_Endurance : public FTableRowBase
 {
@@ -46,6 +47,7 @@ struct FAttribute_Endurance : public FTableRowBase
 		float Stamina = 0.f;
 };
 
+// ── 정신력 ──────────────────────────────────────────────────
 USTRUCT(BlueprintType)
 struct FAttribute_Mentality : public FTableRowBase
 {
@@ -55,9 +57,10 @@ struct FAttribute_Mentality : public FTableRowBase
 		int32 Level;
 
 	UPROPERTY(EditAnywhere)
-		float FP = 0.f;
+		float Focus = 0.f;
 };
 
+// ── 근력 ────────────────────────────────────────────────────
 USTRUCT(BlueprintType)
 struct FAttribute_Strength : public FTableRowBase
 {
@@ -66,50 +69,48 @@ struct FAttribute_Strength : public FTableRowBase
 	UPROPERTY(EditAnywhere)
 		int32 Level;
 
-	UPROPERTY(EditAnywhere)
-		float PhysicalDefense = 0.f;
+		// 물리 공격력 보정계수 (무기 기본 공격력에 곱해지는 값)
+		// 무기마다 근력/민첩 보정계수 비율이 다름
+	UPROPERTY(EditAnywhere) 
+		float PhysicalAttackBonus = 0.f;
+
+		// 강인도 Max (경직 트리거 임계값)
+	UPROPERTY(EditAnywhere) 
+		float PoiseMax = 0.f;
+
+		// 장비 하중 Max
+	UPROPERTY(EditAnywhere) 
+		float EquipLoadMax = 0.f;
 };
 
+// ── 민첩 ────────────────────────────────────────────────
 USTRUCT(BlueprintType)
 struct FAttribute_Dexterity : public FTableRowBase
 {
 	GENERATED_BODY()
 
-		UPROPERTY(EditAnywhere)
+	UPROPERTY(EditAnywhere)
 		int32 Level;
 
-	UPROPERTY(EditAnywhere)
-		float Poise = 0.f;
+		// 물리 공격력 보정계수 (근력과 동일 구조, 무기별 비율로 혼합)
+	UPROPERTY(EditAnywhere) 
+		float PhysicalAttackBonus = 0.f;
 
-	UPROPERTY(EditAnywhere)
-		float Evasion = 0.f;
+		// Stamina 초당 회복 보너스
+	UPROPERTY(EditAnywhere) 
+		float StaminaRegenBonus = 0.f;
 };
 
+// ── 자연친화 ────────────────────────────────────────────────
 USTRUCT(BlueprintType)
-struct FAttribute_Intelligence : public FTableRowBase
+struct FAttribute_Affinity : public FTableRowBase
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere)
-		int32 Level;
+	UPROPERTY(EditAnywhere) int32 Level;
 
-	UPROPERTY(EditAnywhere)
-		float MagicDefense = 0.f;
-};
-
-USTRUCT(BlueprintType)
-struct FAttribute_Vigor : public FTableRowBase
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere)
-		int32 Level;
-
-	UPROPERTY(EditAnywhere)
-		float EquipLoad = 0.f;
-
-	UPROPERTY(EditAnywhere)
-		float Resistance = 0.f;
+	// 자연물 계열 무기 요구치 판정에 사용
+	// 스킬 트리 관련 수치는 스킬 시스템 확정 후 추가 예정
 };
 
 USTRUCT(BlueprintType)
@@ -117,28 +118,13 @@ struct FCharacterAttributes
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		int32 Vitality = 10;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Vitality = 10;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Endurance = 10;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Mentality = 10;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Strength = 10;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Dexterity = 10;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) int32 Affinity = 10;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		int32 Endurance = 10;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		int32 Mentality = 10;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		int32 Strength = 10;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		int32 Dexterity = 10;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		int32 Intelligence = 10;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		int32 Vigor = 10;
-
-	// 스탯 합산, 비교, 증감 같은 유틸 함수도 여기 포함 가능
 	FCharacterAttributes operator+(const FCharacterAttributes& Other) const
 	{
 		return {
@@ -147,12 +133,33 @@ struct FCharacterAttributes
 			Mentality + Other.Mentality,
 			Strength + Other.Strength,
 			Dexterity + Other.Dexterity,
-			Intelligence + Other.Intelligence,
-			Vigor + Other.Vigor
+			Affinity + Other.Affinity
 		};
 	}
 
 	float GetRequirementAttributeRate(const FCharacterAttributes& Requirement) const;
+};
+
+/* ============================================================
+ *  FPlayerCombatStats — 전투 보정 수치 (특성에서 계산된 결과값)
+ *  PlayerStatComponent가 InitializeStats 후 보관
+ * ============================================================ */
+USTRUCT(BlueprintType)
+struct FPlayerCombatStats
+{
+	GENERATED_BODY()
+
+	// 근력 기반 물리 공격력 보정계수
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) 
+	float StrengthAttackBonus = 0.f;
+
+	// 민첩 기반 물리 공격력 보정계수
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) 
+	float DexterityAttackBonus = 0.f;
+
+	// Stamina 초당 회복 보너스 (민첩에서)
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly) 
+	float StaminaRegenBonus = 0.f;
 };
 
 /* ============================================================
@@ -236,8 +243,8 @@ struct FPlayerStats
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		FResourceStat EquipLoad;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float Evasion;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) 
+		FPlayerCombatStats CombatStats;
 };
 
 USTRUCT(BlueprintType)
