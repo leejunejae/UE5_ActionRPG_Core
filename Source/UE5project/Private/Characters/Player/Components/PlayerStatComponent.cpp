@@ -1,6 +1,3 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "Characters/Player/Components/PlayerStatComponent.h"
 #include "Utils/CoreLog.h"
 
@@ -128,6 +125,32 @@ void UPlayerStatComponent::InitializeStats()
 	BroadcastResourceStat(EResourceStatType::Focus, PlayerStats.Focus);
 }
 
+#pragma region Attributes
+
+float UPlayerStatComponent::GetAttributesRequirementRatio_Implementation(const FCharacterAttributes& RequireStats) const
+{
+	return BaseAttributes.GetRequirementAttributeRate(RequireStats);
+}
+
+float UPlayerStatComponent::GetWeaponPerformanceRatio_Implementation(const FCharacterAttributes& RequireStats) const
+{
+	const float StatFulfillRatio = BaseAttributes.GetRequirementAttributeRate(RequireStats);
+
+	if (StatFulfillRatio >= 1.0f)
+		return 1.0f;
+	else if (StatFulfillRatio >= 0.8f)
+		return 0.5f;
+	else if (StatFulfillRatio >= 0.5f)
+		return 0.3f;
+	else
+		return 0.2f;
+}
+
+#pragma endregion
+
+
+#pragma region Stamina
+
 void UPlayerStatComponent::ChangeMaxStamina(const float Amount)
 {
 	PlayerStats.Stamina.Max += Amount;
@@ -143,7 +166,7 @@ bool UPlayerStatComponent::ChangeStamina(const float Amount, const EStatChangeTy
 	{
 	case EStatChangeType::Damage:
 		bChangeSuccess = PlayerStats.Stamina.Current >= Delta;
-		if (Delta > 0.f) TimeSinceStaminaSpend = 0.f;   // ← 핵심: 소모 시 회복 딜레이 리셋
+		if (Delta > 0.f) TimeSinceStaminaSpend = 0.f;   // 핵심: 소모 시 회복 딜레이 리셋
 		break;
 	case EStatChangeType::Heal:
 		bChangeSuccess = (PlayerStats.Stamina.Current + Delta) <= PlayerStats.Stamina.Max;
@@ -175,26 +198,18 @@ void UPlayerStatComponent::TickStaminaRegen(float DeltaTime)
 	BroadcastResourceStat(EResourceStatType::Stamina, PlayerStats.Stamina);
 }
 
-float UPlayerStatComponent::GetAttributesRequirementRatio_Implementation(const FCharacterAttributes& RequireStats) const
-{
-	return BaseAttributes.GetRequirementAttributeRate(RequireStats);
-}
+#pragma endregion
 
-float UPlayerStatComponent::GetWeaponPerformanceRatio_Implementation(const FCharacterAttributes& RequireStats) const
-{
-	const float StatFulfillRatio = BaseAttributes.GetRequirementAttributeRate(RequireStats);
 
-	if (StatFulfillRatio >= 1.0f)
-		return 1.0f;
-	else if (StatFulfillRatio >= 0.8f)
-		return 0.5f;
-	else if (StatFulfillRatio >= 0.5f)
-		return 0.3f;
-	else
-		return 0.2f;
-}
+#pragma region Equipment
 
-void UPlayerStatComponent::ApplyArmorStats(float TotalDefense, float TotalMagicDefense, float TotalFireResistance, float TotalFrostResistance, float TotalPoisonResistance, float TotalBleedResistance, float TotalWeight)
+void UPlayerStatComponent::ApplyArmorStats(
+	float TotalDefense,
+	float TotalMagicDefense,
+	float TotalFireResistance,
+	float TotalFrostResistance,
+	float TotalPoisonResistance,
+	float TotalBleedResistance)
 {
 	// 방어력
 	PlayerStats.BaseStats.PhysicalDefense = TotalDefense;
@@ -205,8 +220,12 @@ void UPlayerStatComponent::ApplyArmorStats(float TotalDefense, float TotalMagicD
 	PlayerStats.BaseStats.FrostResistance = TotalFrostResistance;
 	PlayerStats.BaseStats.PoisonResistance = TotalPoisonResistance;
 	PlayerStats.BaseStats.BleedResistance = TotalBleedResistance;
-
-	// 장비 하중 현재값 갱신
-	// EquipLoad.Max는 Strength 특성으로 결정된 값 유지, Current만 교체
-	PlayerStats.EquipLoad.Current = TotalWeight;
 }
+
+void UPlayerStatComponent::ApplyEquipLoad(float TotalLoad)
+{
+	// EquipLoad.Max는 Strength 특성으로 결정된 값 유지, Current만 갱신
+	PlayerStats.EquipLoad.Current = TotalLoad;
+}
+
+#pragma endregion

@@ -1,37 +1,32 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "Characters/Components/EquipmentComponent.h"
 #include "Characters/Player/Components/PlayerStatComponent.h"
 
 #include "GameFramework/Character.h"
-
 #include "Core/Subsystems/GameInstanceSystem/WeaponDataSubsystem.h"
 #include "Core/Subsystems/GameInstanceSystem/ArmorDataSubsystem.h"
-
 #include "Items/Weapons/Data/WeaponDataAsset.h"
 #include "Items/Armor/Data/ArmorDataAsset.h"
-
 #include "Utils/CoreLog.h"
 
-// Sets default values for this component's properties
 UEquipmentComponent::UEquipmentComponent()
 {
-
 }
 
+void UEquipmentComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+}
 
-// Called when the game starts
 void UEquipmentComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	// ...
 	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	if (!Character) return;
 
-	if (!Character)
-		return;
-	
+	// StatInterface 캐시
 	for (UActorComponent* Comp : Character->GetComponents())
 	{
 		if (Comp->GetClass()->ImplementsInterface(UStatInterface::StaticClass()))
@@ -41,6 +36,7 @@ void UEquipmentComponent::BeginPlay()
 		}
 	}
 
+	// 무기 메시 동적 생성
 	WeaponMesh = NewObject<UStaticMeshComponent>(GetOwner(), UStaticMeshComponent::StaticClass(), TEXT("WeaponMesh"));
 	SubEquipMesh = NewObject<UStaticMeshComponent>(GetOwner(), UStaticMeshComponent::StaticClass(), TEXT("SubEquipMesh"));
 
@@ -63,94 +59,79 @@ void UEquipmentComponent::BeginPlay()
 	InitArmorMeshComponents(Character);
 }
 
-
-// Called every frame
-void UEquipmentComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
-{
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-	// ...
-}
+#pragma region Weapon
 
 void UEquipmentComponent::EquipWeapon_Implementation(FName WeaponKey)
 {
 	UWorld* World = GetWorld();
-	if (WeaponMesh && World )
+	if (!WeaponMesh || !World) return;
+
+	UWeaponDataSubsystem* WeaponSubsystem = World->GetGameInstance()->GetSubsystem<UWeaponDataSubsystem>();
+	if (!WeaponSubsystem)
 	{
-		UWeaponDataSubsystem* WeaponSubsystem = World->GetGameInstance()->GetSubsystem<UWeaponDataSubsystem>();
-		if (!WeaponSubsystem)
-		{
-			UE_LOG(LogTemp, Error, TEXT("[EquipmentComponent] WeaponSubSystem not found"));
-			return;
-		}
-		const FWeaponSetsInfo* FindWeapon = WeaponSubsystem->GetWeaponInfo(WeaponKey);
-
-		if (!FindWeapon)
-		{
-			UE_LOG(Log_Equip_Weapon, Error, TEXT("[EquipmentComponent] No weapon found for %s"), *WeaponKey.ToString());
-			return;
-		}
-
-		if (!FindWeapon->WeaponDefenition.LoadSynchronous())
-		{
-			UE_LOG(Log_Equip_Weapon, Error, TEXT("[EquipmentComponent] Failed to load data %s"), *WeaponKey.ToString());
-			return;
-		}
-
-		if (!FindWeapon->WeaponDefenition.Get()->WeaponInstance.IsValid()
-			&& WeaponKey != FName("Hand_Unarmed_01"))
-		{
-			UE_LOG(Log_Equip_Weapon, Error, TEXT("[EquipmentComponent] Weapon Mesh Asset is Missing"), *WeaponKey.ToString());
-			return;
-		}
-
-		WeaponMesh->SetStaticMesh(nullptr);
-		SubEquipMesh->SetStaticMesh(nullptr);
-
-		EquipedWeapon = FindWeapon;
-
-		WeaponMesh->SetStaticMesh(EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.WeaponMesh);
-		//WeaponMesh->SetRelativeTransform(EquipedWeapon->WeaponDefenition);
-
-		if (EquipedWeapon->WeaponDefenition.Get()->HasSubWeapon)
-		{
-			SubEquipMesh->SetStaticMesh(EquipedWeapon->WeaponDefenition.Get()->SubInstance.WeaponMesh);
-			//SubEquipMesh->SetRelativeTransform(EquipedWeapon->SubWeapon.WeaponTransform);
-		}
-
-		OnWeaponChangedDelegate.Broadcast(EquipedWeapon->WeaponDefenition.Get()->WeaponType);
+		UE_LOG(Log_Equip_Weapon, Error, TEXT("[EquipmentComponent] WeaponDataSubsystem not found"));
+		return;
 	}
+
+	const FWeaponSetsInfo* FindWeapon = WeaponSubsystem->GetWeaponInfo(WeaponKey);
+	if (!FindWeapon)
+	{
+		UE_LOG(Log_Equip_Weapon, Error, TEXT("[EquipmentComponent] No weapon found for %s"), *WeaponKey.ToString());
+		return;
+	}
+
+	if (!FindWeapon->WeaponDefenition.LoadSynchronous())
+	{
+		UE_LOG(Log_Equip_Weapon, Error, TEXT("[EquipmentComponent] Failed to load weapon data: %s"), *WeaponKey.ToString());
+		return;
+	}
+
+	if (!FindWeapon->WeaponDefenition.Get()->WeaponInstance.IsValid()
+		&& WeaponKey != FName("Hand_Unarmed_01"))
+	{
+		UE_LOG(Log_Equip_Weapon, Error, TEXT("[EquipmentComponent] Weapon mesh missing: %s"), *WeaponKey.ToString());
+		return;
+	}
+
+	WeaponMesh->SetStaticMesh(nullptr);
+	SubEquipMesh->SetStaticMesh(nullptr);
+
+	EquipedWeapon = FindWeapon;
+	WeaponMesh->SetStaticMesh(EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.WeaponMesh);
+
+	if (EquipedWeapon->WeaponDefenition.Get()->HasSubWeapon)
+	{
+		SubEquipMesh->SetStaticMesh(EquipedWeapon->WeaponDefenition.Get()->SubInstance.WeaponMesh);
+	}
+
+	RecalcEquipLoad();
+
+	OnWeaponChangedDelegate.Broadcast(EquipedWeapon->WeaponDefenition.Get()->WeaponType);
 }
 
 FVector UEquipmentComponent::GetWeaponSocketLocation_Implementation(FName SocketName, bool IsSubWeapon) const
 {
 	if (!EquipedWeapon)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("GetWeaponSocketLocation called with no valid weapon! IsSubWeapon=%d"), IsSubWeapon);
+		UE_LOG(LogTemp, Warning, TEXT("[EquipmentComponent] GetWeaponSocketLocation called with no valid weapon"));
 		return FVector::ZeroVector;
 	}
-
 	return !IsSubWeapon ? WeaponMesh->GetSocketLocation(SocketName) : SubEquipMesh->GetSocketLocation(SocketName);
 }
 
 FAttackTraceSource UEquipmentComponent::GetAttackTraceSource(EAttackSourceType AttackSourceType) const
 {
 	FAttackTraceSource OutData;
-
 	switch (AttackSourceType)
 	{
 	case EAttackSourceType::MainHand:
-	{
 		OutData.TraceComponent = WeaponMesh;
 		OutData.Radius = EquipedWeapon->WeaponDefenition.Get()->WeaponConfig.HitBoxRadius;
 		break;
-	}
 	case EAttackSourceType::OffHand:
-	{
 		OutData.TraceComponent = SubEquipMesh;
 		OutData.Radius = EquipedWeapon->WeaponDefenition.Get()->SubConfig.HitBoxRadius;
 		break;
-	}
 	}
 	return OutData;
 }
@@ -160,7 +141,7 @@ FAttackDamageSource UEquipmentComponent::GetAttackDamageSource() const
 	FAttackDamageSource OutData;
 	if (!EquipedWeapon) return OutData;
 
-	// 1. 요구치 충족률 계산 (기존 로직 유지)
+	// 요구치 충족률 계산
 	float PerformanceRatio = 1.0f;
 	if (CachedStat)
 	{
@@ -169,15 +150,12 @@ FAttackDamageSource UEquipmentComponent::GetAttackDamageSource() const
 			EquipedWeapon->RequiredStats.ToCharacterStats());
 	}
 
-	// 2. 특성 보정값 읽기 (근력/민첩 공격력 보정)
+	// 특성 보정값 읽기 (근력/민첩 공격력 보정)
 	float StrengthBonus = 0.f;
 	float DexterityBonus = 0.f;
 	float AffinityBonus = 0.f;
 	if (CachedStat)
 	{
-		// UPlayerStatComponent만 FPlayerCombatStats를 가짐
-		// IStatInterface를 통해 캐스트 없이 접근하려면 인터페이스 확장이 필요하므로
-		// 여기서는 직접 캐스트 (EquipmentComponent는 항상 플레이어에 붙어있음)
 		if (const UPlayerStatComponent* PlayerStat = Cast<UPlayerStatComponent>(CachedStat.GetObject()))
 		{
 			const FPlayerCombatStats& Combat = PlayerStat->GetCharacterStats_Native().CombatStats;
@@ -186,9 +164,7 @@ FAttackDamageSource UEquipmentComponent::GetAttackDamageSource() const
 		}
 	}
 
-	// 3. 최종 공격력 계산
-	// AttackRating = (무기 기본공격력 × 요구치 충족률)
-	//              + (특성 보정값 × 등급 배율)
+	// 최종 공격력 = (무기 기본공격력 × 요구치 충족률) + (특성 보정값 × 등급 배율)
 	const float BaseAttack = EquipedWeapon->AttackPower * PerformanceRatio;
 	const float AttributeAttack = EquipedWeapon->CalcAttributeAttackBonus(StrengthBonus, DexterityBonus, AffinityBonus);
 	OutData.AttackRating = BaseAttack + AttributeAttack;
@@ -200,10 +176,12 @@ FAttackDamageSource UEquipmentComponent::GetAttackDamageSource() const
 	return OutData;
 }
 
-/* ============================================================
- *  방어구 메시 컴포넌트 초기화
- *  EArmorSlot 순회로 슬롯별 컴포넌트 생성 → TMap에 저장
- * ============================================================ */
+#pragma endregion
+
+
+#pragma region Armor
+
+// 슬롯별 SkeletalMeshComponent 생성 → 루트 메시를 리더로 지정해 본 동기화
 void UEquipmentComponent::InitArmorMeshComponents(ACharacter* Character)
 {
 	const TArray<TPair<EArmorSlot, FName>> SlotDefs = {
@@ -227,20 +205,20 @@ void UEquipmentComponent::InitArmorMeshComponents(ACharacter* Character)
 		ArmorComp->SetCollisionProfileName(TEXT("NoCollision"));
 		ArmorComp->SetGenerateOverlapEvents(false);
 		ArmorComp->CanCharacterStepUpOn = ECanBeCharacterBase::ECB_No;
-		ArmorComp->SetSkeletalMesh(nullptr); // 초기 비어있음 → 언더메시 노출
+		ArmorComp->SetSkeletalMesh(nullptr); // 초기 비어있음
 
 		ArmorMeshes.Add(Slot, ArmorComp);
 		EquipedArmors.Add(Slot, nullptr);
 	}
 }
 
-/* ============================================================
- *  방어구 장착
- *  1. DataTable에서 FArmorPieceInfo 조회
- *  2. ArmorDefinition 에셋 로드 → ArmorSlot 읽어 슬롯 자동 판단
- *  3. 해당 슬롯 메시 교체 + EquipedArmors 갱신
- *  4. RecalcArmorStats 호출
- * ============================================================ */
+// 1. DataTable에서 FArmorPieceInfo 조회
+// 2. ArmorDefinition 에셋 로드 → ArmorSlot 읽어 슬롯 자동 판단
+// 3. 해당 슬롯 메시 교체 + EquipedArmors 갱신
+// 4. RecalcArmorStats() 호출 (내부에서 RecalcEquipLoad()까지 연결됨)
+//
+// NOTE: 모든 방어구 부위를 호환할 베이스 메시 처리가 아직 없어
+// 장착 시 캐릭터 베이스 메시를 통째로 숨기는 임시 처리 포함 (의도된 동작)
 void UEquipmentComponent::EquipArmor(FName ArmorKey)
 {
 	if (ArmorKey == NAME_None)
@@ -278,30 +256,24 @@ void UEquipmentComponent::EquipArmor(FName ArmorKey)
 	TObjectPtr<USkeletalMeshComponent>* MeshPtr = ArmorMeshes.Find(Slot);
 	if (!MeshPtr)
 	{
-		UE_LOG(Log_Equip_Armor, Error, TEXT("[EquipmentComponent] ArmorMesh not found for slot: %s"), *ArmorKey.ToString());
+		UE_LOG(Log_Equip_Armor, Error, TEXT("[EquipmentComponent] ArmorMesh not found for slot of: %s"), *ArmorKey.ToString());
 		return;
 	}
 
-	// 메시 교체
 	USkeletalMesh* LoadedMesh = ArmorAsset->Mesh.IsNull() ? nullptr : ArmorAsset->Mesh.LoadSynchronous();
 	(*MeshPtr)->SetSkeletalMesh(LoadedMesh);
 
-	// 수치 데이터 갱신
 	EquipedArmors[Slot] = PieceInfo;
 
 	RecalcArmorStats();
 
-	ACharacter* Character = Cast<ACharacter>(GetOwner());
-
-	if (!Character)
-		return;
-
-	Character->GetMesh()->SetHiddenInGame(true, false);
+	// 임시 처리: 베이스 메시 전체 숨김 (모든 방어구 호환 처리 전까지 유지)
+	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
+	{
+		Character->GetMesh()->SetHiddenInGame(true, false);
+	}
 }
 
-/* ============================================================
- *  방어구 해제
- * ============================================================ */
 void UEquipmentComponent::UnequipArmor(EArmorSlot Slot)
 {
 	TObjectPtr<USkeletalMeshComponent>* MeshPtr = ArmorMeshes.Find(Slot);
@@ -312,18 +284,14 @@ void UEquipmentComponent::UnequipArmor(EArmorSlot Slot)
 
 	RecalcArmorStats();
 
-	ACharacter* Character = Cast<ACharacter>(GetOwner());
-
-	if (!Character)
-		return;
-
-	Character->GetMesh()->SetHiddenInGame(false, false);
+	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
+	{
+		Character->GetMesh()->SetHiddenInGame(false, false);
+	}
 }
 
-/* ============================================================
- *  방어력 · 저항력 · 장비 하중 재계산
- *  장착된 모든 슬롯 합산 → PlayerStatComponent에 반영
- * ============================================================ */
+// 장착된 모든 슬롯 합산 → PlayerStatComponent에 반영
+// 마지막에 RecalcEquipLoad()를 호출해 무게도 갱신
 void UEquipmentComponent::RecalcArmorStats()
 {
 	if (!CachedStat) return;
@@ -337,7 +305,6 @@ void UEquipmentComponent::RecalcArmorStats()
 	float TotalFrostRes = 0.f;
 	float TotalPoisonRes = 0.f;
 	float TotalBleedRes = 0.f;
-	float TotalWeight = 0.f;
 
 	for (const auto& [Slot, Info] : EquipedArmors)
 	{
@@ -349,12 +316,41 @@ void UEquipmentComponent::RecalcArmorStats()
 			TotalFrostRes += Info->FrostResistance;
 			TotalPoisonRes += Info->PoisonResistance;
 			TotalBleedRes += Info->BleedResistance;
-			TotalWeight += Info->WeightValue;
 		}
 	}
 
 	PlayerStat->ApplyArmorStats(
 		TotalDefense, TotalMagicDefense,
-		TotalFireRes, TotalFrostRes, TotalPoisonRes, TotalBleedRes,
-		TotalWeight);
+		TotalFireRes, TotalFrostRes, TotalPoisonRes, TotalBleedRes);
+
+	RecalcEquipLoad();
 }
+
+#pragma endregion
+
+
+#pragma region Shared
+
+// 무기 무게(검+방패 합산값) + 장착된 모든 방어구 무게 합산
+// → PlayerStatComponent::ApplyEquipLoad()로 한 번에 반영
+void UEquipmentComponent::RecalcEquipLoad()
+{
+	if (!CachedStat) return;
+
+	UPlayerStatComponent* PlayerStat = Cast<UPlayerStatComponent>(CachedStat.GetObject());
+	if (!PlayerStat) return;
+
+	float TotalWeight = EquipedWeapon ? EquipedWeapon->WeightValue : 0.f;
+
+	for (const auto& [Slot, Info] : EquipedArmors)
+	{
+		if (Info)
+		{
+			TotalWeight += Info->WeightValue;
+		}
+	}
+
+	PlayerStat->ApplyEquipLoad(TotalWeight);
+}
+
+#pragma endregion

@@ -114,26 +114,29 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 		TSoftObjectPtr<UWeaponDataAsset> WeaponDefenition;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
 		float AttackPower; // 공격력
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
 		float PoisePower; // 경직치
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
 		float StancePower; // 스탠스 데미지
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
 		float StaminaCost; // 스태미나 소모값
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
 		float PoiseBonus; // 공격 시 추가되는 경직 보너스
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "100.0"))
 		float GuardNegation; // 가드시 경감률(가드시 데미지 감소율)
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "100.0"))
 		float GuardBoost; // 가드 강도(값만큼 퍼센트로 들어온 스태미나 소모율 감소)
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
+		float WeightValue = 0.0f; // 무게
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		FWeaponStatRequirement RequiredStats;
