@@ -277,7 +277,10 @@ bool AEnemyBase::ApplyEnemyStats(const FEnemyStats* Stat)
 	RuntimeStats.BaseStats.Poise.InitResource(Stat->Poise);
 	RuntimeStats.BaseStats.PhysicalDefense = Stat->PhysicalDefense;
 	RuntimeStats.BaseStats.MagicDefense = Stat->MagicDefense;
-	RuntimeStats.BaseStats.Resistance = Stat->Resistance;
+	RuntimeStats.BaseStats.FireResistance = Stat->FireResistance;
+	RuntimeStats.BaseStats.FrostResistance = Stat->FrostResistance;
+	RuntimeStats.BaseStats.PoisonResistance = Stat->PoisonResistance;
+	RuntimeStats.BaseStats.BleedResistance = Stat->BleedResistance;
 	RuntimeStats.MagicAttackPower = Stat->MagicAttackPower;
 	RuntimeStats.PhysicalAttackPower = Stat->PhysicalAttackPower;
 	RuntimeStats.PoiseAttackPower = Stat->PoiseAttackPower;

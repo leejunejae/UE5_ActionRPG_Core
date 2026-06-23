@@ -29,6 +29,11 @@ void AFallenKnight::BeginPlay()
 	Super::BeginPlay();
 
 	GetEquipmentComponent()->EquipWeapon_Implementation(DefaultWeaponKey);
+
+	GetEquipmentComponent()->EquipArmor(DefaultLegsKey);
+	GetEquipmentComponent()->EquipArmor(DefaultHeadKey);
+	GetEquipmentComponent()->EquipArmor(DefaultChestKey);
+	GetEquipmentComponent()->EquipArmor(DefaultHandsKey);
 }
 
 void AFallenKnight::Tick(float DeltaTime)

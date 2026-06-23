@@ -205,14 +205,21 @@ struct FCharacterStats
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		FResourceStat Poise;
 
+	// ── 방어력 ──────────────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		float PhysicalDefense = 0;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		float MagicDefense = 0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float Resistance = 0;
+	// ── 상태이상 저항력 ──────────────────────────────────────
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) 
+		float FireResistance = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) 
+		float FrostResistance = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) 
+		float PoisonResistance = 0.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite) 
+		float BleedResistance = 0.f;
 
 public:
 	FORCEINLINE float GetHealth() const { return Health.Current; }

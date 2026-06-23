@@ -61,26 +61,35 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		EAttackSourceType AttackSource;
 
+	// ── 속성 ──────────────────────────────────────────────────
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+		EElementalType ElementType = EElementalType::None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+		float ElementalBuildup = 0.f;
+
+	// ── 배율 ──────────────────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		float DamageMultiplier = 1.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		float PoiseDamageMultiplier = 1.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		float StanceDamageMultiplier = 1.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		float StaminaCostMultiplier = 1.0f;
 
+	// ── 판정 플래그 ────────────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		bool CanBlocked;
+		bool CanBlocked = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		bool CanParried;
+		bool CanParried = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		bool CanAvoid;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		TArray<FStatusEffect> StatusEffectList;
+		bool CanAvoid = false;
 
 	bool operator==(const FName& Other) const
 	{

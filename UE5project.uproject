@@ -54,6 +54,11 @@
 		{
 			"Name": "ChaosVehiclesPlugin",
 			"Enabled": true
+		},
+		{
+			"Name": "QuickMergeSkeletalMesh",
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/marketplace/product/46b05d77fa164177918c5476a26bc408"
 		}
 	]
 }

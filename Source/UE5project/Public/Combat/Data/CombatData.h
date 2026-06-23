@@ -40,29 +40,26 @@ enum class EHitResponse : uint8
 	BlockStun UMETA(DisplayName = "BlockStun"),
 	Parry UMETA(DisplayName = "Parry"),
 };
-/*
-* 공격 데이터 자료형
-*/
+
+/* ============================================================
+ *  EElementalType — 속성 종류
+ *
+ *  DamageType(물리/마법/고정)과 독립적으로 존재.
+ *  예) 날카로운 검 = PhysicalDamage + Bleed 스택
+ *      화염구     = MagicalDamage  + Fire  스택
+ *      순수 타격  = PhysicalDamage + None  (속성 없음)
+ *
+ *  스택 처리는 추후 StatusEffectComponent에서 담당.
+ *  FAttackRequest.ElementalBuildup 값을 읽어 피격 측에 누적.
+ * ============================================================ */
 UENUM(BlueprintType)
-enum class EStatusEffect : uint8
+enum class EElementalType : uint8
 {
-	Bleeding UMETA(DisplayName = "Bleeding"),
-	Darkness UMETA(DisplayName = "Darkness"),
-	SlowDown UMETA(DisplayName = "SlowDown"),
-	Weakness UMETA(DisplayName = "Weakness"),
-	Restraint UMETA(DisplayName = "Restraint"),
-};
-
-USTRUCT(BlueprintType)
-struct FStatusEffect
-{
-	GENERATED_BODY()
-
-public:
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		EStatusEffect StatusEffect;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float Amount;
+	None    UMETA(DisplayName = "None"),    // 속성 없음
+	Fire    UMETA(DisplayName = "Fire"),    // 화염 → 화상
+	Frost   UMETA(DisplayName = "Frost"),   // 냉기 → 동상
+	Poison  UMETA(DisplayName = "Poison"),  // 독   → 중독
+	Bleed   UMETA(DisplayName = "Bleed"),   // 출혈
 };
 
 USTRUCT(BlueprintType)
@@ -72,53 +69,77 @@ struct FAttackRequest
 
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float Damage;
+	float Damage = 0.f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float StanceDamage;
+	float StanceDamage = 0.f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float PoiseDamage;
+	float PoiseDamage = 0.f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		EHitResponse Response;
+	EHitResponse Response = EHitResponse::None;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		EDamageType AttackType;
+	EDamageType AttackType = EDamageType::PhysicalDamage;
+
+	// ── 속성 ──────────────────────────────────────────────────
+	// ElementType: 이 공격이 쌓는 속성 종류
+	// ElementalBuildup: 이 공격 한 번이 누적시키는 스택량
+	// 추후 StatusEffectComponent가 피격 측 저항력과 비교해 상태이상 판정
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		FVector HitPoint;
+	EElementalType ElementType = EElementalType::None;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		FString HitPointName;
+	float ElementalBuildup = 0.f;
+
+	// ── 피격 위치 ──────────────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		bool CanBlocked;
+	FVector HitPoint = FVector::ZeroVector;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		bool CanParried;
+	FString HitPointName;
+
+	// ── 판정 플래그 ────────────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		bool CanAvoid;
+	bool CanBlocked = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		TArray<FStatusEffect> StatusEffectList;
+	bool CanParried = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool CanAvoid = false;
 
 public:
 	FAttackRequest() {}
+
 	FAttackRequest(
 		float InDamage,
 		float InStanceDamage,
 		float InPoiseDamage,
 		EHitResponse InResponse,
+		EDamageType InAttackType,
+		EElementalType InElementType,
+		float InElementalBuildup,
 		FVector InHitPoint,
 		FString InHitPointName,
 		bool InCanBlocked,
 		bool InCanParried,
-		bool InCanAvoid,
-		const TArray<FStatusEffect>& InStatusEffectList
-		)
+		bool InCanAvoid)
 		: Damage(InDamage)
 		, StanceDamage(InStanceDamage)
 		, PoiseDamage(InPoiseDamage)
 		, Response(InResponse)
+		, AttackType(InAttackType)
+		, ElementType(InElementType)
+		, ElementalBuildup(InElementalBuildup)
 		, HitPoint(InHitPoint)
 		, HitPointName(InHitPointName)
 		, CanBlocked(InCanBlocked)
 		, CanParried(InCanParried)
 		, CanAvoid(InCanAvoid)
-		, StatusEffectList(InStatusEffectList)
-	{}
+	{
+	}
 };
 
 UCLASS()

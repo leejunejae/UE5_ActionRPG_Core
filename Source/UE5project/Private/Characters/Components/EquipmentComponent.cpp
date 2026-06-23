@@ -5,21 +5,19 @@
 #include "Characters/Player/Components/PlayerStatComponent.h"
 
 #include "GameFramework/Character.h"
-#include "Kismet/GameplayStatics.h"
-#include "Engine/StaticMeshSocket.h"
 
 #include "Core/Subsystems/GameInstanceSystem/WeaponDataSubsystem.h"
+#include "Core/Subsystems/GameInstanceSystem/ArmorDataSubsystem.h"
+
 #include "Items/Weapons/Data/WeaponDataAsset.h"
+#include "Items/Armor/Data/ArmorDataAsset.h"
+
 #include "Utils/CoreLog.h"
 
 // Sets default values for this component's properties
 UEquipmentComponent::UEquipmentComponent()
 {
-	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
-	// off to improve performance if you don't need them.
-	//PrimaryComponentTick.bCanEverTick = true;
 
-	// ...
 }
 
 
@@ -46,26 +44,23 @@ void UEquipmentComponent::BeginPlay()
 	WeaponMesh = NewObject<UStaticMeshComponent>(GetOwner(), UStaticMeshComponent::StaticClass(), TEXT("WeaponMesh"));
 	SubEquipMesh = NewObject<UStaticMeshComponent>(GetOwner(), UStaticMeshComponent::StaticClass(), TEXT("SubEquipMesh"));
 
-	if (WeaponMesh && SubEquipMesh)
-	{
-		GetOwner()->AddInstanceComponent(WeaponMesh);
-		WeaponMesh->RegisterComponent();
-		WeaponMesh->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, WeaponSocket);
-		WeaponMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		WeaponMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
-		WeaponMesh->SetCollisionProfileName(TEXT("NoCollision"));
-		WeaponMesh->SetGenerateOverlapEvents(false);
-		WeaponMesh->CanCharacterStepUpOn = ECanBeCharacterBase::ECB_No;
+	auto SetupStaticMesh = [&](UStaticMeshComponent* Comp, FName Socket)
+		{
+			GetOwner()->AddInstanceComponent(Comp);
+			Comp->RegisterComponent();
+			Comp->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, Socket);
+			Comp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			Comp->SetCollisionResponseToAllChannels(ECR_Ignore);
+			Comp->SetCollisionProfileName(TEXT("NoCollision"));
+			Comp->SetGenerateOverlapEvents(false);
+			Comp->CanCharacterStepUpOn = ECanBeCharacterBase::ECB_No;
+		};
 
-		GetOwner()->AddInstanceComponent(SubEquipMesh);
-		SubEquipMesh->RegisterComponent();
-		SubEquipMesh->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale, SubEquipSocket);
-		SubEquipMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		SubEquipMesh->SetCollisionResponseToAllChannels(ECR_Ignore);
-		SubEquipMesh->SetCollisionProfileName(TEXT("NoCollision"));
-		SubEquipMesh->SetGenerateOverlapEvents(false);
-		SubEquipMesh->CanCharacterStepUpOn = ECanBeCharacterBase::ECB_No;
-	}
+	SetupStaticMesh(WeaponMesh, WeaponSocket);
+	SetupStaticMesh(SubEquipMesh, SubEquipSocket);
+
+	// 방어구 메시 컴포넌트 초기화
+	InitArmorMeshComponents(Character);
 }
 
 
@@ -203,4 +198,163 @@ FAttackDamageSource UEquipmentComponent::GetAttackDamageSource() const
 	OutData.StanceRating = EquipedWeapon->StancePower * PerformanceRatio;
 
 	return OutData;
+}
+
+/* ============================================================
+ *  방어구 메시 컴포넌트 초기화
+ *  EArmorSlot 순회로 슬롯별 컴포넌트 생성 → TMap에 저장
+ * ============================================================ */
+void UEquipmentComponent::InitArmorMeshComponents(ACharacter* Character)
+{
+	const TArray<TPair<EArmorSlot, FName>> SlotDefs = {
+		{ EArmorSlot::Head,  TEXT("ArmorMesh_Head")  },
+		{ EArmorSlot::Chest, TEXT("ArmorMesh_Chest") },
+		{ EArmorSlot::Hands, TEXT("ArmorMesh_Hands") },
+		{ EArmorSlot::Legs,  TEXT("ArmorMesh_Legs")  },
+	};
+
+	for (const auto& [Slot, CompName] : SlotDefs)
+	{
+		USkeletalMeshComponent* ArmorComp = NewObject<USkeletalMeshComponent>(
+			GetOwner(), USkeletalMeshComponent::StaticClass(), CompName);
+
+		GetOwner()->AddInstanceComponent(ArmorComp);
+		ArmorComp->RegisterComponent();
+		ArmorComp->AttachToComponent(Character->GetMesh(), FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		ArmorComp->SetLeaderPoseComponent(Character->GetMesh());
+		ArmorComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		ArmorComp->SetCollisionResponseToAllChannels(ECR_Ignore);
+		ArmorComp->SetCollisionProfileName(TEXT("NoCollision"));
+		ArmorComp->SetGenerateOverlapEvents(false);
+		ArmorComp->CanCharacterStepUpOn = ECanBeCharacterBase::ECB_No;
+		ArmorComp->SetSkeletalMesh(nullptr); // 초기 비어있음 → 언더메시 노출
+
+		ArmorMeshes.Add(Slot, ArmorComp);
+		EquipedArmors.Add(Slot, nullptr);
+	}
+}
+
+/* ============================================================
+ *  방어구 장착
+ *  1. DataTable에서 FArmorPieceInfo 조회
+ *  2. ArmorDefinition 에셋 로드 → ArmorSlot 읽어 슬롯 자동 판단
+ *  3. 해당 슬롯 메시 교체 + EquipedArmors 갱신
+ *  4. RecalcArmorStats 호출
+ * ============================================================ */
+void UEquipmentComponent::EquipArmor(FName ArmorKey)
+{
+	if (ArmorKey == NAME_None)
+	{
+		UE_LOG(Log_Equip_Armor, Warning, TEXT("[EquipmentComponent] EquipArmor: ArmorKey is None. Use UnequipArmor(EArmorSlot) to remove."));
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	UArmorDataSubsystem* ArmorSubsystem = World->GetGameInstance()->GetSubsystem<UArmorDataSubsystem>();
+	if (!ArmorSubsystem)
+	{
+		UE_LOG(Log_Equip_Armor, Error, TEXT("[EquipmentComponent] ArmorDataSubsystem not found"));
+		return;
+	}
+
+	const FArmorPieceInfo* PieceInfo = ArmorSubsystem->GetArmorPieceInfo(ArmorKey);
+	if (!PieceInfo)
+	{
+		UE_LOG(Log_Equip_Armor, Error, TEXT("[EquipmentComponent] ArmorPiece not found: %s"), *ArmorKey.ToString());
+		return;
+	}
+
+	UArmorDataAsset* ArmorAsset = PieceInfo->ArmorDefinition.LoadSynchronous();
+	if (!ArmorAsset)
+	{
+		UE_LOG(Log_Equip_Armor, Error, TEXT("[EquipmentComponent] ArmorDefinition failed to load: %s"), *ArmorKey.ToString());
+		return;
+	}
+
+	const EArmorSlot Slot = ArmorAsset->ArmorSlot;
+
+	TObjectPtr<USkeletalMeshComponent>* MeshPtr = ArmorMeshes.Find(Slot);
+	if (!MeshPtr)
+	{
+		UE_LOG(Log_Equip_Armor, Error, TEXT("[EquipmentComponent] ArmorMesh not found for slot: %s"), *ArmorKey.ToString());
+		return;
+	}
+
+	// 메시 교체
+	USkeletalMesh* LoadedMesh = ArmorAsset->Mesh.IsNull() ? nullptr : ArmorAsset->Mesh.LoadSynchronous();
+	(*MeshPtr)->SetSkeletalMesh(LoadedMesh);
+
+	// 수치 데이터 갱신
+	EquipedArmors[Slot] = PieceInfo;
+
+	RecalcArmorStats();
+
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+
+	if (!Character)
+		return;
+
+	Character->GetMesh()->SetHiddenInGame(true, false);
+}
+
+/* ============================================================
+ *  방어구 해제
+ * ============================================================ */
+void UEquipmentComponent::UnequipArmor(EArmorSlot Slot)
+{
+	TObjectPtr<USkeletalMeshComponent>* MeshPtr = ArmorMeshes.Find(Slot);
+	if (!MeshPtr) return;
+
+	(*MeshPtr)->SetSkeletalMesh(nullptr);
+	EquipedArmors[Slot] = nullptr;
+
+	RecalcArmorStats();
+
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+
+	if (!Character)
+		return;
+
+	Character->GetMesh()->SetHiddenInGame(false, false);
+}
+
+/* ============================================================
+ *  방어력 · 저항력 · 장비 하중 재계산
+ *  장착된 모든 슬롯 합산 → PlayerStatComponent에 반영
+ * ============================================================ */
+void UEquipmentComponent::RecalcArmorStats()
+{
+	if (!CachedStat) return;
+
+	UPlayerStatComponent* PlayerStat = Cast<UPlayerStatComponent>(CachedStat.GetObject());
+	if (!PlayerStat) return;
+
+	float TotalDefense = 0.f;
+	float TotalMagicDefense = 0.f;
+	float TotalFireRes = 0.f;
+	float TotalFrostRes = 0.f;
+	float TotalPoisonRes = 0.f;
+	float TotalBleedRes = 0.f;
+	float TotalWeight = 0.f;
+
+	for (const auto& [Slot, Info] : EquipedArmors)
+	{
+		if (Info)
+		{
+			TotalDefense += Info->DefenseValue;
+			TotalMagicDefense += Info->MagicDefenseValue;
+			TotalFireRes += Info->FireResistance;
+			TotalFrostRes += Info->FrostResistance;
+			TotalPoisonRes += Info->PoisonResistance;
+			TotalBleedRes += Info->BleedResistance;
+			TotalWeight += Info->WeightValue;
+		}
+	}
+
+	PlayerStat->ApplyArmorStats(
+		TotalDefense, TotalMagicDefense,
+		TotalFireRes, TotalFrostRes, TotalPoisonRes, TotalBleedRes,
+		TotalWeight);
 }

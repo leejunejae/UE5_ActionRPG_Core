@@ -36,6 +36,9 @@ public:
 	FPlayerStats GetCharacterStats_Implementation() const { return PlayerStats; }
 	float GetAttributesRequirementRatio_Implementation(const FCharacterAttributes& RequireStats) const;
 	float GetWeaponPerformanceRatio_Implementation(const FCharacterAttributes& RequireStats) const;
+	FORCEINLINE float GetStaminaRegenRate() const { return StaminaRegenRate; }
+
+	void ApplyArmorStats(float TotalDefense, float TotalMagicDefense, float TotalFireResistance, float TotalFrostResistance, float TotalPoisonResistance, float TotalBleedResistance, float TotalWeight);
 
 protected:
 	UPROPERTY(VisibleAnywhere, Category = "Stats")

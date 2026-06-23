@@ -69,10 +69,10 @@ void UGameMenuWidget::ApplyOpenInputMode()
     APlayerController* PC = GetOwningPlayer();
     if (!PC) return;
 
-    FInputModeGameAndUI InputMode;
-    InputMode.SetHideCursorDuringCapture(false);
+    FInputModeUIOnly InputMode;
     PC->SetInputMode(InputMode);
     PC->SetShowMouseCursor(true);
+    PC->SetPause(true);
 }
 
 void UGameMenuWidget::ApplyCloseInputMode()
@@ -83,6 +83,7 @@ void UGameMenuWidget::ApplyCloseInputMode()
     FInputModeGameOnly InputMode;
     PC->SetInputMode(InputMode);
     PC->SetShowMouseCursor(false);
+    PC->SetPause(false);
 }
 
 void UGameMenuWidget::OnStatusTabClicked() { SwitchToTab(EGameMenuTab::Status); }

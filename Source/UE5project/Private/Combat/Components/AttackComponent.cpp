@@ -245,24 +245,27 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 						float OutStanceDamage = DamageSource.StanceRating * Detail->StanceDamageMultiplier;
 						EHitResponse OutResponse = Detail->Response;
 						EDamageType OutAttackType = Detail->DamageType;
+						EElementalType OutElementType = Detail->ElementType;
+						float OutElementalBuildup = Detail->ElementalBuildup;
 						FVector OutHitPoint = Result.ImpactPoint;
 						FString OutHitPointName = Result.PhysMaterial.IsValid() ? Result.PhysMaterial->GetName() : FString();
 						bool OutCanBlocked = Detail->CanBlocked;
 						bool OutCanParried = Detail->CanParried;
 						bool OutCanAvoid = Detail->CanAvoid;
-						TArray<FStatusEffect> OutStatusEffect = Detail->StatusEffectList;
 
 						FAttackRequest OutAttackData(
 							OutDamage,
 							OutStanceDamage,
 							OutPoiseDamage,
 							OutResponse,
+							OutAttackType,
+							OutElementType,
+							OutElementalBuildup,
 							OutHitPoint,
 							OutHitPointName,
 							OutCanBlocked,
 							OutCanParried,
-							OutCanAvoid,
-							OutStatusEffect
+							OutCanAvoid
 						);
 
 						IHitReactionInterface::Execute_OnHit(HitActor, OutAttackData);

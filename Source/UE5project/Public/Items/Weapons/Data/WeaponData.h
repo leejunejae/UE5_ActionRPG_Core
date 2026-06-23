@@ -156,3 +156,10 @@ public:
 		return FMath::Max3(StrResult, DexResult, AffResult);
 	}
 };
+
+UCLASS()
+class UE5PROJECT_API UWeaponData : public UObject
+{
+	GENERATED_BODY()
+
+};

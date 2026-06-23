@@ -36,4 +36,12 @@ public:
 private:
 	UPROPERTY(EditAnyWhere, Category = Equipment)
 		FName DefaultWeaponKey = FName("SNS_HardenedIron_01");
+	UPROPERTY(EditAnyWhere, Category = Equipment)
+		FName DefaultHeadKey = FName("Wanderer_Cloak");
+	UPROPERTY(EditAnyWhere, Category = Equipment)
+		FName DefaultChestKey = FName("Wanderer_Tunic");
+	UPROPERTY(EditAnyWhere, Category = Equipment)
+		FName DefaultLegsKey = FName("Wanderer_Pants");
+	UPROPERTY(EditAnyWhere, Category = Equipment)
+		FName DefaultHandsKey = FName("Wanderer_Bracers");
 };
