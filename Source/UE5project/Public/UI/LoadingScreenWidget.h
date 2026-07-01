@@ -9,6 +9,18 @@
 /**
  * 
  */
+USTRUCT(BlueprintType)
+struct FLoadingTipData
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    FText TipTitle;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    FText TipContent;
+};
+
 UCLASS(Abstract)
 class UE5PROJECT_API ULoadingScreenWidget : public UFullScreenWidget
 {
@@ -21,7 +33,7 @@ protected:
 
     /** 팁/분위기 문구 목록 — BP에서 FText 배열로 추가 */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Loading|Content")
-    TArray<FText> LoadingTips;
+    TArray<FLoadingTipData> LoadingTips;
 
     /** 콘텐츠 전환 간격 (초) */
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Loading|Content")
@@ -36,7 +48,7 @@ protected:
      * Tip: 다음에 표시할 문구 (배열 비어있으면 FText::GetEmpty())
      */
     UFUNCTION(BlueprintImplementableEvent, Category = "Loading")
-    void OnCycleContent(UTexture2D* Background, const FText& Tip, bool bIsFirstShow);
+    void OnCycleContent(UTexture2D* Background, const FText& TipTitle, const FText& TipContent, bool bIsFirstShow);
 
 private:
     void DoCycleContent(bool bIsFirstShow);

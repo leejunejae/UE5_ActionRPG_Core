@@ -42,9 +42,8 @@ void ULoadingScreenWidget::DoCycleContent(bool bIsFirstShow)
 {
     UTexture2D* Bg = BackgroundImages.Num() > 0
         ? BackgroundImages[CurrentIndex % BackgroundImages.Num()] : nullptr;
-    const FText Tip = LoadingTips.Num() > 0
-        ? LoadingTips[CurrentIndex % LoadingTips.Num()] : FText::GetEmpty();
+    const FLoadingTipData Tip = LoadingTips.Num() > 0 ? LoadingTips[CurrentIndex % LoadingTips.Num()] : FLoadingTipData();
 
-    OnCycleContent(Bg, Tip, bIsFirstShow);
+    OnCycleContent(Bg, Tip.TipTitle, Tip.TipContent, bIsFirstShow);
     CurrentIndex++;
 }

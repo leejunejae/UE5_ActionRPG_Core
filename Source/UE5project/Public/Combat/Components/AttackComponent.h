@@ -68,7 +68,6 @@ public:
 	FOnMultiOneParamDelegate OnAttackFinished;
 
 protected:
-	TScriptInterface<IAttackSourceInterface> AttackSourceInterface;
 	FOnMontageEnded OnMontageEndedDelegate;
 	TSet<AActor*> HitActorListCurrentAttack;
 	const FBoneTransformSegment* CurrentSeg = nullptr;

@@ -97,6 +97,7 @@ void UEquipmentComponent::EquipWeapon_Implementation(FName WeaponKey)
 	SubEquipMesh->SetStaticMesh(nullptr);
 
 	EquipedWeapon = FindWeapon;
+	EquipedWeaponKey = WeaponKey;
 	WeaponMesh->SetStaticMesh(EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.WeaponMesh);
 
 	if (EquipedWeapon->WeaponDefenition.Get()->HasSubWeapon)
@@ -136,12 +137,11 @@ FAttackTraceSource UEquipmentComponent::GetAttackTraceSource(EAttackSourceType A
 	return OutData;
 }
 
-FAttackDamageSource UEquipmentComponent::GetAttackDamageSource() const
+FAttackDamageSource UEquipmentComponent::CalculateAttackDamageSource(float StrengthBonus, float DexterityBonus, float AffinityBonus) const
 {
 	FAttackDamageSource OutData;
 	if (!EquipedWeapon) return OutData;
 
-	// 요구치 충족률 계산
 	float PerformanceRatio = 1.0f;
 	if (CachedStat)
 	{
@@ -150,10 +150,22 @@ FAttackDamageSource UEquipmentComponent::GetAttackDamageSource() const
 			EquipedWeapon->RequiredStats.ToCharacterStats());
 	}
 
-	// 특성 보정값 읽기 (근력/민첩 공격력 보정)
+	const float BaseAttack = EquipedWeapon->AttackPower * PerformanceRatio;
+	const float AttributeAttack = EquipedWeapon->CalcAttributeAttackBonus(StrengthBonus, DexterityBonus, AffinityBonus);
+	OutData.AttackRating = BaseAttack + AttributeAttack;
+
+	OutData.PoiseRating = EquipedWeapon->PoisePower * PerformanceRatio;
+	OutData.StanceRating = EquipedWeapon->StancePower * PerformanceRatio;
+
+	return OutData;
+}
+
+FAttackDamageSource UEquipmentComponent::GetAttackDamageSource() const
+{
 	float StrengthBonus = 0.f;
 	float DexterityBonus = 0.f;
 	float AffinityBonus = 0.f;
+
 	if (CachedStat)
 	{
 		if (const UPlayerStatComponent* PlayerStat = Cast<UPlayerStatComponent>(CachedStat.GetObject()))
@@ -164,16 +176,12 @@ FAttackDamageSource UEquipmentComponent::GetAttackDamageSource() const
 		}
 	}
 
-	// 최종 공격력 = (무기 기본공격력 × 요구치 충족률) + (특성 보정값 × 등급 배율)
-	const float BaseAttack = EquipedWeapon->AttackPower * PerformanceRatio;
-	const float AttributeAttack = EquipedWeapon->CalcAttributeAttackBonus(StrengthBonus, DexterityBonus, AffinityBonus);
-	OutData.AttackRating = BaseAttack + AttributeAttack;
+	return CalculateAttackDamageSource(StrengthBonus, DexterityBonus, AffinityBonus);
+}
 
-	// Poise/Stance는 요구치 충족률만 적용 (특성 보정 없음)
-	OutData.PoiseRating = EquipedWeapon->PoisePower * PerformanceRatio;
-	OutData.StanceRating = EquipedWeapon->StancePower * PerformanceRatio;
-
-	return OutData;
+FAttackDamageSource UEquipmentComponent::PreviewAttackDamageSource(float OverrideStrengthBonus, float OverrideDexterityBonus, float OverrideAffinityBonus) const
+{
+	return CalculateAttackDamageSource(OverrideStrengthBonus, OverrideDexterityBonus, OverrideAffinityBonus);
 }
 
 #pragma endregion
@@ -209,6 +217,7 @@ void UEquipmentComponent::InitArmorMeshComponents(ACharacter* Character)
 
 		ArmorMeshes.Add(Slot, ArmorComp);
 		EquipedArmors.Add(Slot, nullptr);
+		EquipedArmorKeys.Add(Slot, NAME_None);
 	}
 }
 
@@ -264,14 +273,11 @@ void UEquipmentComponent::EquipArmor(FName ArmorKey)
 	(*MeshPtr)->SetSkeletalMesh(LoadedMesh);
 
 	EquipedArmors[Slot] = PieceInfo;
+	EquipedArmorKeys.FindOrAdd(Slot) = ArmorKey;
 
 	RecalcArmorStats();
 
-	// 임시 처리: 베이스 메시 전체 숨김 (모든 방어구 호환 처리 전까지 유지)
-	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
-	{
-		Character->GetMesh()->SetHiddenInGame(true, false);
-	}
+	OnArmorChangedDelegate.Broadcast(Slot);
 }
 
 void UEquipmentComponent::UnequipArmor(EArmorSlot Slot)
@@ -281,13 +287,11 @@ void UEquipmentComponent::UnequipArmor(EArmorSlot Slot)
 
 	(*MeshPtr)->SetSkeletalMesh(nullptr);
 	EquipedArmors[Slot] = nullptr;
+	EquipedArmorKeys.FindOrAdd(Slot) = NAME_None;
 
 	RecalcArmorStats();
 
-	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
-	{
-		Character->GetMesh()->SetHiddenInGame(false, false);
-	}
+	OnArmorChangedDelegate.Broadcast(Slot);
 }
 
 // 장착된 모든 슬롯 합산 → PlayerStatComponent에 반영

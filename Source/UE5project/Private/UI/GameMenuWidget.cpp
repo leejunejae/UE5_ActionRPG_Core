@@ -3,6 +3,7 @@
 #include "UI/GameMenuWidget.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/Button.h"
+#include "UI/Menu/Tabs/TabActivationInterface.h"
 
 void UGameMenuWidget::NativeConstruct()
 {
@@ -57,10 +58,6 @@ void UGameMenuWidget::NotifyMenuClosed()
 void UGameMenuWidget::SwitchToTab(EGameMenuTab Tab)
 {
     ActiveTab = Tab;
-    if (TabContent)
-    {
-        TabContent->SetActiveWidgetIndex(static_cast<int32>(Tab));
-    }
     OnTabChanged(Tab);
 }
 

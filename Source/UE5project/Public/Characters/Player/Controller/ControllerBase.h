@@ -14,6 +14,8 @@
 class UGameMenuWidget;
 class UInGameMenuInputConfigDataAsset;
 class UPlayerHUDWidget;
+class ULevelStreaming;
+class ACharacterPreviewActor;
 
 UCLASS()
 class UE5PROJECT_API AControllerBase : public APlayerController

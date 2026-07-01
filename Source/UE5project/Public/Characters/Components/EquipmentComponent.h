@@ -18,14 +18,15 @@
 class ACharacter;
 class UArmorDataAsset;
 
-DECLARE_MULTICAST_DELEGATE_OneParam(FOnEquipmentMulDel, const EWeaponType);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnWeaponChanged, const EWeaponType);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnArmorChanged, const EArmorSlot);
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class UE5PROJECT_API UEquipmentComponent : public UActorComponent,
 	public IEquipmentDataInterface
 {
 	GENERATED_BODY()
-
+	
 public:
 	UEquipmentComponent();
 
@@ -49,9 +50,15 @@ private:
 	FName SubEquipSocket;
 
 	const FWeaponSetsInfo* EquipedWeapon = nullptr;
+	FName EquipedWeaponKey = NAME_None;   // 키 캐싱
+
+private:
+	FAttackDamageSource CalculateAttackDamageSource(float StrengthBonus, float DexterityBonus, float AffinityBonus) const;
 
 public:
 	FORCEINLINE const FWeaponSetsInfo* GetEquipedWeapon() const { return EquipedWeapon; }
+	FORCEINLINE FName GetEquipedWeaponKey() const { return EquipedWeaponKey; }
+
 	FORCEINLINE UStaticMeshComponent* GetMainWeaponComponent() const { return WeaponMesh; }
 	FORCEINLINE UStaticMeshComponent* GetSubEquipComponent() const { return SubEquipMesh; }
 
@@ -61,11 +68,14 @@ public:
 	FAttackTraceSource GetAttackTraceSource(EAttackSourceType AttackSourceType) const;
 	FAttackDamageSource GetAttackDamageSource() const;
 
+	UFUNCTION(BlueprintCallable, Category = "Equipment")
+	FAttackDamageSource PreviewAttackDamageSource(float OverrideStrengthBonus, float OverrideDexterityBonus, float OverrideAffinityBonus) const;
+
 	void SetWeaponSocketName(FName SocketName) { WeaponSocket = SocketName; }
 	void SetSubEquipSocketName(FName SocketName) { SubEquipSocket = SocketName; }
 
-	FOnEquipmentMulDel OnWeaponChangedDelegate;
-	virtual FOnEquipmentMulDel& OnWeaponSetChanged() override { return OnWeaponChangedDelegate; }
+	FOnWeaponChanged OnWeaponChangedDelegate;
+	virtual FOnWeaponChanged& OnWeaponSetChanged() override { return OnWeaponChangedDelegate; }
 #pragma endregion Weapon
 
 #pragma region Armor
@@ -74,8 +84,8 @@ private:
 	// EquipedArmors : 슬롯 → 장착된 FArmorPieceInfo (없으면 nullptr)
 	UPROPERTY(VisibleAnywhere, Category = "Equipment|Armor")
 	TMap<EArmorSlot, TObjectPtr<USkeletalMeshComponent>> ArmorMeshes;
-
 	TMap<EArmorSlot, const FArmorPieceInfo*> EquipedArmors;
+	TMap<EArmorSlot, FName> EquipedArmorKeys;   // 키 캐싱
 
 	void InitArmorMeshComponents(ACharacter* Character);
 
@@ -96,11 +106,19 @@ public:
 		return Found ? *Found : nullptr;
 	}
 
+	FORCEINLINE FName GetEquipedArmorKey(EArmorSlot Slot) const
+	{
+		const FName* Found = EquipedArmorKeys.Find(Slot);
+		return Found ? *Found : NAME_None;
+	}
+
 	FORCEINLINE USkeletalMeshComponent* GetArmorMeshComponent(EArmorSlot Slot) const
 	{
 		const TObjectPtr<USkeletalMeshComponent>* Found = ArmorMeshes.Find(Slot);
 		return Found ? Found->Get() : nullptr;
 	}
+
+	FOnArmorChanged OnArmorChangedDelegate;
 #pragma endregion Armor
 
 #pragma region Shared

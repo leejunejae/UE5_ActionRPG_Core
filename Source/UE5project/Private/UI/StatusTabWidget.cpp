@@ -4,14 +4,33 @@
 #include "UI/StatusTabWidget.h"
 
 #include "Components/TextBlock.h"
+#include "Components/Button.h"
 #include "Components/ProgressBar.h"
 #include "Characters/Player/PlayerBase.h"
 #include "Characters/Player/Components/PlayerStatComponent.h"
 #include "Characters/Components/EquipmentComponent.h"
 
+#include "Components/WidgetSwitcher.h"
+#include "Characters/Preview/CharacterPreviewActor.h"
+#include "Characters/Player/Controller/ControllerBase.h"
+
 void UStatusTabWidget::NativeConstruct()
 {
     Super::NativeConstruct();
+
+    if (Btn_Vitality_Plus)   Btn_Vitality_Plus->OnClicked.AddDynamic(this, &UStatusTabWidget::OnVitalityPlusClicked);
+    if (Btn_Vitality_Minus)  Btn_Vitality_Minus->OnClicked.AddDynamic(this, &UStatusTabWidget::OnVitalityMinusClicked);
+    if (Btn_Endurance_Plus)  Btn_Endurance_Plus->OnClicked.AddDynamic(this, &UStatusTabWidget::OnEnduranceePlusClicked);
+    if (Btn_Endurance_Minus) Btn_Endurance_Minus->OnClicked.AddDynamic(this, &UStatusTabWidget::OnEnduranceMinusClicked);
+    if (Btn_Mentality_Plus)  Btn_Mentality_Plus->OnClicked.AddDynamic(this, &UStatusTabWidget::OnMentalityPlusClicked);
+    if (Btn_Mentality_Minus) Btn_Mentality_Minus->OnClicked.AddDynamic(this, &UStatusTabWidget::OnMentalityMinusClicked);
+    if (Btn_Strength_Plus)   Btn_Strength_Plus->OnClicked.AddDynamic(this, &UStatusTabWidget::OnStrengthPlusClicked);
+    if (Btn_Strength_Minus)  Btn_Strength_Minus->OnClicked.AddDynamic(this, &UStatusTabWidget::OnStrengthMinusClicked);
+    if (Btn_Dexterity_Plus)  Btn_Dexterity_Plus->OnClicked.AddDynamic(this, &UStatusTabWidget::OnDexterityPlusClicked);
+    if (Btn_Dexterity_Minus) Btn_Dexterity_Minus->OnClicked.AddDynamic(this, &UStatusTabWidget::OnDexterityMinusClicked);
+    if (Btn_Affinity_Plus)   Btn_Affinity_Plus->OnClicked.AddDynamic(this, &UStatusTabWidget::OnAffinityPlusClicked);
+    if (Btn_Affinity_Minus)  Btn_Affinity_Minus->OnClicked.AddDynamic(this, &UStatusTabWidget::OnAffinityMinusClicked);
+    if (Btn_ConfirmAllocation) Btn_ConfirmAllocation->OnClicked.AddDynamic(this, &UStatusTabWidget::OnConfirmClicked);
 }
 
 void UStatusTabWidget::InitializeWithPlayer(APlayerBase* InPlayer)
@@ -114,4 +133,131 @@ void UStatusTabWidget::RefreshStats()
         Text_PoiseAttackPowerValue->SetText(FText::AsNumber((int32)AtkSource.PoiseRating));
     if (Text_StanceAttackPowerValue)
         Text_StanceAttackPowerValue->SetText(FText::AsNumber((int32)AtkSource.StanceRating));
+}
+
+void UStatusTabWidget::AdjustPending(EAttributeType Type, int32 Delta)
+{
+    APlayerController* PC = GetOwningPlayer();
+    APlayerBase* Player = PC ? Cast<APlayerBase>(PC->GetPawn()) : nullptr;
+    UPlayerStatComponent* StatComp = Player ? Cast<UPlayerStatComponent>(Player->GetStatComponent()) : nullptr;
+    if (!StatComp) return;
+
+    int32& Current = PendingAllocations.FindOrAdd(Type);
+    const int32 NewValue = Current + Delta;
+
+    // 남은 포인트 체크 (증가 시)
+    const int32 TotalPending = [this]() {
+        int32 Sum = 0;
+        for (const auto& Pair : PendingAllocations) Sum += Pair.Value;
+        return Sum;
+        }();
+
+    if (Delta > 0 && TotalPending >= StatComp->GetAvailableStatPoints()) return;
+    if (NewValue < 0) return; // 0 밑으로는 못 내림
+
+    Current = NewValue;
+    if (Current == 0) PendingAllocations.Remove(Type);
+
+    RefreshPreview();
+}
+
+void UStatusTabWidget::OnVitalityPlusClicked() { AdjustPending(EAttributeType::Vitality, 1); }
+void UStatusTabWidget::OnVitalityMinusClicked() { AdjustPending(EAttributeType::Vitality, -1); }
+void UStatusTabWidget::OnEnduranceePlusClicked() { AdjustPending(EAttributeType::Endurance, 1); }
+void UStatusTabWidget::OnEnduranceMinusClicked() { AdjustPending(EAttributeType::Endurance, -1); }
+void UStatusTabWidget::OnMentalityPlusClicked() { AdjustPending(EAttributeType::Mentality, 1); }
+void UStatusTabWidget::OnMentalityMinusClicked() { AdjustPending(EAttributeType::Mentality, -1); }
+void UStatusTabWidget::OnStrengthPlusClicked() { AdjustPending(EAttributeType::Strength, 1); }
+void UStatusTabWidget::OnStrengthMinusClicked() { AdjustPending(EAttributeType::Strength, -1); }
+void UStatusTabWidget::OnDexterityPlusClicked() { AdjustPending(EAttributeType::Dexterity, 1); }
+void UStatusTabWidget::OnDexterityMinusClicked() { AdjustPending(EAttributeType::Dexterity, -1); }
+void UStatusTabWidget::OnAffinityPlusClicked() { AdjustPending(EAttributeType::Affinity, 1); }
+void UStatusTabWidget::OnAffinityMinusClicked() { AdjustPending(EAttributeType::Affinity, -1); }
+
+void UStatusTabWidget::OnConfirmClicked()
+{
+    if (PendingAllocations.Num() == 0) return;
+
+    APlayerController* PC = GetOwningPlayer();
+    APlayerBase* Player = PC ? Cast<APlayerBase>(PC->GetPawn()) : nullptr;
+    UPlayerStatComponent* StatComp = Player ? Cast<UPlayerStatComponent>(Player->GetStatComponent()) : nullptr;
+    if (!StatComp) return;
+
+    if (StatComp->CommitAttributeAllocation(PendingAllocations))
+    {
+        ResetPending();
+        RefreshStats(); // 확정된 실제 값으로 갱신
+    }
+}
+
+void UStatusTabWidget::ResetPending()
+{
+    PendingAllocations.Empty();
+    RefreshPreview();
+}
+
+void UStatusTabWidget::RefreshPreview()
+{
+    APlayerController* PC = GetOwningPlayer();
+    APlayerBase* Player = PC ? Cast<APlayerBase>(PC->GetPawn()) : nullptr;
+    UPlayerStatComponent* StatComp = Player ? Cast<UPlayerStatComponent>(Player->GetStatComponent()) : nullptr;
+    if (!StatComp) return;
+
+    const FPlayerStats Preview = StatComp->PreviewStatsWithAttributeDelta(PendingAllocations);
+    const FPlayerStats Current = StatComp->GetCharacterStats_Native();
+
+    auto SetBonus = [](UTextBlock* TB, int32 Delta)
+        {
+            if (!TB) return;
+            if (Delta > 0)
+            {
+                TB->SetText(FText::FromString(FString::Printf(TEXT("+%d"), Delta)));
+                TB->SetVisibility(ESlateVisibility::Visible);
+            }
+            else
+            {
+                TB->SetVisibility(ESlateVisibility::Collapsed);
+            }
+        };
+
+    auto GetPending = [this](EAttributeType Type) -> int32
+        {
+            const int32* Found = PendingAllocations.Find(Type);
+            return Found ? *Found : 0;
+        };
+
+    SetBonus(Text_VitalityValue_Bonus, GetPending(EAttributeType::Vitality));
+    SetBonus(Text_EnduranceValue_Bonus, GetPending(EAttributeType::Endurance));
+    SetBonus(Text_MentalityValue_Bonus, GetPending(EAttributeType::Mentality));
+    SetBonus(Text_StrengthValue_Bonus, GetPending(EAttributeType::Strength));
+    SetBonus(Text_DexterityValue_Bonus, GetPending(EAttributeType::Dexterity));
+    SetBonus(Text_AffinityValue_Bonus, GetPending(EAttributeType::Affinity));
+
+    SetBonus(Text_HPValue_Bonus, (int32)(Preview.BaseStats.Health.Max - Current.BaseStats.Health.Max));
+    SetBonus(Text_SPValue_Bonus, (int32)(Preview.Stamina.Max - Current.Stamina.Max));
+    SetBonus(Text_FPValue_Bonus, (int32)(Preview.Focus.Max - Current.Focus.Max));
+    SetBonus(Text_EquipLoadValue_Bonus, (int32)(Preview.EquipLoad.Max - Current.EquipLoad.Max));
+    SetBonus(Text_SPRegenValue_Bonus, (int32)(Preview.CombatStats.StaminaRegenBonus - Current.CombatStats.StaminaRegenBonus));
+    SetBonus(Text_PoiseValue_Bonus, (int32)(Preview.BaseStats.GetMaxPoise() - Current.BaseStats.GetMaxPoise()));
+    
+
+    if (UEquipmentComponent* EquipComp = Player->FindComponentByClass<UEquipmentComponent>())
+    {
+        const FAttackDamageSource CurrentAtk = EquipComp->GetAttackDamageSource();
+        const FAttackDamageSource PreviewAtk = EquipComp->PreviewAttackDamageSource(
+            Preview.CombatStats.StrengthAttackBonus,
+            Preview.CombatStats.DexterityAttackBonus,
+            0.f); // Affinity 보정 아직 미구현
+
+        SetBonus(Text_PhysicalAttackPowerValue_Bonus, FMath::RoundToInt(PreviewAtk.AttackRating - CurrentAtk.AttackRating));
+        SetBonus(Text_PoiseAttackPowerValue_Bonus, FMath::RoundToInt(PreviewAtk.PoiseRating - CurrentAtk.PoiseRating));
+        SetBonus(Text_StanceAttackPowerValue_Bonus, FMath::RoundToInt(PreviewAtk.StanceRating - CurrentAtk.StanceRating));
+    }
+
+    if (Text_RemainingPointsValue)
+    {
+        int32 TotalPending = 0;
+        for (const auto& Pair : PendingAllocations) TotalPending += Pair.Value;
+        Text_RemainingPointsValue->SetText(FText::AsNumber(StatComp->GetAvailableStatPoints() - TotalPending));
+    }
 }

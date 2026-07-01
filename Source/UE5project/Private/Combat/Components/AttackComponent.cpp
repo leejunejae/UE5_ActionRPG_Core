@@ -42,22 +42,6 @@ void UAttackComponent::BeginPlay()
 
 	if (!Character) return;
 
-
-	if (Character->GetClass()->ImplementsInterface(UAttackSourceInterface::StaticClass()))
-	{
-		AttackSourceInterface = TScriptInterface<IAttackSourceInterface>(Character);
-	}
-	else
-	{
-		for (UActorComponent* Comp : Character->GetComponents())
-		{
-			if (Comp->GetClass()->ImplementsInterface(UAttackSourceInterface::StaticClass()))
-			{
-				AttackSourceInterface = TScriptInterface<IAttackSourceInterface>(Comp);
-				break;
-			}
-		}
-	}
 }
 
 const FBaseAttackData* UAttackComponent::ExecuteAttack(FName AttackName, float Playrate)
@@ -140,13 +124,6 @@ void UAttackComponent::OnMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool bDrawDebug)
 {
 	ACharacter* Character = Cast<ACharacter>(GetOwner());
-
-	if (!AttackSourceInterface.GetInterface() || !AttackSourceInterface.GetObject())
-	{
-		UE_LOG(Log_Attack, Error, TEXT("[UAttackComponent] AttackSourceInterface is null"));
-		return;
-	}
-
 	if (!Character)
 	{
 		UE_LOG(Log_Attack, Error, TEXT("[UAttackComponent] Owner Character Invalid"));

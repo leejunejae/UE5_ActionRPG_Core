@@ -24,9 +24,10 @@ public:
 
 #pragma region Attributes
 public:
-	FCharacterAttributes GetBaseAttributesLevel_Implementation() const { return BaseAttributes; }
-	float GetAttributesRequirementRatio_Implementation(const FCharacterAttributes& RequireStats) const;
-	float GetWeaponPerformanceRatio_Implementation(const FCharacterAttributes& RequireStats) const;
+	static constexpr int32 MaxAttributeValue = 60;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Stats")
+	int32 AvailableStatPoints = 0;
 
 protected:
 	UPROPERTY(VisibleAnywhere, Category = "Stats")
@@ -34,6 +35,26 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats") // 기본 특성값(힘, 민첩, 의지 등)
 		FCharacterAttributes BaseAttributes;
+
+public:
+	FCharacterAttributes GetBaseAttributesLevel_Implementation() const { return BaseAttributes; }
+	float GetAttributesRequirementRatio_Implementation(const FCharacterAttributes& RequireStats) const;
+	float GetWeaponPerformanceRatio_Implementation(const FCharacterAttributes& RequireStats) const;
+
+	UFUNCTION(BlueprintCallable, Category = "Stats")
+	int32 GetAvailableStatPoints() const { return AvailableStatPoints; }
+
+	/** 현재 BaseAttributes + Deltas 가정 시 파생 스탯 미리보기 (실제 값 변경 없음) */
+	UFUNCTION(BlueprintCallable, Category = "Stats")
+	FPlayerStats PreviewStatsWithAttributeDelta(const TMap<EAttributeType, int32>& Deltas) const;
+
+	/** Deltas를 실제로 적용. 포인트 부족/상한 초과 시 false, 아무것도 적용 안 됨 */
+	UFUNCTION(BlueprintCallable, Category = "Stats")
+	bool CommitAttributeAllocation(const TMap<EAttributeType, int32>& Deltas);
+
+private:
+	/** Attrs를 기준으로 DataTable 조회해서 FPlayerStats 계산 (InitializeStats와 공용) */
+	FPlayerStats CalculateStatsForAttributes(const FCharacterAttributes& Attrs) const;
 #pragma endregion
 
 #pragma region Stamina
