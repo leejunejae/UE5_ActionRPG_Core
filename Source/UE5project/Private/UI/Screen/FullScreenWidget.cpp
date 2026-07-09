@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "UI/FullScreenWidget.h"
+#include "UI/Screen/FullScreenWidget.h"
 #include "Core/Subsystems/GameInstanceSystem/UIManagerSubsystem.h"
 #include "Kismet/GameplayStatics.h"
 

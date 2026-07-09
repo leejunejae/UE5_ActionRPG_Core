@@ -210,12 +210,12 @@ bool UPlayerStatComponent::CommitAttributeAllocation(const TMap<EAttributeType, 
 
 #pragma region Attributes
 
-float UPlayerStatComponent::GetAttributesRequirementRatio_Implementation(const FCharacterAttributes& RequireStats) const
+float UPlayerStatComponent::GetAttributesRequirementRatio(const FCharacterAttributes& RequireStats) const
 {
 	return BaseAttributes.GetRequirementAttributeRate(RequireStats);
 }
 
-float UPlayerStatComponent::GetWeaponPerformanceRatio_Implementation(const FCharacterAttributes& RequireStats) const
+float UPlayerStatComponent::GetWeaponPerformanceRatio(const FCharacterAttributes& RequireStats) const
 {
 	const float StatFulfillRatio = BaseAttributes.GetRequirementAttributeRate(RequireStats);
 

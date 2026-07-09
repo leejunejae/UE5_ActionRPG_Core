@@ -1,9 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-#include "UI/GameMenuWidget.h"
+#include "UI/Menu/GameMenuWidget.h"
 #include "Components/WidgetSwitcher.h"
 #include "Components/Button.h"
-#include "UI/Menu/Tabs/TabActivationInterface.h"
 
 void UGameMenuWidget::NativeConstruct()
 {

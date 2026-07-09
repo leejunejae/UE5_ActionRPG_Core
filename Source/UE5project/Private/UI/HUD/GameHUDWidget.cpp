@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "UI/GameHUDWidget.h"
+#include "UI/HUD/GameHUDWidget.h"
 #include "Core/Subsystems/GameInstanceSystem/UIManagerSubsystem.h"
 
 void UGameHUDWidget::NativeConstruct()

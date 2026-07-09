@@ -12,43 +12,59 @@
  */
 
 USTRUCT(BlueprintType)
-struct FWeaponInstance
-{
-    GENERATED_BODY()
-
-public:
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        TObjectPtr<UStaticMesh> WeaponMesh = nullptr;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        TObjectPtr<UTexture2D> WeaponIcon = nullptr;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        TObjectPtr<UParticleSystem> WeaponTrail = nullptr;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        TObjectPtr<USoundBase> WeaponSound = nullptr;
-
-public:
-    bool IsValid() const
-    {
-        if (WeaponMesh) return true;
-        else return false;
-    }
-};
-
-USTRUCT(BlueprintType)
 struct FWeaponConfig
 {
     GENERATED_BODY()
 
     // 무기 메시 피벗/손잡이 기준 차이를 해결하는 "무기 고유" 오프셋
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        FVector WeaponScale = FVector::OneVector;
+    FVector WeaponScale = FVector::OneVector;
 
     // 히트 판정 반경(무기 고유)
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        float HitBoxRadius = 10.f;
+    float HitBoxRadius = 10.f;
+};
+
+USTRUCT(BlueprintType)
+struct FWeaponInstance
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+        TSoftObjectPtr<UStaticMesh> Mesh = nullptr;
+
+        // 전체 아이콘
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+        TObjectPtr<UTexture2D> Icon = nullptr;
+
+        // 슬롯용 아이콘
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+        TObjectPtr<UTexture2D> SlotIcon = nullptr;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+        TSoftObjectPtr<UParticleSystem> Trail = nullptr;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+        TSoftObjectPtr<USoundBase> Sound = nullptr;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+        FWeaponConfig WeaponConfig;
+
+    UPROPERTY(EditAnyWhere, BlueprintReadOnly)
+        bool HasSubWeapon;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "HasSubWeapon"))
+        TSoftObjectPtr<UStaticMesh> SubMesh = nullptr;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "HasSubWeapon"))
+        FWeaponConfig SubConfig;
+
+public:
+    bool IsValid() const
+    {
+        return !Mesh.IsNull();
+    }
 };
 
 UCLASS()
@@ -57,24 +73,19 @@ class UE5PROJECT_API UWeaponDataAsset : public UPrimaryDataAsset
 	GENERATED_BODY()
 	
 public:
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-        FText DisplayName; // 표시용 이름
+    // 표시용 이름
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
+        FText DisplayName; 
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-        EWeaponType WeaponType; // 무기 유형
+    // 설명
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon")
+        FText Description;
+        
+    // 유형
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
+        EWeaponType WeaponType; 
 
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    // 리소스
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
         FWeaponInstance WeaponInstance;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-        FWeaponConfig WeaponConfig;
-
-    UPROPERTY(EditAnyWhere, BlueprintReadWrite)
-        bool HasSubWeapon;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "HasSubWeapon"))
-        FWeaponInstance SubInstance;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (EditCondition = "HasSubWeapon"))
-        FWeaponConfig SubConfig;
 };

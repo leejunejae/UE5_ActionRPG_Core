@@ -3,7 +3,7 @@
 #include "Characters/Components/EquipmentComponent.h"
 #include "Characters/Player/Components/PlayerStatComponent.h"
 
-#include "GameFramework/Character.h"
+#include "Characters/Player/PlayerBase.h"
 #include "Core/Subsystems/GameInstanceSystem/WeaponDataSubsystem.h"
 #include "Core/Subsystems/GameInstanceSystem/ArmorDataSubsystem.h"
 #include "Items/Weapons/Data/WeaponDataAsset.h"
@@ -23,18 +23,8 @@ void UEquipmentComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	APlayerBase* Character = Cast<APlayerBase>(GetOwner());
 	if (!Character) return;
-
-	// StatInterface 캐시
-	for (UActorComponent* Comp : Character->GetComponents())
-	{
-		if (Comp->GetClass()->ImplementsInterface(UStatInterface::StaticClass()))
-		{
-			CachedStat = TScriptInterface<IStatInterface>(Comp);
-			break;
-		}
-	}
 
 	// 무기 메시 동적 생성
 	WeaponMesh = NewObject<UStaticMeshComponent>(GetOwner(), UStaticMeshComponent::StaticClass(), TEXT("WeaponMesh"));
@@ -86,8 +76,7 @@ void UEquipmentComponent::EquipWeapon_Implementation(FName WeaponKey)
 		return;
 	}
 
-	if (!FindWeapon->WeaponDefenition.Get()->WeaponInstance.IsValid()
-		&& WeaponKey != FName("Hand_Unarmed_01"))
+	if (!FindWeapon->WeaponDefenition.Get()->WeaponInstance.IsValid() && WeaponKey != FName("Hand_Unarmed_01"))
 	{
 		UE_LOG(Log_Equip_Weapon, Error, TEXT("[EquipmentComponent] Weapon mesh missing: %s"), *WeaponKey.ToString());
 		return;
@@ -98,11 +87,11 @@ void UEquipmentComponent::EquipWeapon_Implementation(FName WeaponKey)
 
 	EquipedWeapon = FindWeapon;
 	EquipedWeaponKey = WeaponKey;
-	WeaponMesh->SetStaticMesh(EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.WeaponMesh);
+	WeaponMesh->SetStaticMesh(EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.Mesh.LoadSynchronous());
 
-	if (EquipedWeapon->WeaponDefenition.Get()->HasSubWeapon)
+	if (EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.HasSubWeapon)
 	{
-		SubEquipMesh->SetStaticMesh(EquipedWeapon->WeaponDefenition.Get()->SubInstance.WeaponMesh);
+		SubEquipMesh->SetStaticMesh(EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.SubMesh.LoadSynchronous());
 	}
 
 	RecalcEquipLoad();
@@ -126,65 +115,86 @@ FAttackTraceSource UEquipmentComponent::GetAttackTraceSource(EAttackSourceType A
 	switch (AttackSourceType)
 	{
 	case EAttackSourceType::MainHand:
-		OutData.TraceComponent = WeaponMesh;
-		OutData.Radius = EquipedWeapon->WeaponDefenition.Get()->WeaponConfig.HitBoxRadius;
+		OutData.Radius = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.WeaponConfig.HitBoxRadius;
 		break;
 	case EAttackSourceType::OffHand:
-		OutData.TraceComponent = SubEquipMesh;
-		OutData.Radius = EquipedWeapon->WeaponDefenition.Get()->SubConfig.HitBoxRadius;
+		OutData.Radius = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.SubConfig.HitBoxRadius;
 		break;
 	}
 	return OutData;
 }
 
-FAttackDamageSource UEquipmentComponent::CalculateAttackDamageSource(float StrengthBonus, float DexterityBonus, float AffinityBonus) const
+void UEquipmentComponent::GetCurrentAttackBonuses(float& OutStrengthBonus, float& OutDexterityBonus, float& OutAffinityBonus) const
 {
-	FAttackDamageSource OutData;
-	if (!EquipedWeapon) return OutData;
+	OutStrengthBonus = 0.f;
+	OutDexterityBonus = 0.f;
+	OutAffinityBonus = 0.f;
 
-	float PerformanceRatio = 1.0f;
-	if (CachedStat)
+	APlayerBase* Player = Cast<APlayerBase>(GetOwner());
+	if (!Player) return;
+
+	if (const UPlayerStatComponent* PlayerStat = Player->GetStatComponent())
 	{
-		PerformanceRatio = IStatInterface::Execute_GetWeaponPerformanceRatio(
-			CachedStat.GetObject(),
-			EquipedWeapon->RequiredStats.ToCharacterStats());
+		const FPlayerCombatStats& Combat = PlayerStat->GetCharacterStats().CombatStats;
+		OutStrengthBonus = Combat.StrengthAttackBonus;
+		OutDexterityBonus = Combat.DexterityAttackBonus;
 	}
-
-	const float BaseAttack = EquipedWeapon->AttackPower * PerformanceRatio;
-	const float AttributeAttack = EquipedWeapon->CalcAttributeAttackBonus(StrengthBonus, DexterityBonus, AffinityBonus);
-	OutData.AttackRating = BaseAttack + AttributeAttack;
-
-	OutData.PoiseRating = EquipedWeapon->PoisePower * PerformanceRatio;
-	OutData.StanceRating = EquipedWeapon->StancePower * PerformanceRatio;
-
-	return OutData;
 }
 
 FAttackDamageSource UEquipmentComponent::GetAttackDamageSource() const
 {
-	float StrengthBonus = 0.f;
-	float DexterityBonus = 0.f;
-	float AffinityBonus = 0.f;
+	if (!EquipedWeapon) return FAttackDamageSource();
 
-	if (CachedStat)
+	float PerformanceRatio = 1.0f;
+	APlayerBase* Player = Cast<APlayerBase>(GetOwner());
+	if (!Player) return FAttackDamageSource() ;
+
+	if (const UPlayerStatComponent* PlayerStat = Player->GetStatComponent())
 	{
-		if (const UPlayerStatComponent* PlayerStat = Cast<UPlayerStatComponent>(CachedStat.GetObject()))
-		{
-			const FPlayerCombatStats& Combat = PlayerStat->GetCharacterStats_Native().CombatStats;
-			StrengthBonus = Combat.StrengthAttackBonus;
-			DexterityBonus = Combat.DexterityAttackBonus;
-		}
+		PerformanceRatio = PlayerStat->GetWeaponPerformanceRatio(EquipedWeapon->RequiredAttributes.ToCharacterStats());
 	}
 
-	return CalculateAttackDamageSource(StrengthBonus, DexterityBonus, AffinityBonus);
+	float StrengthBonus, DexterityBonus, AffinityBonus;
+	GetCurrentAttackBonuses(StrengthBonus, DexterityBonus, AffinityBonus);
+
+	return CalculateWeaponAttackDamageSource(EquipedWeapon, PerformanceRatio, StrengthBonus, DexterityBonus, AffinityBonus);
 }
 
 FAttackDamageSource UEquipmentComponent::PreviewAttackDamageSource(float OverrideStrengthBonus, float OverrideDexterityBonus, float OverrideAffinityBonus) const
 {
-	return CalculateAttackDamageSource(OverrideStrengthBonus, OverrideDexterityBonus, OverrideAffinityBonus);
+	if (!EquipedWeapon) return FAttackDamageSource();
+
+	float PerformanceRatio = 1.0f;
+
+	APlayerBase* Player = Cast<APlayerBase>(GetOwner());
+	if (!Player) return FAttackDamageSource();
+
+	if (const UPlayerStatComponent* PlayerStat = Player->GetStatComponent())
+	{
+		PerformanceRatio = PlayerStat->GetWeaponPerformanceRatio(EquipedWeapon->RequiredAttributes.ToCharacterStats());
+	}
+
+	return CalculateWeaponAttackDamageSource(EquipedWeapon, PerformanceRatio, OverrideStrengthBonus, OverrideDexterityBonus, OverrideAffinityBonus);
 }
 
-#pragma endregion
+FWeaponRequirementBreakdown UEquipmentComponent::GetEquippedWeaponRequirementBreakdown() const
+{
+	APlayerBase* Player = Cast<APlayerBase>(GetOwner());
+	if (!Player) return FWeaponRequirementBreakdown();
+
+	UPlayerStatComponent* PlayerStat = Player->GetStatComponent();
+
+	if (!EquipedWeapon || !PlayerStat) return FWeaponRequirementBreakdown();
+
+	const FCharacterAttributes CurrentAttrs = PlayerStat->GetBaseAttributesLevel();
+
+	float StrengthBonus, DexterityBonus, AffinityBonus;
+	GetCurrentAttackBonuses(StrengthBonus, DexterityBonus, AffinityBonus);
+
+	return CalculateWeaponRequirementBreakdown(EquipedWeapon, CurrentAttrs, StrengthBonus, DexterityBonus, AffinityBonus);
+}
+
+#pragma endregion Weapon
 
 
 #pragma region Armor
@@ -298,9 +308,10 @@ void UEquipmentComponent::UnequipArmor(EArmorSlot Slot)
 // 마지막에 RecalcEquipLoad()를 호출해 무게도 갱신
 void UEquipmentComponent::RecalcArmorStats()
 {
-	if (!CachedStat) return;
+	APlayerBase* Player = Cast<APlayerBase>(GetOwner());
+	if (!Player) return;
 
-	UPlayerStatComponent* PlayerStat = Cast<UPlayerStatComponent>(CachedStat.GetObject());
+	UPlayerStatComponent* PlayerStat = Player->GetStatComponent();
 	if (!PlayerStat) return;
 
 	float TotalDefense = 0.f;
@@ -339,9 +350,10 @@ void UEquipmentComponent::RecalcArmorStats()
 // → PlayerStatComponent::ApplyEquipLoad()로 한 번에 반영
 void UEquipmentComponent::RecalcEquipLoad()
 {
-	if (!CachedStat) return;
+	APlayerBase* Player = Cast<APlayerBase>(GetOwner());
+	if (!Player) return;
 
-	UPlayerStatComponent* PlayerStat = Cast<UPlayerStatComponent>(CachedStat.GetObject());
+	UPlayerStatComponent* PlayerStat = Player->GetStatComponent();
 	if (!PlayerStat) return;
 
 	float TotalWeight = EquipedWeapon ? EquipedWeapon->WeightValue : 0.f;

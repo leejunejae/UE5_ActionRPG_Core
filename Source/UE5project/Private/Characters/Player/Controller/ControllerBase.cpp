@@ -3,12 +3,12 @@
 
 #include "Characters/Player/Controller/ControllerBase.h"
 #include "Core/Subsystems/GameInstanceSystem/UIManagerSubsystem.h"
-#include "UI/PlayerHUDWidget.h"
+#include "UI/HUD/PlayerHUDWidget.h"
 #include "Characters/Player/PlayerBase.h"
 #include "Characters/Player/Components/PlayerStatComponent.h"
 #include "Characters/Player/Components/PlayerStatusComponent.h"
 
-#include "UI/GameMenuWidget.h"
+#include "UI/Menu/GameMenuWidget.h"
 #include "Characters/Player/Controller/InGameMenuInputConfigDataAsset.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"

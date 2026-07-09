@@ -38,6 +38,7 @@
 #include "Characters/Player/Components/PlayerStatusComponent.h"
 #include "Characters/Player/Components/PlayerStatComponent.h"
 #include "Characters/Components/EquipmentComponent.h"
+#include "Characters/Player/Components/InventoryComponent.h" 
 #include "Combat/Components/CombatComponent.h"
 #include "Combat/Components/PlayerAttackComponent.h"
 #include "Combat/Components/PlayerHitReactionComponent.h"
@@ -66,6 +67,8 @@ APlayerBase::APlayerBase(const FObjectInitializer& ObjectInitializer)
 
 	EquipmentComponent = CreateDefaultSubobject<UEquipmentComponent>(TEXT("EquipmentComponent"));
 	EquipmentComponent->bAutoActivate = true;
+
+	InventoryComponent = CreateDefaultSubobject<UInventoryComponent>(TEXT("InventoryComponent"));
 
 	CombatComponent = CreateDefaultSubobject<UCombatComponent>(TEXT("CombatComponent"));
 	CombatComponent->bAutoActivate = true;
@@ -509,7 +512,7 @@ void APlayerBase::ExecuteDodge()
 {
 	GetCharacterStatusComponent()->SwitchAction(TAG_Action_Dodge);
 
-	const FPlayerStats Stats = GetStatComponent()->GetCharacterStats_Native();
+	const FPlayerStats Stats = GetStatComponent()->GetCharacterStats();
 	const float LoadRatio = Stats.EquipLoad.Max > KINDA_SMALL_NUMBER
 		? FMath::Clamp(Stats.EquipLoad.Current / Stats.EquipLoad.Max, 0.f, 1.f) : 0.f;
 	const float Cost = DodgeStaminaBase * (1.0f + LoadRatio);  // 무부하 ×1 ~ 만적재 ×2
@@ -858,7 +861,7 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 	case EHitResponse::Block:
 	case EHitResponse::BlockLarge:
 	{
-		float PerformanceRatio = IStatInterface::Execute_GetWeaponPerformanceRatio(StatComponent, EquipmentComponent->GetEquipedWeapon()->RequiredStats.ToCharacterStats());
+		float PerformanceRatio = GetStatComponent()->GetWeaponPerformanceRatio(EquipmentComponent->GetEquipedWeapon()->RequiredAttributes.ToCharacterStats());
 		float GuardBoost = EquipmentComponent->GetEquipedWeapon()->GuardBoost;
 		float GuardNegation = EquipmentComponent->GetEquipedWeapon()->GuardNegation;
 		if (PerformanceRatio < 1.0f)

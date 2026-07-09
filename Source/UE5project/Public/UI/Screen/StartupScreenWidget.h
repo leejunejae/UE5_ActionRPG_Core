@@ -1,7 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "UI/FullScreenWidget.h"
+#include "UI/Screen/FullScreenWidget.h"
 #include "StartupScreenWidget.generated.h"
 
 UENUM(BlueprintType)

@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "UI/LoadingScreenWidget.h"
+#include "UI/Screen/LoadingScreenWidget.h"
 #include "Utils/CoreLog.h"
 
 void ULoadingScreenWidget::ShowWidget()

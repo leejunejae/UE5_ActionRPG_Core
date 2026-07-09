@@ -18,22 +18,26 @@ class UE5PROJECT_API UArmorDataAsset : public UPrimaryDataAsset
 public:
 	// 이 에셋이 속하는 부위
 	// EquipmentComponent가 슬롯 자동 판단에 사용
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	EArmorSlot ArmorSlot = EArmorSlot::Chest;
-
-	// 이 부위의 Skeletal Mesh
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	TSoftObjectPtr<USkeletalMesh> Mesh;
-
-	// UI용 아이콘
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-	TObjectPtr<UTexture2D> Icon;
-
-	// 표시 이름
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+		// 표시 이름
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Armor")
 	FText DisplayName;
 
 	// 표시 이름
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Armor")
 	FText Description;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Armor")
+	EArmorSlot ArmorSlot = EArmorSlot::Chest;
+
+	// 이 부위의 Skeletal Mesh
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Armor")
+	TSoftObjectPtr<USkeletalMesh> Mesh;
+
+	// UI용 아이콘
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Armor")
+	TObjectPtr<UTexture2D> Icon;
+
+	// 슬롯용 아이콘
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Armor")
+	TObjectPtr<UTexture2D> SlotIcon = nullptr;
 };

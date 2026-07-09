@@ -24,7 +24,7 @@
 #include "Blueprint/AIBlueprintHelperLibrary.h"
 
 #include "Components/WidgetComponent.h"
-#include "UI/OverheadHPWidget.h"
+#include "UI/HUD/OverheadHPWidget.h"
 
 // Sets default values
 AEnemyBase::AEnemyBase(const FObjectInitializer& ObjectInitializer)
@@ -180,7 +180,7 @@ bool AEnemyBase::ApplyEnemyInfo(const FEnemyInfo* Info)
 	{ 
 		if (WeaponDataAsset->WeaponInstance.IsValid())
 		{
-			MainWeapon->SetStaticMesh(WeaponDataAsset->WeaponInstance.WeaponMesh);
+			MainWeapon->SetStaticMesh(WeaponDataAsset->WeaponInstance.Mesh.LoadSynchronous());
 			MainWeapon->AttachToComponent(
 				GetMesh(),
 				FAttachmentTransformRules::SnapToTargetIncludingScale,

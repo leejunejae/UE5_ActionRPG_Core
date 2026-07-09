@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "UI/GameOverWidget.h"
+#include "UI/Screen/GameOverWidget.h"
 #include "Characters/Player/Controller/ControllerBase.h"
 #include "Core/Subsystems/GameInstanceSystem/UIManagerSubsystem.h"
 #include "Components/Button.h"

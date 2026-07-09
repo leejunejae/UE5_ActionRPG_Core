@@ -1,4 +1,4 @@
-#include "UI/StartupScreenWidget.h"
+#include "UI/Screen/StartupScreenWidget.h"
 #include "Core/Subsystems/GameInstanceSystem/UIManagerSubsystem.h"
 #include "Kismet/KismetSystemLibrary.h"
 

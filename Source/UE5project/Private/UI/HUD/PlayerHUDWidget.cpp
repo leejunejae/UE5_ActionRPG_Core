@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "UI/PlayerHUDWidget.h"
+#include "UI/HUD/PlayerHUDWidget.h"
 #include "Components/ProgressBar.h"
 #include "Characters/Player/Components/PlayerStatComponent.h"
 
@@ -22,7 +22,7 @@ void UPlayerHUDWidget::BindToStatComponent(UPlayerStatComponent* InStatComponent
         this, &UPlayerHUDWidget::HandleResourceStatChanged);
 
     // 2) 현재값을 즉시 한 번 읽어와서 초기 표시 (브로드캐스트를 놓쳤어도 안전)
-    const FPlayerStats Stats = BoundStatComponent->GetCharacterStats_Native();
+    const FPlayerStats Stats = BoundStatComponent->GetCharacterStats();
 
     if (HealthBar)
     {

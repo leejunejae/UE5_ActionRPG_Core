@@ -43,6 +43,24 @@ public:
 	UPROPERTY() float StanceRating = 0.f;
 };
 
+/**
+ * "대상 무기 데이터 + 이 배율/보정치"면 전투 수치가 얼마인지 계산
+ */
+static FAttackDamageSource CalculateWeaponAttackDamageSource(const FWeaponSetsInfo* Weapon,float PerformanceRatio,float StrengthBonus, float DexterityBonus, float AffinityBonus)
+{
+	FAttackDamageSource OutData;
+	if (!Weapon) return OutData;
+
+	const float BaseAttack = Weapon->AttackPower * PerformanceRatio;
+	const float AttributeAttack = Weapon->CalcAttributeAttackBonus(StrengthBonus, DexterityBonus, AffinityBonus);
+	OutData.AttackRating = BaseAttack + AttributeAttack;
+
+	OutData.PoiseRating = Weapon->PoisePower * PerformanceRatio;
+	OutData.StanceRating = Weapon->StancePower * PerformanceRatio;
+
+	return OutData;
+}
+
 USTRUCT(BlueprintType)
 struct FBaseAttackData
 {

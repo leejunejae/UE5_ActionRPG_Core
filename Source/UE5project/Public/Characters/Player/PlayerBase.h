@@ -31,6 +31,7 @@ class UPlayerBaseAnimInstance;
 class UPlayerStatusComponent;
 class UPlayerStatComponent;
 class UEquipmentComponent;
+class UInventoryComponent;
 class UCombatComponent;
 class UPlayerAttackComponent;
 class UPlayerHitReactionComponent;
@@ -167,8 +168,12 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = Equip)
 	TObjectPtr<UEquipmentComponent> EquipmentComponent;
 
+	UPROPERTY(VisibleAnywhere, Category = Inventory)
+	TObjectPtr<UInventoryComponent> InventoryComponent;
+
 public:
 	FORCEINLINE UEquipmentComponent* GetEquipmentComponent() const { return EquipmentComponent; }
+	FORCEINLINE UInventoryComponent* GetInventoryComponent() const { return InventoryComponent; }
 
 	UStaticMeshComponent* GetMainWeaponMesh() const override;
 

@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "UI/OverheadHPWidget.h"
+#include "UI/HUD/OverheadHPWidget.h"
 #include "Components/ProgressBar.h"
 #include "Characters/Components/StatComponent.h"
 #include "TimerManager.h"

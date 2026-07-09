@@ -1,7 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "UI/StatusTabWidget.h"
+#include "UI/Menu/Status/StatusTabWidget.h"
 
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
@@ -54,8 +54,8 @@ void UStatusTabWidget::RefreshStats()
     UEquipmentComponent* EquipComp = Player->FindComponentByClass<UEquipmentComponent>();
 
 
-    const FPlayerStats Stats = StatComp->GetCharacterStats_Native();
-    const FCharacterAttributes Attrs = StatComp->GetBaseAttributesLevel_Implementation();
+    const FPlayerStats Stats = StatComp->GetCharacterStats();
+    const FCharacterAttributes Attrs = StatComp->GetBaseAttributesLevel();
     const FCharacterStats& Base = Stats.BaseStats;
     const FPlayerCombatStats& Combat = Stats.CombatStats;
 
@@ -204,7 +204,7 @@ void UStatusTabWidget::RefreshPreview()
     if (!StatComp) return;
 
     const FPlayerStats Preview = StatComp->PreviewStatsWithAttributeDelta(PendingAllocations);
-    const FPlayerStats Current = StatComp->GetCharacterStats_Native();
+    const FPlayerStats Current = StatComp->GetCharacterStats();
 
     auto SetBonus = [](UTextBlock* TB, int32 Delta)
         {

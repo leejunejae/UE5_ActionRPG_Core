@@ -7,7 +7,6 @@
 
 // 인터페이스
 #include "Characters/Interfaces/EquipmentDataInterface.h"
-#include "Characters/Interfaces/StatInterface.h"
 
 #include "Items/Weapons/Data/WeaponData.h"
 #include "Items/Armor/Data/ArmorData.h"
@@ -53,7 +52,7 @@ private:
 	FName EquipedWeaponKey = NAME_None;   // 키 캐싱
 
 private:
-	FAttackDamageSource CalculateAttackDamageSource(float StrengthBonus, float DexterityBonus, float AffinityBonus) const;
+	void GetCurrentAttackBonuses(float& OutStrengthBonus, float& OutDexterityBonus, float& OutAffinityBonus) const;
 
 public:
 	FORCEINLINE const FWeaponSetsInfo* GetEquipedWeapon() const { return EquipedWeapon; }
@@ -70,6 +69,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Equipment")
 	FAttackDamageSource PreviewAttackDamageSource(float OverrideStrengthBonus, float OverrideDexterityBonus, float OverrideAffinityBonus) const;
+
+	UFUNCTION(BlueprintCallable, Category = "Equipment")
+	FWeaponRequirementBreakdown GetEquippedWeaponRequirementBreakdown() const;
 
 	void SetWeaponSocketName(FName SocketName) { WeaponSocket = SocketName; }
 	void SetSubEquipSocketName(FName SocketName) { SubEquipSocket = SocketName; }
@@ -123,8 +125,6 @@ public:
 
 #pragma region Shared
 private:
-	TScriptInterface<IStatInterface> CachedStat;
-
 	// 무기/방어구 중 무엇이 바뀌든 호출 — 전체 장비 무게 재계산 후 StatComponent에 반영
 	void RecalcEquipLoad();
 #pragma endregion

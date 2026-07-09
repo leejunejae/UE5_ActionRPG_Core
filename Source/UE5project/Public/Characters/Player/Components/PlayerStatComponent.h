@@ -2,13 +2,11 @@
 
 #include "CoreMinimal.h"
 #include "Characters/Components/StatComponent.h"
-#include "Characters/Interfaces/StatInterface.h"
 
 #include "PlayerStatComponent.generated.h"
 
 UCLASS()
-class UE5PROJECT_API UPlayerStatComponent : public UStatComponent,
-	public IStatInterface
+class UE5PROJECT_API UPlayerStatComponent : public UStatComponent
 {
 	GENERATED_BODY()
 
@@ -19,8 +17,7 @@ public:
 
 	FCharacterStats& GetCommonStats() override { return PlayerStats.BaseStats; }
 
-	FORCEINLINE FPlayerStats GetCharacterStats_Native() const { return PlayerStats; }
-	FPlayerStats GetCharacterStats_Implementation() const { return PlayerStats; }
+	FORCEINLINE FPlayerStats GetCharacterStats() const { return PlayerStats; }
 
 #pragma region Attributes
 public:
@@ -37,9 +34,9 @@ protected:
 		FCharacterAttributes BaseAttributes;
 
 public:
-	FCharacterAttributes GetBaseAttributesLevel_Implementation() const { return BaseAttributes; }
-	float GetAttributesRequirementRatio_Implementation(const FCharacterAttributes& RequireStats) const;
-	float GetWeaponPerformanceRatio_Implementation(const FCharacterAttributes& RequireStats) const;
+	FCharacterAttributes GetBaseAttributesLevel() const { return BaseAttributes; }
+	float GetAttributesRequirementRatio(const FCharacterAttributes& RequireStats) const;
+	float GetWeaponPerformanceRatio(const FCharacterAttributes& RequireStats) const;
 
 	UFUNCTION(BlueprintCallable, Category = "Stats")
 	int32 GetAvailableStatPoints() const { return AvailableStatPoints; }

@@ -2,7 +2,7 @@
 
 
 #include "Core/Subsystems/GameInstanceSystem/UIManagerSubsystem.h"
-#include "UI/FullScreenWidget.h"
+#include "UI/Screen/FullScreenWidget.h"
 #include "UI/UIConfigDataAsset.h"
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/PlayerController.h"

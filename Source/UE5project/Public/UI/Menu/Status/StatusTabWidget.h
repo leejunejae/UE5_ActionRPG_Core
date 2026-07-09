@@ -5,7 +5,6 @@
 #include "CoreMinimal.h"
 #include "UI/BaseUserWidget.h"
 #include "Characters/Data/CharacterStatData.h"
-#include "UI/Menu/Tabs/TabActivationInterface.h" 
 #include "StatusTabWidget.generated.h"
 
 /**

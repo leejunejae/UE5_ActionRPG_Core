@@ -53,7 +53,7 @@ static float GetGradeMultiplier(EWeaponGrade Grade)
 }
 
 USTRUCT(BlueprintType)
-struct FWeaponStatRequirement
+struct FWeaponAttributeRequirement
 {
 	GENERATED_BODY()
 
@@ -105,6 +105,51 @@ struct FWeaponScaling
 	EWeaponGrade AffinityGrade = EWeaponGrade::None;
 };
 
+/* ============================================================
+ *  요구 스탯 충족도 브레이크다운 — 장비 탭 UI 표시용
+ * ============================================================ */
+USTRUCT(BlueprintType)
+struct FWeaponRequirementRow
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly)
+	int32 RequiredValue = 0;
+
+	UPROPERTY(BlueprintReadOnly)
+	int32 CurrentValue = 0;
+
+	// CurrentValue / RequiredValue, 0~1 clamp (RequiredValue가 0이면 1.0)
+	UPROPERTY(BlueprintReadOnly)
+	float FulfillRatio = 1.f;
+
+	UPROPERTY(BlueprintReadOnly)
+	EWeaponGrade Grade = EWeaponGrade::None;
+
+	// (해당 스탯의 AttackBonus 계수) × GradeMultiplier
+	UPROPERTY(BlueprintReadOnly)
+	float AppliedAttackValue = 0.f;
+
+	// CalcAttributeAttackBonus에서 세 스탯 중 최댓값으로 채택된 스탯인지
+	UPROPERTY(BlueprintReadOnly)
+	bool bIsAdopted = false;
+};
+
+USTRUCT(BlueprintType)
+struct FWeaponRequirementBreakdown
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly)
+	FWeaponRequirementRow Strength;
+
+	UPROPERTY(BlueprintReadOnly)
+	FWeaponRequirementRow Dexterity;
+
+	UPROPERTY(BlueprintReadOnly)
+	FWeaponRequirementRow Affinity;
+};
+
 USTRUCT(Atomic, BlueprintType)
 struct FWeaponSetsInfo : public FTableRowBase
 {
@@ -114,33 +159,43 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly)
 		TSoftObjectPtr<UWeaponDataAsset> WeaponDefenition;
 
+		// 공격력
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
-		float AttackPower; // 공격력
+		float AttackPower; 
 
+		// 강인도 공격력
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
-		float PoisePower; // 경직치
+		float PoisePower; 
 
+		// 자세 공격력
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
-		float StancePower; // 스탠스 데미지
+		float StancePower;
 
+		// 스태미나 소모값
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
-		float StaminaCost; // 스태미나 소모값
+		float StaminaCost; 
 
+		// 공격 시 추가되는 강인도 보너스
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
-		float PoiseBonus; // 공격 시 추가되는 경직 보너스
+		float PoiseBonus; 
 
+		// 가드시 경감률(가드시 데미지 감소율)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "100.0"))
-		float GuardNegation; // 가드시 경감률(가드시 데미지 감소율)
+		float GuardNegation; 
 
+		// 가드 강도(값만큼 퍼센트로 들어온 스태미나 소모율 감소)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "100.0"))
-		float GuardBoost; // 가드 강도(값만큼 퍼센트로 들어온 스태미나 소모율 감소)
+		float GuardBoost; 
 
+		// 무게
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
-		float WeightValue = 0.0f; // 무게
+		float WeightValue = 0.0f; 
 
+		// 능력치 요구값(무기 성능을 발휘하기 위한 능력치 제한)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		FWeaponStatRequirement RequiredStats;
+		FWeaponAttributeRequirement RequiredAttributes;
 
+		// 무기 보정치(능력치에 따라 무기 보정)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		FWeaponScaling Scaling;
 
@@ -159,6 +214,42 @@ public:
 		return FMath::Max3(StrResult, DexResult, AffResult);
 	}
 };
+
+
+static FWeaponRequirementBreakdown CalculateWeaponRequirementBreakdown(
+	const FWeaponSetsInfo* Weapon,
+	const FCharacterAttributes& CurrentAttrs,
+	float StrengthBonus, float DexterityBonus, float AffinityBonus)
+{
+	FWeaponRequirementBreakdown Out;
+	if (!Weapon) return Out;
+
+	auto BuildRow = [](int32 CurrentValue, int32 RequiredValue, EWeaponGrade Grade, float AttackBonus) -> FWeaponRequirementRow
+		{
+			FWeaponRequirementRow Row;
+			Row.RequiredValue = RequiredValue;
+			Row.CurrentValue = CurrentValue;
+			Row.FulfillRatio = RequiredValue > 0
+				? FMath::Clamp((float)CurrentValue / RequiredValue, 0.f, 1.f) : 1.f;
+			Row.Grade = Grade;
+			Row.AppliedAttackValue = AttackBonus * GetGradeMultiplier(Grade);
+			return Row;
+		};
+
+	Out.Strength = BuildRow(CurrentAttrs.Strength, Weapon->RequiredAttributes.Strength, Weapon->Scaling.StrengthGrade, StrengthBonus);
+	Out.Dexterity = BuildRow(CurrentAttrs.Dexterity, Weapon->RequiredAttributes.Dexterity, Weapon->Scaling.DexterityGrade, DexterityBonus);
+	Out.Affinity = BuildRow(CurrentAttrs.Affinity, Weapon->RequiredAttributes.Affinity, Weapon->Scaling.AffinityGrade, AffinityBonus);
+
+	FWeaponRequirementRow* Rows[3] = { &Out.Strength, &Out.Dexterity, &Out.Affinity };
+	FWeaponRequirementRow* MaxRow = Rows[0];
+	for (FWeaponRequirementRow* R : Rows)
+	{
+		if (R->AppliedAttackValue > MaxRow->AppliedAttackValue) MaxRow = R;
+	}
+	MaxRow->bIsAdopted = true;
+
+	return Out;
+}
 
 UCLASS()
 class UE5PROJECT_API UWeaponData : public UObject
