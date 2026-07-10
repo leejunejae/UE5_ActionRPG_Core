@@ -7,6 +7,7 @@
 #include "Characters/Player/PlayerBase.h"
 #include "Characters/Player/Components/PlayerStatComponent.h"
 #include "Characters/Player/Components/PlayerStatusComponent.h"
+#include "Characters/Player/InputConfigDataAsset.h" 
 
 #include "UI/Menu/GameMenuWidget.h"
 #include "Characters/Player/Controller/InGameMenuInputConfigDataAsset.h"
@@ -97,16 +98,42 @@ void AControllerBase::ToggleMenuTab(EGameMenuTab Tab)
 
     if (!GameMenuWidget->IsOpen())
     {
+        DisablePlayerGameplayInput();
         GameMenuWidget->OpenToTab(Tab);
     }
     else if (GameMenuWidget->GetActiveTab() == Tab)
     {
         GameMenuWidget->CloseMenu();
+        EnablePlayerGameplayInput();
     }
     else
     {
         // 이미 열려있고 다른 탭 → 탭만 전환 (닫았다 열지 않음)
         GameMenuWidget->OpenToTab(Tab);
+    }
+}
+
+void AControllerBase::DisablePlayerGameplayInput()
+{
+    APlayerBase* PlayerBase = Cast<APlayerBase>(GetPawn());
+    if (!PlayerBase || !PlayerBase->GetInputConfig() || !PlayerBase->GetInputConfig()->DefaultContext) return;
+
+    if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+        ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
+    {
+        Subsystem->RemoveMappingContext(PlayerBase->GetInputConfig()->DefaultContext);
+    }
+}
+
+void AControllerBase::EnablePlayerGameplayInput()
+{
+    APlayerBase* PlayerBase = Cast<APlayerBase>(GetPawn());
+    if (!PlayerBase || !PlayerBase->GetInputConfig() || !PlayerBase->GetInputConfig()->DefaultContext) return;
+
+    if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+        ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
+    {
+        Subsystem->AddMappingContext(PlayerBase->GetInputConfig()->DefaultContext, 0);
     }
 }
 

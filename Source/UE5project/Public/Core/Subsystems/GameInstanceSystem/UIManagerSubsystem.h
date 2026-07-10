@@ -27,7 +27,6 @@ enum class EGameMenuTab : uint8
     Inventory   UMETA(DisplayName = "Inventory"),
     Skills      UMETA(DisplayName = "Skills"),
     Map         UMETA(DisplayName = "Map"),
-    Options     UMETA(DisplayName = "Options"),
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnScreenStateChanged, EGameScreenState, NewState);

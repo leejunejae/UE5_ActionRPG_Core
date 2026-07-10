@@ -139,7 +139,7 @@ void APlayerBase::BeginPlay()
 			SubSystem->AddMappingContext(InputConfig->DefaultContext, 0);
 		}
 	}
-
+	
 	InitSpringArmLocation = SpringArm->GetRelativeLocation();
 }
 

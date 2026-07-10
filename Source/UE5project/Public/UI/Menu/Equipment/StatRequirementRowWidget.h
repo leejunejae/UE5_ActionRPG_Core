@@ -9,25 +9,45 @@
 
 
 class UTextBlock;
-class UProgressBar;
+
+UENUM(BlueprintType)
+enum class EFulfillmentTier : uint8
+{
+	Full,       // 100% 이상
+	High,       // 80~99%
+	Mid,        // 50~79%
+	Low         // 50% 미만
+};
 
 UCLASS(Abstract)
 class UE5PROJECT_API UStatRequirementRowWidget : public UBaseUserWidget
 {
 	GENERATED_BODY()
-	
+
 public:
 	void InitRow(const FText& StatLabel, const FWeaponRequirementRow& Row);
 
 protected:
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> Text_StatLabel;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> Text_ReqValue;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> Text_CurValue;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> Text_GradeValue;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> Text_AppliedValue;
-	UPROPERTY(meta = (BindWidget)) TObjectPtr<UProgressBar> ProgressBar_Fulfill;
+	// ---- 왼쪽: 능력 보정 (등급) ----
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> Text_CorrectionLabel;
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) TObjectPtr<UTextBlock> Text_GradeValue;
 
-	// bIsAdopted일 때 배지/강조 표시는 BP에서 처리 (탭바 하이라이트와 같은 패턴)
+	// ---- 오른쪽: 필요 능력치 (요구치 + 보유치) ----
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> Text_RequirementLabel;
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> Text_ReqValue;
+	UPROPERTY(BlueprintReadOnly, meta = (BindWidget)) TObjectPtr<UTextBlock> Text_CurValue;
+
+	// bIsAdopted(3개 스탯 중 실제 채택된 스탯)일 때 강조는 BP에서 처리
 	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
 	void OnAdoptedChanged(bool bIsAdopted);
+
+	// 요구치 미충족 색상 처리
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
+	void OnFulfillmentTierChanged(EFulfillmentTier Tier);
+
+	UFUNCTION(BlueprintImplementableEvent, Category = "UI")
+	void OnGradeChanged(EWeaponGrade Grade);
+
+private:
+	static EFulfillmentTier CalcFulfillmentTier(float FulfillRatio);
 };

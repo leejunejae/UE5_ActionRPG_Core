@@ -50,9 +50,6 @@ protected:
     TObjectPtr<UButton> TabButton_Inventory;
 
     UPROPERTY(meta = (BindWidget), BlueprintReadOnly)
-    TObjectPtr<UButton> TabButton_Options;
-
-    UPROPERTY(meta = (BindWidget), BlueprintReadOnly)
     TObjectPtr<UButton> TabButton_Skills;
 
     UPROPERTY(meta = (BindWidget), BlueprintReadOnly)
@@ -89,7 +86,6 @@ private:
     UFUNCTION() void OnStatusTabClicked();
     UFUNCTION() void OnEquipmentTabClicked();
     UFUNCTION() void OnInventoryTabClicked();
-    UFUNCTION() void OnOptionsTabClicked();
     UFUNCTION() void OnSkillsTabClicked();
     UFUNCTION() void OnMapTabClicked();
 

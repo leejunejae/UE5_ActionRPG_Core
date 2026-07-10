@@ -386,6 +386,7 @@ void UEquipmentTabWidget::EquipItem(FName ItemKey)
 void UEquipmentTabWidget::SetDetailSectionsCollapsed()
 {
 	if (Panel_DetailContent)  Panel_DetailContent->SetVisibility(ESlateVisibility::Collapsed);
+	if (Section_DetailContent) Section_DetailContent->SetVisibility(ESlateVisibility::Collapsed);
 	if (Panel_SelectionEmpty) Panel_SelectionEmpty->SetVisibility(ESlateVisibility::Visible);
 }
 
@@ -412,12 +413,15 @@ void UEquipmentTabWidget::RefreshDetailPanel()
 		}
 
 		if (Panel_DetailContent)  Panel_DetailContent->SetVisibility(ESlateVisibility::Visible);
+		if (Section_DetailContent) Section_DetailContent->SetVisibility(ESlateVisibility::Visible);
 		if (Panel_SelectionEmpty) Panel_SelectionEmpty->SetVisibility(ESlateVisibility::Collapsed);
 
 		if (Panel_ArmorStatsRow) Panel_ArmorStatsRow->SetVisibility(ESlateVisibility::Collapsed);
 		if (Panel_ArmorDetail)   Panel_ArmorDetail->SetVisibility(ESlateVisibility::Collapsed);
+		if (Section_ArmorDetail) Section_ArmorDetail->SetVisibility(ESlateVisibility::Collapsed);
 		if (Panel_WeaponStatsRow) Panel_WeaponStatsRow->SetVisibility(ESlateVisibility::Visible);
 		if (Panel_WeaponDetail)   Panel_WeaponDetail->SetVisibility(ESlateVisibility::Visible);
+		if (Section_WeaponDetail) Section_WeaponDetail->SetVisibility(ESlateVisibility::Visible);
 
 		UWeaponDataAsset* WeaponAsset = Weapon->WeaponDefenition.Get();
 		if (Image_DetailIcon) Image_DetailIcon->SetBrushFromTexture(WeaponAsset->WeaponInstance.Icon);
@@ -451,9 +455,9 @@ void UEquipmentTabWidget::RefreshDetailPanel()
 					}
 				};
 
-			AddRow(FText::FromString(TEXT("근력 (STR)")), Breakdown.Strength);
-			AddRow(FText::FromString(TEXT("민첩 (DEX)")), Breakdown.Dexterity);
-			AddRow(FText::FromString(TEXT("자연친화 (AFF)")), Breakdown.Affinity);
+			AddRow(FText::FromString(TEXT("근력")), Breakdown.Strength);
+			AddRow(FText::FromString(TEXT("민첩")), Breakdown.Dexterity);
+			AddRow(FText::FromString(TEXT("친화")), Breakdown.Affinity);
 		}
 	}
 	else
@@ -472,9 +476,11 @@ void UEquipmentTabWidget::RefreshDetailPanel()
 
 		if (Panel_WeaponStatsRow) Panel_WeaponStatsRow->SetVisibility(ESlateVisibility::Collapsed);
 		if (Panel_WeaponDetail)   Panel_WeaponDetail->SetVisibility(ESlateVisibility::Collapsed);
+		if (Section_WeaponDetail) Section_WeaponDetail->SetVisibility(ESlateVisibility::Collapsed);
 		if (Text_WeaponTypeValue) Text_WeaponTypeValue->SetVisibility(ESlateVisibility::Collapsed);
 		if (Panel_ArmorStatsRow)  Panel_ArmorStatsRow->SetVisibility(ESlateVisibility::Visible);
 		if (Panel_ArmorDetail)    Panel_ArmorDetail->SetVisibility(ESlateVisibility::Visible);
+		if (Section_ArmorDetail) Section_ArmorDetail->SetVisibility(ESlateVisibility::Visible);
 
 		UArmorDataAsset* ArmorAsset = Armor->ArmorDefinition.Get();
 		if (Image_DetailIcon) Image_DetailIcon->SetBrushFromTexture(ArmorAsset->Icon);
@@ -519,12 +525,14 @@ void UEquipmentTabWidget::RefreshComparePanel()
 	if (SelectedItemKey == NAME_None || SelectedItemKey == EquippedKey)
 	{
 		if (Panel_Compare)      Panel_Compare->SetVisibility(ESlateVisibility::Collapsed);
+		if (Section_Compare) Section_Compare->SetVisibility(ESlateVisibility::Collapsed);
 		if (Panel_CompareEmpty) Panel_CompareEmpty->SetVisibility(ESlateVisibility::Visible);
 		return;
 	}
 
 	if (Panel_CompareEmpty) Panel_CompareEmpty->SetVisibility(ESlateVisibility::Collapsed);
 	if (Panel_Compare)      Panel_Compare->SetVisibility(ESlateVisibility::Visible);
+	if (Section_Compare) Section_Compare->SetVisibility(ESlateVisibility::Visible);
 
 	if (Box_CompareStats) Box_CompareStats->ClearChildren();
 

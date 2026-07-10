@@ -147,6 +147,9 @@ private:
 	FORCEINLINE void ModifierInputEnd() { IsModifierInput = false; }
 
 	bool IsModifierInput = false;
+
+public:
+	FORCEINLINE UInputConfigDataAsset* GetInputConfig() const { return InputConfig; }
 #pragma endregion Input
 
 	/* ============================================================

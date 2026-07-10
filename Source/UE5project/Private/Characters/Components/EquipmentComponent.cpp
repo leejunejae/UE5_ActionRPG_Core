@@ -112,15 +112,21 @@ FVector UEquipmentComponent::GetWeaponSocketLocation_Implementation(FName Socket
 FAttackTraceSource UEquipmentComponent::GetAttackTraceSource(EAttackSourceType AttackSourceType) const
 {
 	FAttackTraceSource OutData;
+
+	if (!EquipedWeapon) return OutData;
+
 	switch (AttackSourceType)
 	{
 	case EAttackSourceType::MainHand:
+		OutData.TraceComponent = WeaponMesh;
 		OutData.Radius = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.WeaponConfig.HitBoxRadius;
 		break;
 	case EAttackSourceType::OffHand:
+		OutData.TraceComponent = SubEquipMesh;
 		OutData.Radius = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.SubConfig.HitBoxRadius;
 		break;
 	}
+
 	return OutData;
 }
 

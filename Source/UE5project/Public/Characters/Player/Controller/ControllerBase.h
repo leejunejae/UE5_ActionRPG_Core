@@ -65,6 +65,8 @@ protected:
 private:
 	void CreateGameMenu();
 	void ToggleMenuTab(EGameMenuTab Tab);
+	void DisablePlayerGameplayInput();
+	void EnablePlayerGameplayInput();
 
 	void Input_OpenStatus();
 	void Input_OpenEquipment();

@@ -26,8 +26,6 @@ void UGameMenuWidget::SetupTabButtons()
         TabButton_Skills->OnClicked.AddDynamic(this, &UGameMenuWidget::OnSkillsTabClicked);
     if (TabButton_Map)
         TabButton_Map->OnClicked.AddDynamic(this, &UGameMenuWidget::OnMapTabClicked);
-    if (TabButton_Options)
-        TabButton_Options->OnClicked.AddDynamic(this, &UGameMenuWidget::OnOptionsTabClicked);
 }
 
 void UGameMenuWidget::OpenToTab(EGameMenuTab Tab)
@@ -65,10 +63,9 @@ void UGameMenuWidget::ApplyOpenInputMode()
     APlayerController* PC = GetOwningPlayer();
     if (!PC) return;
 
-    FInputModeUIOnly InputMode;
+    FInputModeGameAndUI InputMode;
     PC->SetInputMode(InputMode);
     PC->SetShowMouseCursor(true);
-    PC->SetPause(true);
 }
 
 void UGameMenuWidget::ApplyCloseInputMode()
@@ -79,7 +76,6 @@ void UGameMenuWidget::ApplyCloseInputMode()
     FInputModeGameOnly InputMode;
     PC->SetInputMode(InputMode);
     PC->SetShowMouseCursor(false);
-    PC->SetPause(false);
 }
 
 void UGameMenuWidget::OnStatusTabClicked() { SwitchToTab(EGameMenuTab::Status); }
@@ -87,4 +83,3 @@ void UGameMenuWidget::OnEquipmentTabClicked() { SwitchToTab(EGameMenuTab::Equipm
 void UGameMenuWidget::OnInventoryTabClicked() { SwitchToTab(EGameMenuTab::Inventory); }
 void UGameMenuWidget::OnSkillsTabClicked() { SwitchToTab(EGameMenuTab::Skills); }
 void UGameMenuWidget::OnMapTabClicked() { SwitchToTab(EGameMenuTab::Map); }
-void UGameMenuWidget::OnOptionsTabClicked() { SwitchToTab(EGameMenuTab::Options); }

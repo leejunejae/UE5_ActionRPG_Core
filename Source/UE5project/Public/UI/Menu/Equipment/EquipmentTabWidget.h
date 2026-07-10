@@ -67,6 +67,7 @@ protected:
 
 	// ---- 상세 패널: 헤더(이름+유형, 카테고리 라벨) ----
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UWidget> Panel_DetailContent;
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UImage> Section_DetailContent;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> Text_DetailItemName;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> Text_WeaponTypeValue;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> Text_DetailCategoryLabel;
@@ -92,6 +93,7 @@ protected:
 
 	// ---- 무기: 요구 스탯 (구분선 아래) ----
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UWidget> Panel_WeaponDetail;
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UImage> Section_WeaponDetail;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UPanelWidget> Box_WeaponRequirements;
 
 	UPROPERTY(EditDefaultsOnly, Category = "UI")
@@ -99,6 +101,7 @@ protected:
 
 	// ---- 방어구: 저항+무게 (구분선 아래) ----
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UWidget> Panel_ArmorDetail;
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UImage> Section_ArmorDetail;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> Text_ArmorFireResistValue;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> Text_ArmorFrostResistValue;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UTextBlock> Text_ArmorPoisonResistValue;
@@ -107,6 +110,7 @@ protected:
 
 	// ---- 비교 패널 ----
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UWidget> Panel_Compare;
+	UPROPERTY(meta = (BindWidget)) TObjectPtr<UImage> Section_Compare;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UWidget> Panel_CompareEmpty;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UPanelWidget> Box_CompareStats;
 

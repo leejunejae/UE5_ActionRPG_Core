@@ -148,6 +148,12 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 		TraceSource = AttackSource->GetAttackTraceSource(CurAttackContext.AttackDetail[ComboIndex].AttackSource);
 	}
 
+	if (!TraceSource.TraceComponent)
+	{
+		UE_LOG(Log_Attack, Error, TEXT("[UAttackComponent] TraceComponent Invalid"));
+		return;
+	}
+
 	FTransform TargetWeaponOffset = TraceSource.TraceComponent->GetRelativeTransform();
 
 	const FVector StartSocketRelativeLocation = TraceSource.TraceComponent->GetSocketTransform(TEXT("Start"), RTS_Component).GetLocation();
