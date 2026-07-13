@@ -73,8 +73,6 @@ void AControllerBase::SetupInputComponent()
         EIC->BindAction(InGameMenuInputConfig->IA_OpenEquipment, ETriggerEvent::Started, this, &AControllerBase::Input_OpenEquipment);
     if (InGameMenuInputConfig->IA_OpenInventory)
         EIC->BindAction(InGameMenuInputConfig->IA_OpenInventory, ETriggerEvent::Started, this, &AControllerBase::Input_OpenInventory);
-    if (InGameMenuInputConfig->IA_OpenOptions)
-        EIC->BindAction(InGameMenuInputConfig->IA_OpenOptions, ETriggerEvent::Started, this, &AControllerBase::Input_OpenOptions);
     if (InGameMenuInputConfig->IA_OpenSkills)
         EIC->BindAction(InGameMenuInputConfig->IA_OpenSkills, ETriggerEvent::Started, this, &AControllerBase::Input_OpenSkills);
     if (InGameMenuInputConfig->IA_OpenMap)
@@ -142,7 +140,6 @@ void AControllerBase::Input_OpenEquipment() { ToggleMenuTab(EGameMenuTab::Equipm
 void AControllerBase::Input_OpenInventory() { ToggleMenuTab(EGameMenuTab::Inventory); }
 void AControllerBase::Input_OpenSkills() { ToggleMenuTab(EGameMenuTab::Skills); }
 void AControllerBase::Input_OpenMap() { ToggleMenuTab(EGameMenuTab::Map); }
-void AControllerBase::Input_OpenOptions() { ToggleMenuTab(EGameMenuTab::Options); }
 
 void AControllerBase::BindToPlayerDeath()
 {

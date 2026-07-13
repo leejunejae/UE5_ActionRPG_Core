@@ -71,7 +71,6 @@ private:
 	void Input_OpenStatus();
 	void Input_OpenEquipment();
 	void Input_OpenInventory();
-	void Input_OpenOptions();
 	void Input_OpenSkills();
 	void Input_OpenMap();
 
