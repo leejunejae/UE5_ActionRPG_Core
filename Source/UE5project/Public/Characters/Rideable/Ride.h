@@ -13,7 +13,6 @@
 
 
 // 인터페이스
-#include "Interaction/Interfaces/InteractInterface.h"
 #include "Characters/Rideable/Interfaces/RideInterface.h"
 #include "Characters/Player/Interfaces/ViewDataInterface.h"
 
@@ -27,7 +26,6 @@ class UCharacterMovementComponent;
 class UInputMappingContext;
 class UInputAction;
 class USpringArmComponent;
-class UBoxComponent;
 class UCameraComponent;
 
 UENUM(BlueprintType)
@@ -39,7 +37,7 @@ enum class HorseDirection : uint8
 };
 
 UCLASS()
-class UE5PROJECT_API ARide : public ACharacter, public IInteractInterface, public IRideInterface, public IViewDataInterface
+class UE5PROJECT_API ARide : public ACharacter, public IRideInterface, public IViewDataInterface
 {
 	GENERATED_BODY()
 
@@ -53,21 +51,9 @@ public:
 private:
 	void InputSetting();
 
-	UFUNCTION()
-		void TriggerBegin(class UPrimitiveComponent* OverlappedComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
-
-	UFUNCTION()
-		void TriggerEnd(class UPrimitiveComponent* OverlappedComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
-
 private:
-	UPROPERTY(EditAnywhere)
-		class UWidgetComponent* InteractWidget;
-
-
 	float Direction;
-	float WidgetAlpha = 0.0f;
-	bool CanInteraction = false;
-	bool MountRight;
+	bool MountRight = false;
 
 	ACharacter* Rider;
 	FRotator RiderRotator;
@@ -113,9 +99,6 @@ protected:
 	/* �� �Է� */
 
 	UPROPERTY(VisibleAnywhere, Category = Interact)
-		UBoxComponent* RiderTrigger;
-
-	UPROPERTY(VisibleAnywhere, Category = Interact)
 		USceneComponent* RiderLocation;
 
 	UPROPERTY(VisibleAnywhere, Category = Interact)
@@ -137,9 +120,6 @@ public:
 	virtual void PostInitializeComponents() override;
 
 	float GetDirection();
-
-	virtual USceneComponent* GetEnterInteractLocation_Implementation(AActor* Target);
-	virtual USceneComponent* GetLeftInteractLocation_Implementation();
 
 #pragma region Mount And DisMount
 public:

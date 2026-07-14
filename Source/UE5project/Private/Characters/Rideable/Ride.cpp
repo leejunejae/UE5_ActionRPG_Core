@@ -12,7 +12,6 @@
 
 // 콜리전
 #include "Components/CapsuleComponent.h"
-#include "Components/BoxComponent.h"
 
 // 입력
 #include "EnhancedInputComponent.h"
@@ -23,9 +22,6 @@
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/KismetTextLibrary.h"
-
-// UI
-#include "Components/WidgetComponent.h"
 
 // 인터페이스
 #include "Characters/Player/Interfaces/PlayerInterface.h"
@@ -43,7 +39,6 @@ ARide::ARide()
 	PrimaryActorTick.bCanEverTick = true;
 
 	RideTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ride.Horse")));
-	RideTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Interactable.Ride")));
 
 	RootComponent = GetCapsuleComponent();
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
@@ -79,10 +74,6 @@ ARide::ARide()
 	Reins->SetupAttachment(GetMesh());
 	Reins->SetLeaderPoseComponent(GetMesh());
 
-	RiderTrigger = CreateDefaultSubobject<UBoxComponent>(TEXT("RiderTrigger"));
-	RiderTrigger->SetupAttachment(GetMesh());
-	RiderTrigger->SetRelativeScale3D(FVector(3.5f, 3.0f, 1.5f));
-
 	FName MountSocket(TEXT("MountPoint"));
 	RiderLocation = CreateDefaultSubobject<USceneComponent>(TEXT("RiderLocation"));
 	RiderLocation->SetupAttachment(RootComponent, MountSocket);
@@ -103,17 +94,6 @@ ARide::ARide()
 	RiderMountLocRight->SetRelativeLocation(FVector(-70.0f, 44.0f, 85.0f));
 	RiderMountLocRight->SetRelativeRotation(FRotator(0.0f, 0.0f, 0.0f));
 	
-	InteractWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("INTERACTWIDGET"));
-	InteractWidget->SetupAttachment(GetMesh());
-	static ConstructorHelpers::FClassFinder<UUserWidget>INTERACT(TEXT("/Game/00_Character/Data/InteractWidget_BP.InteractWidget_BP_C"));
-	if (INTERACT.Succeeded())
-	{
-		InteractWidget->SetWidgetClass(INTERACT.Class);
-		InteractWidget->SetDrawSize(FVector2D(70.0f, 100.0f));
-	}
-	InteractWidget->SetRelativeLocation(FVector(0.0f, 140.0f, 210.0f));
-	InteractWidget->bOwnerNoSee = true;
-
 	SpringArm->TargetArmLength = 200.0f;
 	SpringArm->SetRelativeLocation(FVector(0.0f,0.0f,90.0f));
 	SpringArm->SetRelativeRotation(FRotator::ZeroRotator);
@@ -205,36 +185,6 @@ void ARide::Tick(float DeltaTime)
 	}
 
 
-	if (CanInteraction)
-	{
-		APlayerController* PlayerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
-		if (!PlayerController)
-			return;
-
-		APawn* PlayerPawn = PlayerController->GetPawn();
-		if (!PlayerPawn)
-			return;
-		
-		FVector StartDir = GetActorLocation();
-		FVector DestDir = PlayerPawn->GetActorLocation();
-		FVector NormalDirection = (DestDir - StartDir).GetSafeNormal();
-		InteractWidget->SetWorldRotation(NormalDirection.Rotation());
-
-		if (WidgetAlpha < 1.0f)
-		{
-			WidgetAlpha = FMath::FInterpTo(WidgetAlpha, 1.0f, DeltaTime, 0.5f);
-			InteractWidget->SetTintColorAndOpacity(FLinearColor(1.0f, 1.0f, 1.0f, WidgetAlpha));
-		}
-	}
-	else
-	{
-		if (WidgetAlpha > 0.0f)
-		{
-			WidgetAlpha = FMath::FInterpTo(WidgetAlpha, 0.0f, DeltaTime, 0.5f);
-			InteractWidget->SetTintColorAndOpacity(FLinearColor(1.0f, 1.0f, 1.0f, WidgetAlpha));
-		}
-	}
-
 	FRotator SocketRot = GetMesh()->GetSocketRotation(FName("MountPoint"));
 	FRotator CurrentRot = RiderLocation->GetComponentRotation();
 
@@ -262,9 +212,6 @@ void ARide::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 void ARide::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
-
-	RiderTrigger->OnComponentBeginOverlap.AddDynamic(this, &ARide::TriggerBegin);
-	RiderTrigger->OnComponentEndOverlap.AddDynamic(this, &ARide::TriggerEnd);
 }
 
 float ARide::GetDirection()
@@ -438,30 +385,6 @@ bool ARide::FindMountPos()
 	return DistRightLoc.Length() < DistLeftLoc.Length();
 }
 
-void ARide::TriggerBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
-{
-	if (OtherActor->ActorHasTag("Player"))
-	{
-		CanInteraction = true;
-		if (OtherActor->GetClass()->ImplementsInterface(UPlayerInterface::StaticClass()))
-		{
-			IPlayerInterface::Execute_RegisterInteractableActor(OtherActor, this);
-		}
-	}
-}
-
-void ARide::TriggerEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
-{
-	if (OtherActor->ActorHasTag("Player"))
-	{
-		CanInteraction = false;
-		if (OtherActor->GetClass()->ImplementsInterface(UPlayerInterface::StaticClass()))
-		{
-			IPlayerInterface::Execute_DeRegisterInteractableActor(OtherActor, this);
-		}
-	}
-}
-
 void ARide::CameraSettingTimer()
 {
 	float CurrentLength = SpringArm->TargetArmLength;
@@ -476,30 +399,6 @@ void ARide::CameraSettingTimer()
 		SpringArm->bEnableCameraLag = true;
 		SpringArm->bEnableCameraRotationLag = true;
 	}
-}
-
-USceneComponent* ARide::GetEnterInteractLocation_Implementation(AActor* Target)
-{
-	IInteractInterface::GetEnterInteractLocation_Implementation(Target);
-
-	FVector DistRightLoc = Target->GetActorLocation() - RiderMountLocRight->GetComponentLocation();
-	FVector DistLeftLoc = Target->GetActorLocation() - RiderMountLocLeft->GetComponentLocation();
-
-	if (DistRightLoc.Length() < DistLeftLoc.Length())
-	{
-		MountRight = true;
-		return RiderMountLocRight;
-	}
-	else
-	{
-		MountRight = false;
-		return RiderMountLocLeft;
-	}
-}
-
-USceneComponent* ARide::GetLeftInteractLocation_Implementation()
-{
-	return RiderGetDownLoc;
 }
 
 FTransform ARide::GetCameraTransform_Implementation()

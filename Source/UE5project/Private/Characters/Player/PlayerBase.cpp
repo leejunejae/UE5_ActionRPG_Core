@@ -783,25 +783,14 @@ void APlayerBase::EndInteraction_Implementation(AActor* Interactable)
 void APlayerBase::HandleArrivedInteractionPoint()
 {
 	AActor* InteractActor = InteractComponent->GetInteractActor();
-	USceneComponent* InteractionPoint = IInteractInterface::Execute_GetEnterInteractLocation(InteractActor, this);
+	if (!InteractActor)
+		return;
 
 	GetController()->SetIgnoreMoveInput(false);
 
 	GetCharacterStatusComponent()->ClearAction();
 
-	if (InteractActor->ActorHasTag("Ride"))
-	{
-		GetCharacterStatusComponent()->SetState(TAG_State_Ride);
-
-		IInteractInterface::Execute_RegisterInteractActor(InteractActor, this);
-
-		DisableInput(UGameplayStatics::GetPlayerController(GetWorld(), 0));
-		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		GetCharacterMovement()->SetMovementMode(MOVE_Flying);
-		Ride = Cast<ARide>(InteractActor);
-		CurRideStance = ERideStance::Mount;
-	}
-	else if (InteractActor->ActorHasTag("Ladder"))
+	if (InteractActor->ActorHasTag("Ladder"))
 	{
 		
 		bool IsRequestSuccess = ClimbComponent->RequestEnterLadder(InteractActor);
