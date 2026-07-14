@@ -85,9 +85,9 @@ void APlayerRide::SpawnFin()
 	CanDismount = true;
 }
 
-void APlayerRide::Mount_Implementation(ACharacter* RiderCharacter, FVector InitVelocity)
+void APlayerRide::Mount(ACharacter* RiderCharacter, FVector InitVelocity)
 {
-	Super::Mount_Implementation(RiderCharacter, InitVelocity);
+	Super::Mount(RiderCharacter, InitVelocity);
 	FOnTimelineEventStatic MountCallbackFin;
 	MountCallbackFin.BindUObject(this, &APlayerRide::SpawnFin);
 	MountTimeline.SetTimelineFinishedFunc(MountCallbackFin);

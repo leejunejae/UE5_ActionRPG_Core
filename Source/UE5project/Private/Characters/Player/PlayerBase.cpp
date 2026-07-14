@@ -32,7 +32,6 @@
 
 // 인터페이스
 #include "Interaction/Interfaces/InteractInterface.h"
-#include "Characters/Rideable/Interfaces/RideInterface.h"
 
 // 유저 컴포넌트
 #include "Characters/Player/Components/PlayerStatusComponent.h"
@@ -617,7 +616,7 @@ void APlayerBase::ExecuteSpawnRide()
 
 	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 
-	IRideInterface::Execute_Mount(Ride, this, GetVelocity());
+	Ride->Mount(this, GetVelocity());
 	GetCharacterMovement()->DisableMovement();
 
 	CurRideStance = ERideStance::Mount;
@@ -702,13 +701,13 @@ bool APlayerBase::GetIsMovementInput()
 float APlayerBase::GetRideSpeed()
 {
 	if (Ride == nullptr) return 0.0f;
-	return IRideInterface::Execute_GetRideSpeed(Ride);
+	return Ride->GetRideSpeed();
 }
 
 float APlayerBase::GetRideDirection()
 {
 	if (Ride == nullptr) return 0.0f;
-	return IRideInterface::Execute_GetRideDirection(Ride);
+	return Ride->GetRideDirection();
 }
 
 FVector APlayerBase::GetInputDirection()
@@ -945,7 +944,7 @@ void APlayerBase::HandleRespawnFinalized()
  * ============================================================ */
 void APlayerBase::MountEnd()
 {
-	FTransform MountTransform = IRideInterface::Execute_GetMountTransform(Ride);
+	FTransform MountTransform = Ride->GetMountTransform();
 	SetActorLocation(MountTransform.GetLocation());
 	SetActorRotation(MountTransform.GetRotation().Rotator());
 
@@ -1049,7 +1048,7 @@ void APlayerBase::JumpDismountTimer()
 void APlayerBase::MountTimer()
 {
 	FVector StartLocation = Ride->GetActorLocation();
-	FVector TargetLocation = IRideInterface::Execute_GetMountTransform(Ride).GetLocation();
+	FVector TargetLocation = Ride->GetMountTransform().GetLocation();
 
 	FVector CurLocation = FMath::Lerp(StartLocation, TargetLocation, CharacterBaseAnim->GetCurveValue(FName("Char_Translation_Y")));
 	CurLocation.Z = FMath::Lerp(StartLocation.Z, TargetLocation.Z, CharacterBaseAnim->GetCurveValue(FName("Char_Translation_Z")));

@@ -214,7 +214,7 @@ void ARide::PostInitializeComponents()
 	Super::PostInitializeComponents();
 }
 
-float ARide::GetDirection()
+float ARide::GetDirection() const
 {
 	return Direction;
 }
@@ -319,10 +319,8 @@ void ARide::Look(const FInputActionValue& value)
 	AddControllerYawInput(LookAxisValue.X * -0.5f);
 }
 
-void ARide::Mount_Implementation(ACharacter* RiderCharacter, FVector InitVelocity)
+void ARide::Mount(ACharacter* RiderCharacter, FVector InitVelocity)
 {
-	IRideInterface::Mount_Implementation(RiderCharacter, InitVelocity);
-
 	SpringArm->bEnableCameraLag = false;
 	SpringArm->bEnableCameraRotationLag = false;
 
@@ -434,23 +432,23 @@ void ARide::QuickTurn(float TurnDirection)
 	}
 }
 
-float ARide::GetRideSpeed_Implementation()
+float ARide::GetRideSpeed() const
 { 
 
 	return GetVelocity().Length();;
 }
 
-float ARide::GetRideDirection_Implementation()
+float ARide::GetRideDirection() const
 {
 	return GetDirection();
 }
 
-bool ARide::GetMountDir_Implementation()
+bool ARide::GetMountDir() const
 {
 	return MountRight;
 }
 
-FTransform ARide::GetMountTransform_Implementation()
+FTransform ARide::GetMountTransform() const
 {
 	return RiderLocation->GetComponentTransform();
 }

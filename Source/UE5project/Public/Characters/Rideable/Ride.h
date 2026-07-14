@@ -13,7 +13,6 @@
 
 
 // 인터페이스
-#include "Characters/Rideable/Interfaces/RideInterface.h"
 #include "Characters/Player/Interfaces/ViewDataInterface.h"
 
 // 태그
@@ -37,7 +36,7 @@ enum class HorseDirection : uint8
 };
 
 UCLASS()
-class UE5PROJECT_API ARide : public ACharacter, public IRideInterface, public IViewDataInterface
+class UE5PROJECT_API ARide : public ACharacter, public IViewDataInterface
 {
 	GENERATED_BODY()
 
@@ -119,18 +118,18 @@ public:
 
 	virtual void PostInitializeComponents() override;
 
-	float GetDirection();
+	float GetDirection() const;
 
 #pragma region Mount And DisMount
 public:
 	void DisMount();
 	virtual bool TryDisMount();
 
-	virtual void Mount_Implementation(ACharacter* RiderCharacter, FVector InitVelocity);
-	virtual float GetRideSpeed_Implementation();
-	virtual float GetRideDirection_Implementation();
-	virtual bool GetMountDir_Implementation();
-	virtual FTransform GetMountTransform_Implementation();
+	virtual void Mount(ACharacter* RiderCharacter, FVector InitVelocity);
+	float GetRideSpeed() const;
+	float GetRideDirection() const;
+	bool GetMountDir() const;
+	FTransform GetMountTransform() const;
 
 protected:
 	bool CanDismount;
