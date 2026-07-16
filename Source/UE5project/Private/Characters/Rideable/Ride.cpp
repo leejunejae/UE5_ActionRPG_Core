@@ -32,6 +32,9 @@
 // 애니메이션
 #include "Characters/Rideable/RideAnimInstance.h"
 
+// 컴포넌트
+#include "Characters/Components/RideComponent.h"
+
 
 
 
@@ -328,55 +331,7 @@ void ARide::Mount(ACharacter* RiderCharacter, FVector InitVelocity)
 	if (!RiderCharacter)
 		return;
 
-	FRotator SourceControlRotation = FRotator::ZeroRotator;
-
-	if (RiderCharacter->GetClass()->ImplementsInterface(UViewDataInterface::StaticClass()))
-	{
-		SourceControlRotation = IViewDataInterface::Execute_GetControllerRotation(RiderCharacter);
-	}
-
 	Rider = RiderCharacter;
-
-	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
-	if (PlayerController)
-	{
-		PlayerController->bAutoManageActiveCameraTarget = false;
-
-		ACameraActor* TransitionCamera = nullptr;
-		if (PlayerController->PlayerCameraManager)
-		{
-			const FVector CurrentCameraLocation = PlayerController->PlayerCameraManager->GetCameraLocation();
-			const FRotator CurrentCameraRotation = PlayerController->PlayerCameraManager->GetCameraRotation();
-			const float CurrentFOV = PlayerController->PlayerCameraManager->GetFOVAngle();
-
-			FActorSpawnParameters SpawnParams;
-			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-			SpawnParams.ObjectFlags |= RF_Transient;
-
-			TransitionCamera = GetWorld()->SpawnActor<ACameraActor>(CurrentCameraLocation, CurrentCameraRotation, SpawnParams);
-			if (TransitionCamera)
-			{
-				TransitionCamera->GetCameraComponent()->SetFieldOfView(CurrentFOV);
-				TransitionCamera->GetCameraComponent()->SetConstraintAspectRatio(false);
-				TransitionCamera->SetLifeSpan(1.0f);
-				PlayerController->SetViewTarget(TransitionCamera);
-			}
-		}
-
-		if (!TransitionCamera)
-		{
-			PlayerController->SetViewTarget(RiderCharacter);
-		}
-
-		PlayerController->Possess(this);
-		PlayerController->SetControlRotation(SourceControlRotation);
-
-		SpringArm->UpdateComponentToWorld();
-		Camera->UpdateComponentToWorld();
-
-		PlayerController->SetViewTargetWithBlend(this, 0.25f, VTBlend_Cubic);
-	}
-
 	GetCharacterMovement()->Velocity = InitVelocity;
 
 	CanDismount = false;
@@ -409,12 +364,15 @@ bool ARide::TryDisMount()
 	if (!Rider || !RiderGetDownLoc || !CanDismount)
 		return false;
 
-	if (Rider->GetClass()->ImplementsInterface(UPlayerInterface::StaticClass()))
+	if (URideComponent* RideComponent = Rider->FindComponentByClass<URideComponent>())
 	{
 		LastSpeed = GetVelocity();
 		bMovingDismount = LastSpeed.SizeSquared2D() > FMath::Square(MovingDismountSpeedThreshold);
 
-		IPlayerInterface::Execute_DespawnRide(Rider, GetVelocity());
+		if (!RideComponent->RequestDismount(GetVelocity()))
+		{
+			return false;
+		}
 
 		bDismount = bMovingDismount;
 		Rider = nullptr;

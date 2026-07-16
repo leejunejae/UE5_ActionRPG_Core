@@ -55,6 +55,7 @@ class UE5PROJECT_API APlayerBase : public ACharacterBase,
 	public IAttackSourceInterface
 {
 	GENERATED_BODY()
+	friend class URideComponent;
 
 public:
 	APlayerBase(const FObjectInitializer& ObjectInitializer);
@@ -200,7 +201,6 @@ protected:
 	 * ============================================================ */
 #pragma region State & Stance
 protected:
-	ERideAnimPhase CurRideAnimPhase = ERideAnimPhase::Riding;
 
 public:
 	ERideAnimPhase GetCurRideAnimPhase();
@@ -249,17 +249,6 @@ public:
 private:
 	UPROPERTY(VisibleAnywhere, Category = Ride)
 	TObjectPtr<URideComponent> RideComponent;
-
-	void MountTimer();
-	FTimerHandle MountTimerHandle;
-
-	void BeginRideCollision(ARide* Ride);
-	void EndRideCollision(ARide* Ride);
-
-	void NormalDismountTimer();
-	FTimerHandle NormalDismountTimerHandle;
-	FTransform NormalDismountStartTransform;
-	FTransform NormalDismountTargetTransform;
 
 	void JumpDismountTimer();
 	FTimerHandle JumpDismountTimerHandle;

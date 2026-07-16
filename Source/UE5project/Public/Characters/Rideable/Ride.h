@@ -26,6 +26,7 @@ class UInputMappingContext;
 class UInputAction;
 class USpringArmComponent;
 class UCameraComponent;
+class URideComponent;
 
 UENUM(BlueprintType)
 enum class HorseDirection : uint8
@@ -39,6 +40,7 @@ UCLASS()
 class UE5PROJECT_API ARide : public ACharacter, public IViewDataInterface
 {
 	GENERATED_BODY()
+	friend class URideComponent;
 
 public:
 	// Sets default values for this character's properties
