@@ -126,24 +126,27 @@ public:
 	virtual bool TryDisMount();
 
 	virtual void Mount(ACharacter* RiderCharacter, FVector InitVelocity);
+	void AttachRider();
+	virtual void FinishDismount();
 	float GetRideSpeed() const;
 	float GetRideDirection() const;
 	bool GetMountDir() const;
 	FTransform GetMountTransform() const;
+	FTransform GetDismountTransform() const;
+	bool IsMovingDismount() const;
 
 protected:
 	bool CanDismount;
 	bool bDismount = false;
+	bool bMovingDismount = false;
 	FVector LastSpeed;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Dismount")
+	float MovingDismountSpeedThreshold = 150.0f;
 
 #pragma endregion
 
 #pragma region Need for Conversion Possess
-private:
-	void CameraSettingTimer();
-	FTimerHandle CameraSettingTimerHandle;
-	float SpringArmLength = 200.0f;
-
 public:
 	virtual FTransform GetCameraTransform_Implementation();
 	virtual FTransform GetSpringArmTransform_Implementation();

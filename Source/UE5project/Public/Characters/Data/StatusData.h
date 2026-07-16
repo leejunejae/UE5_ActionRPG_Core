@@ -8,10 +8,10 @@
 #include "StatusData.generated.h"
 
 UENUM(BlueprintType)
-enum class ERideStance : uint8
+enum class ERideAnimPhase : uint8
 {
 	Mount UMETA(DisplayName = "Mount"),
-	DisMount UMETA(DisplayName = "DisMount"),
+	DisMount_Normal UMETA(DisplayName = "DisMount_Normal"),
 	Riding UMETA(DisplayName = "Riding"),
 };
 

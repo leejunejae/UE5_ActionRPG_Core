@@ -2,23 +2,39 @@
 
 
 #include "Animation/Mode/AnimMode_Ride.h"
+#include "Characters/Components/RideComponent.h"
 #include "Characters/Rideable/Ride.h"
 #include "Characters/Player/PlayerBase.h"
 #include "Characters/Player/PlayerBaseAnimInstance.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 void UAnimMode_Ride::Tick(float DeltaSeconds)
 {
 	if (!Character.IsValid() || !AnimInst.IsValid()) return;
 
 	auto* Ch = Cast<APlayerBase>(Character.Get());
+	if (!Ch) return;
+
 	auto* Anim = AnimInst.Get();
 
-	Anim->CurRideStance = Ch->GetCurRideStance();
-
-	if (Anim->CurRideStance == ERideStance::Riding)
+	Anim->CurRideAnimPhase = Ch->GetCurRideAnimPhase();
+	Anim->IsInAir = Ch->GetCharacterMovement()->IsFalling();
+	Anim->IsJumping = Anim->IsFalling = Anim->IsLanding = false;
+	if (Anim->IsInAir)
 	{
-		Anim->Speed = Ch->GetRideSpeed();
-		Anim->Direction = Ch->GetRideDirection();
+		Ch->GetVelocity().Z > 0.0f ? Anim->IsJumping = true : Anim->IsFalling = true;
+	}
+
+	FVector WorldAcceleration = Ch->GetCharacterMovement()->GetCurrentAcceleration() * FVector(1.0f, 1.0f, 0.0f);
+	Anim->IsAccelerating = !WorldAcceleration.IsNearlyZero();
+
+	if (Anim->CurRideAnimPhase == ERideAnimPhase::Riding)
+	{
+		if (URideComponent* RideComponent = Ch->GetRideComponent())
+		{
+			Anim->Speed = RideComponent->GetRideSpeed();
+			Anim->Direction = RideComponent->GetRideDirection();
+		}
 	}
 
 	UpdateRideLocomotionIK(DeltaSeconds);
@@ -26,7 +42,10 @@ void UAnimMode_Ride::Tick(float DeltaSeconds)
 
 void UAnimMode_Ride::UpdateRideLocomotionIK(float DeltaSeconds)
 {
-	ARide* Ride = Character->GetCurrentRide();
+	APlayerBase* Player = Cast<APlayerBase>(Character.Get());
+	if (!Player || !Player->GetRideComponent()) return;
+
+	ARide* Ride = Player->GetRideComponent()->GetCurrentRide();
 	if (!Ride) return;
 
 	USkeletalMeshComponent* RideMesh = Ride->GetMesh();

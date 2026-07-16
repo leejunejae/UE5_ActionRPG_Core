@@ -9,7 +9,6 @@
 #include "Characters/Components/CharacterStatusComponent.h"
 #include "Characters/Components/StatComponent.h"
 #include "Interaction/Climb/Components/ClimbComponent.h"
-#include "Characters/Rideable/Ride.h"
 #include "Utils/CoreLog.h"
 
 // Sets default values
@@ -92,12 +91,6 @@ void ACharacterBase::SetCurLocomotionGait(ELocomotionGait NewGait)
 
 	GetCharacterMovement()->MaxWalkSpeed = NewGaitSetting.MaxSpeed;
 }
-
-ARide* ACharacterBase::GetCurrentRide()
-{
-	return Ride;
-}
-
 
 void ACharacterBase::HandleDeathStarted()
 {

@@ -37,9 +37,11 @@ class UPlayerAttackComponent;
 class UPlayerHitReactionComponent;
 class UInteractComponent;
 class ULockOnComponent;
+class URideComponent;
 
 class UPlayerConfig;
 class APlayerRide;
+class ARide;
 
 struct FGameplayTag;
 
@@ -120,9 +122,9 @@ public:
 	virtual TOptional<FVector> GetCharBoneLocation(FName BoneName);
 
 	bool GetIsMovementInput();
-	float GetRideSpeed();
-	float GetRideDirection();
 	FVector GetInputDirection();
+	FORCEINLINE bool ShouldSkipJumpStart() const { return bSkipJumpStart; }
+	FORCEINLINE void SetSkipJumpStart(bool bNewSkipJumpStart) { bSkipJumpStart = bNewSkipJumpStart; }
 
 	/* ============================================================
 	 *  Config
@@ -198,10 +200,10 @@ protected:
 	 * ============================================================ */
 #pragma region State & Stance
 protected:
-	ERideStance CurRideStance = ERideStance::Riding;
+	ERideAnimPhase CurRideAnimPhase = ERideAnimPhase::Riding;
 
 public:
-	ERideStance GetCurRideStance();
+	ERideAnimPhase GetCurRideAnimPhase();
 #pragma endregion State & Stance
 
 	/* ============================================================
@@ -223,6 +225,7 @@ public:
 
 private:
 	float Direction;
+	bool bSkipJumpStart = false;
 
 	FRotator InputRotation;
 	bool bForcedRotatingInputDirection = false;
@@ -244,14 +247,25 @@ public:
 	 * ============================================================ */
 #pragma region Ride
 private:
+	UPROPERTY(VisibleAnywhere, Category = Ride)
+	TObjectPtr<URideComponent> RideComponent;
+
 	void MountTimer();
 	FTimerHandle MountTimerHandle;
 
-	void CameraSettingTimer();
-	FTimerHandle CameraSettingTimerHandle;
+	void BeginRideCollision(ARide* Ride);
+	void EndRideCollision(ARide* Ride);
+
+	void NormalDismountTimer();
+	FTimerHandle NormalDismountTimerHandle;
+	FTransform NormalDismountStartTransform;
+	FTransform NormalDismountTargetTransform;
 
 	void JumpDismountTimer();
 	FTimerHandle JumpDismountTimerHandle;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Dismount")
+	float MovingDismountSpeedThreshold = 150.0f;
 
 	// ---- 입력 → 판단 ----
 	void SpawnRideInput();
@@ -267,6 +281,7 @@ protected:
 	TSubclassOf<APlayerRide> RideClass;
 
 public:
+	FORCEINLINE URideComponent* GetRideComponent() const { return RideComponent; }
 	virtual FTransform GetCameraTransform_Implementation();
 	virtual FTransform GetSpringArmTransform_Implementation();
 	virtual float GetTargetArmLength_Implementation();

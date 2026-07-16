@@ -85,6 +85,14 @@ void APlayerRide::SpawnFin()
 	CanDismount = true;
 }
 
+void APlayerRide::StartDespawn()
+{
+	FOnTimelineEventStatic MountCallbackFin;
+	MountCallbackFin.BindUObject(this, &APlayerRide::DespawnFin);
+	MountTimeline.SetTimelineFinishedFunc(MountCallbackFin);
+	MountTimeline.ReverseFromEnd();
+}
+
 void APlayerRide::Mount(ACharacter* RiderCharacter, FVector InitVelocity)
 {
 	Super::Mount(RiderCharacter, InitVelocity);
@@ -99,10 +107,15 @@ bool APlayerRide::TryDisMount()
 	if (!Super::TryDisMount())
 		return false;
 
-	FOnTimelineEventStatic MountCallbackFin;
-	MountCallbackFin.BindUObject(this, &APlayerRide::DespawnFin);
-	MountTimeline.SetTimelineFinishedFunc(MountCallbackFin);
-	MountTimeline.ReverseFromEnd();
+	if (IsMovingDismount())
+	{
+		StartDespawn();
+	}
 
 	return true;
+}
+
+void APlayerRide::FinishDismount()
+{
+	StartDespawn();
 }

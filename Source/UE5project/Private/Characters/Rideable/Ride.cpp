@@ -6,6 +6,9 @@
 // 카메라
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
+#include "Camera/CameraActor.h"
+#include "Camera/PlayerCameraManager.h"
+#include "GameFramework/PlayerController.h"
 
 // 이동
 #include "GameFramework/CharacterMovementComponent.h"
@@ -45,6 +48,7 @@ ARide::ARide()
 	Camera = CreateDefaultSubobject<UCameraComponent>(TEXT("Camera"));
 	SpringArm->SetupAttachment(GetCapsuleComponent());
 	Camera->SetupAttachment(SpringArm);
+	Camera->SetConstraintAspectRatio(false);
 
 	GetCapsuleComponent()->SetCollisionProfileName(TEXT("Ride"));
 
@@ -94,7 +98,7 @@ ARide::ARide()
 	RiderMountLocRight->SetRelativeLocation(FVector(-70.0f, 44.0f, 85.0f));
 	RiderMountLocRight->SetRelativeRotation(FRotator(0.0f, 0.0f, 0.0f));
 	
-	SpringArm->TargetArmLength = 200.0f;
+	SpringArm->TargetArmLength = 300.0f;
 	SpringArm->SetRelativeLocation(FVector(0.0f,0.0f,90.0f));
 	SpringArm->SetRelativeRotation(FRotator::ZeroRotator);
 	SpringArm->SocketOffset = FVector(0.0f, 60.0f, 0.0f);
@@ -102,7 +106,7 @@ ARide::ARide()
 	SpringArm->bInheritPitch = true;
 	SpringArm->bInheritRoll = true;
 	SpringArm->bInheritYaw = true;
-	SpringArm->bDoCollisionTest = true;
+	SpringArm->bDoCollisionTest = false;
 	SpringArm->bEnableCameraLag = true;
 	SpringArm->bEnableCameraRotationLag = true;
 	SpringArm->CameraLagSpeed = 10.0f;
@@ -321,8 +325,69 @@ void ARide::Look(const FInputActionValue& value)
 
 void ARide::Mount(ACharacter* RiderCharacter, FVector InitVelocity)
 {
-	SpringArm->bEnableCameraLag = false;
-	SpringArm->bEnableCameraRotationLag = false;
+	if (!RiderCharacter)
+		return;
+
+	FRotator SourceControlRotation = FRotator::ZeroRotator;
+
+	if (RiderCharacter->GetClass()->ImplementsInterface(UViewDataInterface::StaticClass()))
+	{
+		SourceControlRotation = IViewDataInterface::Execute_GetControllerRotation(RiderCharacter);
+	}
+
+	Rider = RiderCharacter;
+
+	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+	if (PlayerController)
+	{
+		PlayerController->bAutoManageActiveCameraTarget = false;
+
+		ACameraActor* TransitionCamera = nullptr;
+		if (PlayerController->PlayerCameraManager)
+		{
+			const FVector CurrentCameraLocation = PlayerController->PlayerCameraManager->GetCameraLocation();
+			const FRotator CurrentCameraRotation = PlayerController->PlayerCameraManager->GetCameraRotation();
+			const float CurrentFOV = PlayerController->PlayerCameraManager->GetFOVAngle();
+
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			SpawnParams.ObjectFlags |= RF_Transient;
+
+			TransitionCamera = GetWorld()->SpawnActor<ACameraActor>(CurrentCameraLocation, CurrentCameraRotation, SpawnParams);
+			if (TransitionCamera)
+			{
+				TransitionCamera->GetCameraComponent()->SetFieldOfView(CurrentFOV);
+				TransitionCamera->GetCameraComponent()->SetConstraintAspectRatio(false);
+				TransitionCamera->SetLifeSpan(1.0f);
+				PlayerController->SetViewTarget(TransitionCamera);
+			}
+		}
+
+		if (!TransitionCamera)
+		{
+			PlayerController->SetViewTarget(RiderCharacter);
+		}
+
+		PlayerController->Possess(this);
+		PlayerController->SetControlRotation(SourceControlRotation);
+
+		SpringArm->UpdateComponentToWorld();
+		Camera->UpdateComponentToWorld();
+
+		PlayerController->SetViewTargetWithBlend(this, 0.25f, VTBlend_Cubic);
+	}
+
+	GetCharacterMovement()->Velocity = InitVelocity;
+
+	CanDismount = false;
+	bDismount = false;
+	bMovingDismount = false;
+}
+
+void ARide::AttachRider()
+{
+	if (!Rider)
+		return;
 
 	FAttachmentTransformRules AttachmentRules = FAttachmentTransformRules(
 		EAttachmentRule::SnapToTarget,
@@ -331,25 +396,7 @@ void ARide::Mount(ACharacter* RiderCharacter, FVector InitVelocity)
 		true
 	);
 
-	Rider = RiderCharacter;
-
 	Rider->AttachToComponent(RiderLocation, AttachmentRules);
-	//Rider->AttachToComponent(GetMesh(), AttachmentRules, FName("MountPoint"));
-
-	FTransform SpringArmTransform = IViewDataInterface::Execute_GetSpringArmTransform(Rider);
-	SpringArm->SetWorldLocation(SpringArmTransform.GetLocation());
-	SpringArm->SetWorldRotation(SpringArmTransform.GetRotation().Rotator());
-
-	FRotator InitControllerRotator = IViewDataInterface::Execute_GetControllerRotation(Rider);
-
-	UGameplayStatics::GetPlayerController(GetWorld(), 0)->Possess(this);
-	UGameplayStatics::GetPlayerController(GetWorld(), 0)->SetControlRotation(InitControllerRotator);
-
-	GetCharacterMovement()->Velocity = InitVelocity;
-
-	CanDismount = false;
-
-	GetWorldTimerManager().SetTimer(CameraSettingTimerHandle, this, &ARide::CameraSettingTimer, 0.01f, true);
 }
 
 void ARide::DisMount()
@@ -365,14 +412,25 @@ bool ARide::TryDisMount()
 	if (Rider->GetClass()->ImplementsInterface(UPlayerInterface::StaticClass()))
 	{
 		LastSpeed = GetVelocity();
+		bMovingDismount = LastSpeed.SizeSquared2D() > FMath::Square(MovingDismountSpeedThreshold);
 
 		IPlayerInterface::Execute_DespawnRide(Rider, GetVelocity());
 
-		bDismount = true;
+		bDismount = bMovingDismount;
 		Rider = nullptr;
 	}
 
 	return true;
+}
+
+void ARide::FinishDismount()
+{
+	Destroy();
+}
+
+bool ARide::IsMovingDismount() const
+{
+	return bMovingDismount;
 }
 
 bool ARide::FindMountPos()
@@ -381,22 +439,6 @@ bool ARide::FindMountPos()
 	FVector DistLeftLoc = Rider->GetActorLocation() - RiderMountLocLeft->GetComponentLocation();
 
 	return DistRightLoc.Length() < DistLeftLoc.Length();
-}
-
-void ARide::CameraSettingTimer()
-{
-	float CurrentLength = SpringArm->TargetArmLength;
-	float NewLength = FMath::FInterpTo(CurrentLength, 300.0f, GetWorld()->GetDeltaSeconds(), 1.0f);
-
-	SpringArm->TargetArmLength = NewLength;
-
-	if (FMath::IsNearlyEqual(NewLength, 300.0f, 1.0f))
-	{
-		SpringArm->TargetArmLength = 300.0f;
-		GetWorld()->GetTimerManager().ClearTimer(CameraSettingTimerHandle);
-		SpringArm->bEnableCameraLag = true;
-		SpringArm->bEnableCameraRotationLag = true;
-	}
 }
 
 FTransform ARide::GetCameraTransform_Implementation()
@@ -451,4 +493,9 @@ bool ARide::GetMountDir() const
 FTransform ARide::GetMountTransform() const
 {
 	return RiderLocation->GetComponentTransform();
+}
+
+FTransform ARide::GetDismountTransform() const
+{
+	return RiderGetDownLoc ? RiderGetDownLoc->GetComponentTransform() : GetActorTransform();
 }

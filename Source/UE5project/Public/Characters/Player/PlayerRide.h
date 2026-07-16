@@ -43,12 +43,15 @@ private:
 
 	void DespawnFin();
 	void SpawnFin();
+	void StartDespawn();
 
 #pragma endregion
 	
 
+public:
 #pragma region Mount And DisMount
 	virtual void Mount(ACharacter* RiderCharacter, FVector InitVelocity) override;
 	virtual bool TryDisMount() override;
+	virtual void FinishDismount() override;
 #pragma endregion
 };

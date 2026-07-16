@@ -94,7 +94,7 @@ private:
 		EClimbPhase CurLadderStance;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
-		ERideStance CurRideStance;
+		ERideAnimPhase CurRideAnimPhase;
 
 public:
 	FOnAnimInstanceMulDel OnEnterWalkState;
@@ -146,6 +146,9 @@ protected:
 
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Ground|Jump", meta = (AllowPrivateAccess = "true"))
 		bool IsLanding;
+
+	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Ground|Jump", meta = (AllowPrivateAccess = "true"))
+		bool bSkipJumpStart;
 
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Ground|Combat", meta = (AllowPrivateAccess = "true"))
 		bool bIsLockOn;

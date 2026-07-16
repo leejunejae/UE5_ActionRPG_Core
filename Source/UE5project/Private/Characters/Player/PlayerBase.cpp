@@ -11,6 +11,9 @@
 // 카메라
 #include "GameFramework/SpringArmComponent.h"
 #include "Camera/CameraComponent.h"
+#include "Camera/CameraActor.h"
+#include "Camera/PlayerCameraManager.h"
+#include "GameFramework/PlayerController.h"
 
 // 입력
 #include "EnhancedInputComponent.h"
@@ -37,6 +40,7 @@
 #include "Characters/Player/Components/PlayerStatusComponent.h"
 #include "Characters/Player/Components/PlayerStatComponent.h"
 #include "Characters/Components/EquipmentComponent.h"
+#include "Characters/Components/RideComponent.h"
 #include "Characters/Player/Components/InventoryComponent.h" 
 #include "Combat/Components/CombatComponent.h"
 #include "Combat/Components/PlayerAttackComponent.h"
@@ -77,6 +81,9 @@ APlayerBase::APlayerBase(const FObjectInitializer& ObjectInitializer)
 
 	LockOnComponent = CreateDefaultSubobject<ULockOnComponent>(TEXT("LockOnComponent"));
 	LockOnComponent->bAutoActivate = true;
+
+	RideComponent = CreateDefaultSubobject<URideComponent>(TEXT("RideComponent"));
+	RideComponent->bAutoActivate = true;
 
 	GetCapsuleComponent()->SetCollisionProfileName(TEXT("Character_Player"));
 	GetMesh()->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
@@ -246,6 +253,7 @@ void APlayerBase::CameraSetting()
 
 	SpringArm->SetupAttachment(GetCapsuleComponent());
 	Camera->SetupAttachment(SpringArm);
+	Camera->SetConstraintAspectRatio(false);
 
 	SpringArm->TargetArmLength = 200.0f;
 	SpringArm->SocketOffset = FVector(0.0f, 60.0f, 0.0f);
@@ -607,19 +615,24 @@ void APlayerBase::ExecuteInteract()
 
 void APlayerBase::ExecuteSpawnRide()
 {
-	Ride = GetWorld()->SpawnActor<APlayerRide>(RideClass, GetActorTransform());
-	if (!Ride)
+	APlayerRide* SpawnedRide = GetWorld()->SpawnActor<APlayerRide>(RideClass, GetActorTransform());
+	if (!SpawnedRide)
 	{
 		UE_LOG(Log_RideSpawn, Warning, TEXT("[APlayerBase] %s : Horse was Not Spawned"), *GetName());
 		return;
 	}
 
-	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	if (RideComponent)
+	{
+		RideComponent->SetCurrentRide(SpawnedRide);
+	}
 
-	Ride->Mount(this, GetVelocity());
+	BeginRideCollision(SpawnedRide);
+
+	SpawnedRide->Mount(this, GetVelocity());
 	GetCharacterMovement()->DisableMovement();
 
-	CurRideStance = ERideStance::Mount;
+	CurRideAnimPhase = ERideAnimPhase::Mount;
 	GetCharacterStatusComponent()->SetState(TAG_State_Ride);
 
 	GetWorldTimerManager().SetTimer(MountTimerHandle, this, &APlayerBase::MountTimer, 0.01f, true);
@@ -646,6 +659,7 @@ void APlayerBase::OnStateChanged(const FGameplayTag NewState)
 void APlayerBase::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
+	SetSkipJumpStart(false);
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	OnActionFinished(false);
 }
@@ -698,18 +712,6 @@ bool APlayerBase::GetIsMovementInput()
 	return IsMovementInput;
 }
 
-float APlayerBase::GetRideSpeed()
-{
-	if (Ride == nullptr) return 0.0f;
-	return Ride->GetRideSpeed();
-}
-
-float APlayerBase::GetRideDirection()
-{
-	if (Ride == nullptr) return 0.0f;
-	return Ride->GetRideDirection();
-}
-
 FVector APlayerBase::GetInputDirection()
 {
 	return DodgeVector;
@@ -720,37 +722,14 @@ UStaticMeshComponent* APlayerBase::GetMainWeaponMesh() const
 	return EquipmentComponent ? EquipmentComponent->GetMainWeaponComponent() : nullptr;
 }
 
-ERideStance APlayerBase::GetCurRideStance()
+ERideAnimPhase APlayerBase::GetCurRideAnimPhase()
 {
-	return CurRideStance;
+	return CurRideAnimPhase;
 }
 
 TOptional<FVector> APlayerBase::GetRideIKTargetLoc(EBodyType BoneType)
 {
-	if (Ride == nullptr)
-		return TOptional<FVector>();
-
-	switch (BoneType)
-	{
-	case EBodyType::Hand_L:
-		return Ride->GetMesh()->DoesSocketExist(FName("Reins_Bn_Hand_L"))
-			? Ride->GetMesh()->GetSocketLocation(FName("Reins_Bn_Hand_L"))
-			: TOptional<FVector>();
-	case EBodyType::Hand_R:
-		return Ride->GetMesh()->DoesSocketExist(FName("Reins_Bn_Hand_R"))
-			? Ride->GetMesh()->GetSocketLocation(FName("Reins_Bn_Hand_R"))
-			: TOptional<FVector>();
-	case EBodyType::Foot_L:
-		return Ride->GetMesh()->DoesSocketExist(FName("SaddleLeftFootPlace"))
-			? Ride->GetMesh()->GetSocketLocation(FName("SaddleLeftFootPlace"))
-			: TOptional<FVector>();
-	case EBodyType::Foot_R:
-		return Ride->GetMesh()->DoesSocketExist(FName("SaddleRightFootPlace"))
-			? Ride->GetMesh()->GetSocketLocation(FName("SaddleRightFootPlace"))
-			: TOptional<FVector>();
-	default:
-		return TOptional<FVector>();
-	}
+	return RideComponent ? RideComponent->GetRideIKTargetLoc(BoneType) : TOptional<FVector>();
 }
 
 /* ============================================================
@@ -944,100 +923,123 @@ void APlayerBase::HandleRespawnFinalized()
  * ============================================================ */
 void APlayerBase::MountEnd()
 {
-	FTransform MountTransform = Ride->GetMountTransform();
+	ARide* CurrentRide = RideComponent ? RideComponent->GetCurrentRide() : nullptr;
+	if (!CurrentRide)
+		return;
+
+	FTransform MountTransform = RideComponent->GetMountTransform();
 	SetActorLocation(MountTransform.GetLocation());
 	SetActorRotation(MountTransform.GetRotation().Rotator());
+	CurrentRide->AttachRider();
 
 	if (GetWorldTimerManager().IsTimerActive(MountTimerHandle))
 	{
-		GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 		GetMesh()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
 		GetWorldTimerManager().ClearTimer(MountTimerHandle);
 	}
-	CurRideStance = ERideStance::Riding;
+	CurRideAnimPhase = ERideAnimPhase::Riding;
 }
 
 void APlayerBase::DespawnRide_Implementation(FVector InitVelocity)
 {
+	ARide* Ride = RideComponent ? RideComponent->GetCurrentRide() : nullptr;
 	if (!Ride) return;
 
-	GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-
-	SpringArm->bEnableCameraLag = false;
-	SpringArm->bEnableCameraRotationLag = false;
+	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+	FRotator InitControllerRotator = FRotator::ZeroRotator;
+	if (PlayerController)
+	{
+		InitControllerRotator = PlayerController->GetControlRotation();
+	}
 
 	if (Ride->GetClass()->ImplementsInterface(UViewDataInterface::StaticClass()))
 	{
-		FDetachmentTransformRules DetachmentRules = FDetachmentTransformRules(
-			EDetachmentRule::KeepWorld, false);
+		InitControllerRotator = IViewDataInterface::Execute_GetControllerRotation(Ride);
+	}
 
+	ACameraActor* TransitionCamera = nullptr;
+	if (PlayerController)
+	{
+		PlayerController->bAutoManageActiveCameraTarget = false;
+
+		if (PlayerController->PlayerCameraManager)
+		{
+			const FVector CurrentCameraLocation = PlayerController->PlayerCameraManager->GetCameraLocation();
+			const FRotator CurrentCameraRotation = PlayerController->PlayerCameraManager->GetCameraRotation();
+			const float CurrentFOV = PlayerController->PlayerCameraManager->GetFOVAngle();
+
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			SpawnParams.ObjectFlags |= RF_Transient;
+
+			TransitionCamera = GetWorld()->SpawnActor<ACameraActor>(CurrentCameraLocation, CurrentCameraRotation, SpawnParams);
+			if (TransitionCamera)
+			{
+				TransitionCamera->GetCameraComponent()->SetFieldOfView(CurrentFOV);
+				TransitionCamera->GetCameraComponent()->SetConstraintAspectRatio(false);
+				TransitionCamera->SetLifeSpan(1.0f);
+				PlayerController->SetViewTarget(TransitionCamera);
+			}
+		}
+
+		if (!TransitionCamera)
+		{
+			PlayerController->SetViewTarget(Ride);
+		}
+	}
+
+	FDetachmentTransformRules DetachmentRules = FDetachmentTransformRules(
+		EDetachmentRule::KeepWorld, false);
+
+	if (PlayerController)
+	{
+		PlayerController->Possess(this);
+		PlayerController->SetControlRotation(InitControllerRotator);
+
+		SpringArm->UpdateComponentToWorld();
+		Camera->UpdateComponentToWorld();
+
+		PlayerController->SetViewTargetWithBlend(this, 0.25f, VTBlend_Cubic);
+	}
+
+	const bool bJumpDismount = InitVelocity.SizeSquared2D() > FMath::Square(MovingDismountSpeedThreshold);
+
+	if (bJumpDismount)
+	{
 		DetachFromActor(DetachmentRules);
+		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+		SetSkipJumpStart(true);
 
-		FTransform SpringArmTransform = IViewDataInterface::Execute_GetSpringArmTransform(Ride);
-		float InitTargetArmLength = IViewDataInterface::Execute_GetTargetArmLength(Ride);
+		FVector DisMountVelocity = InitVelocity * 0.4f;
+		DisMountVelocity.Z = 600.0f;
 
-		SpringArm->TargetArmLength = InitTargetArmLength;
-		SpringArm->SetWorldLocation(SpringArmTransform.GetLocation());
-		SpringArm->SetWorldRotation(SpringArmTransform.GetRotation().Rotator());
+		LaunchCharacter(DisMountVelocity, true, true);
+		GetCharacterStatusComponent()->SetState(TAG_State_Ground);
 
-		FRotator InitControllerRotator = IViewDataInterface::Execute_GetControllerRotation(Ride);
+		if (RideComponent)
+		{
+			RideComponent->ClearCurrentRide();
+		}
 
-		UGameplayStatics::GetPlayerController(GetWorld(), 0)->Possess(this);
-		UGameplayStatics::GetPlayerController(GetWorld(), 0)->SetControlRotation(InitControllerRotator);
+		EndRideCollision(Ride);
+
+		FTimerHandle TimerHandle;
+		GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
+		{
+			GetCapsuleComponent()->SetCollisionProfileName(TEXT("Character_Player"));
+		}, 0.01f, false);
 	}
 	else
 	{
-		UGameplayStatics::GetPlayerController(GetWorld(), 0)->Possess(this);
-	}
+		GetCharacterMovement()->StopMovementImmediately();
+		GetCharacterMovement()->DisableMovement();
 
-	CurRideStance = ERideStance::DisMount;
-	FVector DisMountVelocity = InitVelocity * 0.4f;
-	DisMountVelocity.Z = 600.0f;
+		SetSkipJumpStart(false);
+		CurRideAnimPhase = ERideAnimPhase::DisMount_Normal;
+		NormalDismountStartTransform = GetActorTransform();
+		NormalDismountTargetTransform = Ride->GetDismountTransform();
 
-	LaunchCharacter(DisMountVelocity, true, true);
-
-	FTimerHandle TimerHandle;
-	GetWorld()->GetTimerManager().SetTimer(TimerHandle, [this]()
-		{
-			GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
-		}, 0.01f, false);
-
-	GetWorldTimerManager().SetTimer(CameraSettingTimerHandle, this, &APlayerBase::CameraSettingTimer, 0.01f, true);
-}
-
-void APlayerBase::CameraSettingTimer()
-{
-	bool CheckTargetArmLength = false;
-
-	float CurrentLength = SpringArm->TargetArmLength;
-	float NewLength = FMath::FInterpTo(CurrentLength, 200.0f, GetWorld()->GetDeltaSeconds(), 1.0f);
-
-	SpringArm->TargetArmLength = NewLength;
-
-	if (FMath::IsNearlyEqual(NewLength, 200.0f, 1.0f))
-	{
-		SpringArm->TargetArmLength = 200.0f;
-		CheckTargetArmLength = true;
-	}
-
-	bool CheckSpringArmLocation = false;
-
-	FVector CurrentLocation = SpringArm->GetRelativeLocation();
-	FVector NewLocation = FMath::VInterpTo(CurrentLocation, InitSpringArmLocation, GetWorld()->GetDeltaSeconds(), 1.0f);
-
-	SpringArm->SetRelativeLocation(NewLocation);
-
-	if (SpringArm->GetRelativeLocation().Equals(InitSpringArmLocation))
-	{
-		SpringArm->SetRelativeLocation(InitSpringArmLocation);
-		CheckSpringArmLocation = true;
-	}
-
-	if (CheckTargetArmLength && CheckSpringArmLocation)
-	{
-		SpringArm->bEnableCameraLag = true;
-		SpringArm->bEnableCameraRotationLag = true;
-		GetWorld()->GetTimerManager().ClearTimer(CameraSettingTimerHandle);
+		GetWorldTimerManager().SetTimer(NormalDismountTimerHandle, this, &APlayerBase::NormalDismountTimer, 0.01f, true);
 	}
 }
 
@@ -1045,15 +1047,68 @@ void APlayerBase::JumpDismountTimer()
 {
 }
 
+void APlayerBase::BeginRideCollision(ARide* Ride)
+{
+	GetCapsuleComponent()->SetCollisionProfileName(TEXT("Character_Riding"));
+
+	if (Ride)
+	{
+		GetCapsuleComponent()->IgnoreActorWhenMoving(Ride, true);
+		Ride->GetCapsuleComponent()->IgnoreActorWhenMoving(this, true);
+	}
+}
+
+void APlayerBase::EndRideCollision(ARide* Ride)
+{
+	GetCapsuleComponent()->SetCollisionProfileName(TEXT("Character_Player"));
+
+	if (Ride)
+	{
+		GetCapsuleComponent()->IgnoreActorWhenMoving(Ride, false);
+		Ride->GetCapsuleComponent()->IgnoreActorWhenMoving(this, false);
+	}
+}
+
 void APlayerBase::MountTimer()
 {
+	ARide* Ride = RideComponent ? RideComponent->GetCurrentRide() : nullptr;
+	if (!Ride || !RideComponent)
+		return;
+
 	FVector StartLocation = Ride->GetActorLocation();
-	FVector TargetLocation = Ride->GetMountTransform().GetLocation();
+	FVector TargetLocation = RideComponent->GetMountTransform().GetLocation();
 
 	FVector CurLocation = FMath::Lerp(StartLocation, TargetLocation, CharacterBaseAnim->GetCurveValue(FName("Char_Translation_Y")));
 	CurLocation.Z = FMath::Lerp(StartLocation.Z, TargetLocation.Z, CharacterBaseAnim->GetCurveValue(FName("Char_Translation_Z")));
 
 	SetActorLocation(CurLocation);
+}
+
+void APlayerBase::NormalDismountTimer()
+{
+	if (!CharacterBaseAnim)
+		return;
+
+	const float HorizontalAlpha = CharacterBaseAnim->GetCurveValue(FName("Char_Translation_Y"));
+	const float VerticalAlpha = CharacterBaseAnim->GetCurveValue(FName("Char_Translation_Z"));
+	const float RotationAlpha = FMath::Clamp(HorizontalAlpha, 0.0f, 1.0f);
+
+	FVector CurLocation = FMath::Lerp(
+		NormalDismountStartTransform.GetLocation(),
+		NormalDismountTargetTransform.GetLocation(),
+		HorizontalAlpha);
+
+	CurLocation.Z = FMath::Lerp(
+		NormalDismountStartTransform.GetLocation().Z,
+		NormalDismountTargetTransform.GetLocation().Z,
+		VerticalAlpha);
+
+	const FQuat CurRotation = FQuat::Slerp(
+		NormalDismountStartTransform.GetRotation(),
+		NormalDismountTargetTransform.GetRotation(),
+		RotationAlpha);
+
+	SetActorLocationAndRotation(CurLocation, CurRotation.Rotator());
 }
 
 /* ============================================================
@@ -1086,7 +1141,44 @@ TOptional<FVector> APlayerBase::GetCharBoneLocation(FName BoneName)
 
 void APlayerBase::DisMountEnd()
 {
+	ARide* CurrentRide = RideComponent ? RideComponent->GetCurrentRide() : nullptr;
+
+	if (RideComponent)
+	{
+		if (CurRideAnimPhase == ERideAnimPhase::DisMount_Normal)
+		{
+			if (GetWorldTimerManager().IsTimerActive(NormalDismountTimerHandle))
+			{
+				GetWorldTimerManager().ClearTimer(NormalDismountTimerHandle);
+			}
+
+			SetActorLocationAndRotation(
+				NormalDismountTargetTransform.GetLocation(),
+				NormalDismountTargetTransform.GetRotation().Rotator());
+
+			EndRideCollision(CurrentRide);
+
+			if (CurrentRide)
+			{
+				CurrentRide->FinishDismount();
+			}
+		}
+
+		RideComponent->ClearCurrentRide();
+	}
+
+	if (CurRideAnimPhase != ERideAnimPhase::DisMount_Normal)
+	{
+		EndRideCollision(CurrentRide);
+	}
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	SetSkipJumpStart(false);
 	GetCharacterStatusComponent()->SetState(TAG_State_Ground);
+
+	FDetachmentTransformRules DetachmentRules = FDetachmentTransformRules(
+		EDetachmentRule::KeepWorld, false);
+
+	DetachFromActor(DetachmentRules);
 }
 
 /* ============================================================

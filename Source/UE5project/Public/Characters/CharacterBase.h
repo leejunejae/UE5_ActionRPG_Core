@@ -22,8 +22,6 @@ class UCharacterStatusComponent;
 class UStatComponent;
 class UClimbComponent;
 
-class ARide;
-
 UCLASS()
 class UE5PROJECT_API ACharacterBase : public ACharacter,
 	public IHitReactionInterface,
@@ -138,14 +136,6 @@ public:
 	virtual UStaticMeshComponent* GetMainWeaponMesh() const { return nullptr; }
 
 #pragma endregion Equip
-
-#pragma region Ride
-protected:
-	ARide* Ride;
-
-public:
-	ARide* GetCurrentRide();
-#pragma endregion Ride
 
 #pragma region Death
 protected:
