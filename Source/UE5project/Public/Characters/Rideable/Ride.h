@@ -64,7 +64,9 @@ protected:
 	virtual void BeginPlay() override;
 
 	void Move(const FInputActionValue& value);
+	void StopMove(const FInputActionValue& value);
 	void Look(const FInputActionValue& value);
+	void UpdateRideMovement(float DeltaTime);
 
 	bool FindMountPos();
 
@@ -96,6 +98,8 @@ protected:
 
 	bool IsMovementInput;
 	FInputActionValue MovementInputValue;
+	FVector2D RideMoveInput = FVector2D::ZeroVector;
+	float CurrentThrottle = 0.0f;
 
 	/* �� �Է� */
 
@@ -146,6 +150,36 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Ride|Dismount")
 	float MovingDismountSpeedThreshold = 150.0f;
 
+#pragma endregion
+
+#pragma region Ride Movement
+protected:
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float MaxRideSpeed = 800.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float AccelerationInterpSpeed = 2.5f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float DecelerationInterpSpeed = 3.5f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float MaxTurnRate = 180.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float MinTurnRateAtMaxSpeed = 110.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float QuickTurnAngle = 160.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float InputDeadZone = 0.05f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float DirectionInterpRate = 240.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float MaxAnimDirection = 90.0f;
 #pragma endregion
 
 #pragma region Need for Conversion Possess

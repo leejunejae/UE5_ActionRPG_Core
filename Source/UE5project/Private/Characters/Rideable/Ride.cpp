@@ -117,9 +117,9 @@ ARide::ARide()
 
 	bUseControllerRotationYaw = false;
 
-	GetCharacterMovement()->MaxWalkSpeed = 800.0f;
+	GetCharacterMovement()->MaxWalkSpeed = MaxRideSpeed;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 120.0f, 0.0f);
-	GetCharacterMovement()->bOrientRotationToMovement = true;
+	GetCharacterMovement()->bOrientRotationToMovement = false;
 	GetCharacterMovement()->BrakingDecelerationWalking = 300.0f;
 	GetCharacterMovement()->BrakingFrictionFactor = 2.0f;
 
@@ -190,6 +190,10 @@ void ARide::Tick(float DeltaTime)
 		AddMovementInput(GetActorForwardVector(), 1.0f, true);
 		Direction = FMath::FInterpTo(Direction, 0.0f, DeltaTime, 5.0f);
 	}
+	else
+	{
+		UpdateRideMovement(DeltaTime);
+	}
 
 
 	FRotator SocketRot = GetMesh()->GetSocketRotation(FName("MountPoint"));
@@ -211,6 +215,8 @@ void ARide::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 	if (UEnhancedInputComponent* EnhancedInputComponent = CastChecked<UEnhancedInputComponent>(PlayerInputComponent))
 	{
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ARide::Move);
+		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Completed, this, &ARide::StopMove);
+		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Canceled, this, &ARide::StopMove);
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ARide::Look);
 		EnhancedInputComponent->BindAction(DisMountAction, ETriggerEvent::Triggered, this, &ARide::DisMount);
 	}
@@ -228,94 +234,77 @@ float ARide::GetDirection() const
 
 void ARide::Move(const FInputActionValue& value)
 {
-	FVector2D DirectionValue = value.Get<FVector2D>();
-	//MovementInputValue = value;
-	const FRotator Rotation = GetControlRotation();
-	const FRotator YawRotation(0, Rotation.Yaw, 0);
+	RideMoveInput = value.Get<FVector2D>();
+}
 
-	FVector2D MovementScale = DirectionValue;
-	MovementScale.Normalize();
+void ARide::StopMove(const FInputActionValue& value)
+{
+	RideMoveInput = FVector2D::ZeroVector;
+}
 
-	//GetCharacterMovement()->GetLastInputVector();
-
-	FVector MovementDirection = GetActorForwardVector();
-	FVector LastInputDirection = (UKismetMathLibrary::GetForwardVector(YawRotation) * MovementScale.Y) + (UKismetMathLibrary::GetRightVector(YawRotation) * MovementScale.X);
-
-	float DotProductDirection = FVector::DotProduct(MovementDirection, LastInputDirection);
-	float DotProductRadian = FMath::Acos(DotProductDirection);
-	float DotProductDegree = FMath::RadiansToDegrees(DotProductRadian);
-
-	FVector RotationAxis = FVector::CrossProduct(MovementDirection, LastInputDirection);
-	RotationAxis.Normalize();
-
-	Direction = RotationAxis.Z > 0.0f ? DotProductDegree : -1.0f * DotProductDegree;
-
-	if (DotProductDegree > 160.0f)
+void ARide::UpdateRideMovement(float DeltaTime)
+{
+	FVector2D RawInput = RideMoveInput;
+	if (RawInput.SizeSquared() > 1.0f)
 	{
-		QuickTurn(RotationAxis.Z);
-		return;
+		RawInput.Normalize();
 	}
 
-	float AngleRadians = DotProductDegree > 5.0f ? FMath::DegreesToRadians(5.0f) : FMath::DegreesToRadians(DotProductDegree);
+	const bool bHasMoveInput = RawInput.SizeSquared() > FMath::Square(InputDeadZone);
 
-	FQuat RotationQuat = FQuat(RotationAxis, AngleRadians);
-	FVector RotatedVector = RotationQuat.RotateVector(MovementDirection);
-	
-	AddMovementInput(RotatedVector);
+	float TargetThrottle = 0.0f;
+	float TargetDirection = 0.0f;
 
-	if (!LastInputDirection.IsNearlyZero())
+	if (bHasMoveInput)
 	{
-		FVector DebugStartLocation = GetActorLocation() - FVector(0.0f, 0.0f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
-		// 디버깅 시작위치
-		float DotProduct = FVector::DotProduct(MovementDirection, LastInputDirection);
-		// 아크코사인(Arccos)을 이용해 각도 구하기 (라디안)
-		float RadianAngle = FMath::Acos(DotProduct);
-		// 라디안을 각도로 변환
-		float DegreeAngle = FMath::RadiansToDegrees(RadianAngle);
+		TargetThrottle = RawInput.Size();
 
-		FNumberFormattingOptions FormatOptions;
-		FormatOptions.SetMaximumFractionalDigits(1); // 보기 좋게 1자리
+		const FRotator Rotation = GetControlRotation();
+		const FRotator YawRotation(0, Rotation.Yaw, 0);
 
-		FText DebugAxisText = FText::AsNumber(DegreeAngle, &FormatOptions);
-		FString DebugAxisString = DebugAxisText.ToString();
+		FVector2D MovementScale = RawInput;
+		MovementScale.Normalize();
 
-	// 디버깅용 길이
-		float DebugLineLength = 100.0f;
+		FVector MovementDirection = GetActorForwardVector();
+		MovementDirection.Z = 0.0f;
+		MovementDirection.Normalize();
 
-		// 이동 방향 표시
-		DrawDebugDirectionalArrow(
-			GetWorld(),
-			DebugStartLocation,
-			DebugStartLocation + MovementDirection * DebugLineLength,
-			50.0f,          // 화살표 크기
-			FColor::Green,   // 이동 방향은 녹색
-			false,           // 영구 표시 여부 (false: 짧은 시간만 표시)
-			0.0f,            // 표시 시간
-			0,               // 두께
-			2.0f             // 선 두께
-		);
+		FVector LastInputDirection = (UKismetMathLibrary::GetForwardVector(YawRotation) * MovementScale.Y) + (UKismetMathLibrary::GetRightVector(YawRotation) * MovementScale.X);
+		LastInputDirection.Z = 0.0f;
+		LastInputDirection.Normalize();
 
-		// 입력 방향 표시
-		DrawDebugDirectionalArrow(
-			GetWorld(),
-			DebugStartLocation,
-			DebugStartLocation + LastInputDirection * DebugLineLength,
-			50.0f,
-			FColor::Blue,    // 입력 방향은 파란색
-			false,
-			0.0f,
-			0,
-			2.0f
-		);
+		float DotProductDirection = FMath::Clamp(FVector::DotProduct(MovementDirection, LastInputDirection), -1.0f, 1.0f);
+		float DotProductRadian = FMath::Acos(DotProductDirection);
+		float DotProductDegree = FMath::RadiansToDegrees(DotProductRadian);
 
-		DrawDebugString(
-			GetWorld(),
-			DebugStartLocation,
-			DebugAxisString,
-			0,
-			FColor::White,
-			0.0f
-		);
+		FVector RotationAxis = FVector::CrossProduct(MovementDirection, LastInputDirection);
+		if (!RotationAxis.Normalize())
+		{
+			RotationAxis = RawInput.X >= 0.0f ? FVector::UpVector : -FVector::UpVector;
+		}
+
+		TargetDirection = RotationAxis.Z > 0.0f ? DotProductDegree : -1.0f * DotProductDegree;
+		TargetDirection = FMath::Clamp(TargetDirection, -MaxAnimDirection, MaxAnimDirection);
+
+		if (DotProductDegree > QuickTurnAngle)
+		{
+			QuickTurn(RotationAxis.Z);
+			TargetThrottle = 0.0f;
+		}
+
+		const float SpeedAlpha = FMath::Clamp(GetVelocity().Size2D() / FMath::Max(MaxRideSpeed, 1.0f), 0.0f, 1.0f);
+		const float TurnRateBySpeed = FMath::Lerp(MaxTurnRate, MinTurnRateAtMaxSpeed, SpeedAlpha);
+		const float Steering = FMath::Clamp(TargetDirection / 90.0f, -1.0f, 1.0f);
+		AddActorWorldRotation(FRotator(0.0f, Steering * TurnRateBySpeed * DeltaTime, 0.0f));
+	}
+
+	const float InterpSpeed = TargetThrottle > CurrentThrottle ? AccelerationInterpSpeed : DecelerationInterpSpeed;
+	CurrentThrottle = FMath::FInterpTo(CurrentThrottle, TargetThrottle, DeltaTime, InterpSpeed);
+	Direction = FMath::FInterpConstantTo(Direction, TargetDirection, DeltaTime, DirectionInterpRate);
+
+	if (CurrentThrottle > KINDA_SMALL_NUMBER)
+	{
+		AddMovementInput(GetActorForwardVector(), CurrentThrottle);
 	}
 }
 
