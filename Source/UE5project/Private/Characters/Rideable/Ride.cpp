@@ -26,9 +26,6 @@
 #include "Kismet/KismetMathLibrary.h"
 #include "Kismet/KismetTextLibrary.h"
 
-// 인터페이스
-#include "Characters/Player/Interfaces/PlayerInterface.h"
-
 // 애니메이션
 #include "Characters/Rideable/RideAnimInstance.h"
 
@@ -254,6 +251,7 @@ void ARide::UpdateRideMovement(float DeltaTime)
 
 	float TargetThrottle = 0.0f;
 	float TargetDirection = 0.0f;
+	const float PreviousYaw = GetActorRotation().Yaw;
 
 	if (bHasMoveInput)
 	{
@@ -305,6 +303,31 @@ void ARide::UpdateRideMovement(float DeltaTime)
 	if (CurrentThrottle > KINDA_SMALL_NUMBER)
 	{
 		AddMovementInput(GetActorForwardVector(), CurrentThrottle);
+	}
+
+	const float CurrentYaw = GetActorRotation().Yaw;
+	TurnRate = DeltaTime > KINDA_SMALL_NUMBER
+		? FMath::FindDeltaAngleDegrees(PreviousYaw, CurrentYaw) / DeltaTime
+		: 0.0f;
+
+	const float Speed2D = GetVelocity().Size2D();
+	bBraking = !bHasMoveInput && Speed2D > WalkSpeedThreshold;
+
+	if (Speed2D < KINDA_SMALL_NUMBER)
+	{
+		CurrentGait = ERideGait::Idle;
+	}
+	else if (Speed2D < WalkSpeedThreshold)
+	{
+		CurrentGait = ERideGait::Walk;
+	}
+	else if (Speed2D < RunSpeedThreshold)
+	{
+		CurrentGait = ERideGait::Run;
+	}
+	else
+	{
+		CurrentGait = ERideGait::Gallop;
 	}
 }
 
@@ -388,22 +411,28 @@ bool ARide::FindMountPos()
 	return DistRightLoc.Length() < DistLeftLoc.Length();
 }
 
-FTransform ARide::GetCameraTransform_Implementation()
+FTransform ARide::GetCameraTransform() const
 {
 	return Camera->GetComponentTransform();
 }
 
-FTransform ARide::GetSpringArmTransform_Implementation()
+void ARide::RefreshRideCameraComponents()
+{
+	SpringArm->UpdateComponentToWorld();
+	Camera->UpdateComponentToWorld();
+}
+
+FTransform ARide::GetSpringArmTransform() const
 {
 	return SpringArm->GetComponentTransform();;
 }
 
-float ARide::GetTargetArmLength_Implementation()
+float ARide::GetTargetArmLength() const
 {
 	return SpringArm->TargetArmLength;
 }
 
-FRotator ARide::GetControllerRotation_Implementation()
+FRotator ARide::GetControllerRotation() const
 {
 	return GetController()->GetControlRotation();
 }

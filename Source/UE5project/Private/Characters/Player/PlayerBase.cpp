@@ -863,7 +863,10 @@ void APlayerBase::HandleDeathStarted()
 	if (PrevState.MatchesTagExact(TAG_State_Ride))
 	{
 		// 탈것 위에서 사망 → 낙마(탈것 디스폰 + 컨트롤/콜리전 복구)
-		IPlayerInterface::Execute_DespawnRide(this, GetVelocity());
+		if (RideComponent)
+		{
+			RideComponent->RequestDismount(GetVelocity());
+		}
 	}
 	else if (PrevState.MatchesTagExact(TAG_State_Ladder))
 	{
@@ -915,14 +918,6 @@ void APlayerBase::MountEnd()
 	}
 }
 
-void APlayerBase::DespawnRide_Implementation(FVector InitVelocity)
-{
-	if (RideComponent)
-	{
-		RideComponent->RequestDismount(InitVelocity);
-	}
-}
-
 void APlayerBase::JumpDismountTimer()
 {
 }
@@ -930,22 +925,28 @@ void APlayerBase::JumpDismountTimer()
 /* ============================================================
  *  View Data Interface
  * ============================================================ */
-FTransform APlayerBase::GetCameraTransform_Implementation()
+FTransform APlayerBase::GetCameraTransform() const
 {
 	return Camera->GetComponentTransform();
 }
 
-FTransform APlayerBase::GetSpringArmTransform_Implementation()
+void APlayerBase::RefreshPlayerCameraComponents()
+{
+	SpringArm->UpdateComponentToWorld();
+	Camera->UpdateComponentToWorld();
+}
+
+FTransform APlayerBase::GetSpringArmTransform() const
 {
 	return SpringArm->GetComponentTransform();
 }
 
-float APlayerBase::GetTargetArmLength_Implementation()
+float APlayerBase::GetTargetArmLength() const
 {
 	return SpringArm->TargetArmLength;
 }
 
-FRotator APlayerBase::GetControllerRotation_Implementation()
+FRotator APlayerBase::GetControllerRotation() const
 {
 	return GetController()->GetControlRotation();
 }

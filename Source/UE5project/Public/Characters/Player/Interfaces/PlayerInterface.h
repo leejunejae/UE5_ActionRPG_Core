@@ -34,8 +34,5 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 		void EndInteraction(AActor* Interactable);
 
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
-		void DespawnRide(FVector InitVelocity);
-
 	TOptional<FVector> GetCharBoneLocation(FName BoneName);
 };

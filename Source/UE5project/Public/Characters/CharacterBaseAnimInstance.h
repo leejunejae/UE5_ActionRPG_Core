@@ -10,6 +10,7 @@
 #include "Characters/Data/BaseCharacterHeader.h"
 #include "Combat/Data/CombatData.h"
 #include "Characters/Data/StatusData.h"
+#include "Characters/Rideable/Ride.h"
 #include "Interaction/Climb/Data/ClimbHeader.h"
 #include "Characters/Data/IKData.h"
 #include "Animation/Data/AnimData.h"
@@ -149,6 +150,15 @@ protected:
 
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Ground|Jump", meta = (AllowPrivateAccess = "true"))
 		bool bSkipJumpStart;
+
+	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Ride|Locomotion", meta = (AllowPrivateAccess = "true"))
+		float RideTurnRate;
+
+	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Ride|Locomotion", meta = (AllowPrivateAccess = "true"))
+		bool bRideBraking;
+
+	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Ride|Locomotion", meta = (AllowPrivateAccess = "true"))
+		ERideGait RideGait = ERideGait::Idle;
 
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Ground|Combat", meta = (AllowPrivateAccess = "true"))
 		bool bIsLockOn;

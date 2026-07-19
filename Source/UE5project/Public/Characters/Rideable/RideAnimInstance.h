@@ -5,6 +5,7 @@
 // 기본 헤더
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
+#include "Characters/Rideable/Ride.h"
 
 // 구조체, 자료형
 #include "RideAnimInstance.generated.h"
@@ -33,6 +34,9 @@ private:
 		float Direction;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Character, Meta = (AllowPrivateAccess = true))
+		float TurnRate;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Character, Meta = (AllowPrivateAccess = true))
 		float Vertical;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Character, Meta = (AllowPrivateAccess = true))
@@ -42,5 +46,11 @@ private:
 		bool IsBreak;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Character, Meta = (AllowPrivateAccess = true))
+		bool bBraking;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Character, Meta = (AllowPrivateAccess = true))
 		bool bQuickTurn;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Character, Meta = (AllowPrivateAccess = true))
+		ERideGait CurrentGait = ERideGait::Idle;
 };

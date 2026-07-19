@@ -43,10 +43,10 @@ void URideComponent::ClearCurrentRide()
 
 void URideComponent::RequestSpawnRide()
 {
-	if (!Player || !Player->RideClass)
+	if (!Player || !Player->GetRideClass())
 		return;
 
-	APlayerRide* SpawnedRide = GetWorld()->SpawnActor<APlayerRide>(Player->RideClass, Player->GetActorTransform());
+	APlayerRide* SpawnedRide = GetWorld()->SpawnActor<APlayerRide>(Player->GetRideClass(), Player->GetActorTransform());
 	if (!SpawnedRide)
 	{
 		UE_LOG(Log_RideSpawn, Warning, TEXT("[APlayerBase] %s : Horse was Not Spawned"), *Player->GetName());
@@ -79,7 +79,7 @@ bool URideComponent::RequestDismount(FVector InitVelocity)
 	FDetachmentTransformRules DetachmentRules = FDetachmentTransformRules(
 		EDetachmentRule::KeepWorld, false);
 
-	const bool bJumpDismount = InitVelocity.SizeSquared2D() > FMath::Square(Player->MovingDismountSpeedThreshold);
+	const bool bJumpDismount = InitVelocity.SizeSquared2D() > FMath::Square(Player->GetMovingDismountSpeedThreshold());
 
 	if (bJumpDismount)
 	{
@@ -269,19 +269,24 @@ void URideComponent::MountTimer()
 	FVector StartLocation = CurrentRide->GetActorLocation();
 	FVector TargetLocation = GetMountTransform().GetLocation();
 
-	FVector CurLocation = FMath::Lerp(StartLocation, TargetLocation, Player->CharacterBaseAnim->GetCurveValue(FName("Char_Translation_Y")));
-	CurLocation.Z = FMath::Lerp(StartLocation.Z, TargetLocation.Z, Player->CharacterBaseAnim->GetCurveValue(FName("Char_Translation_Z")));
+	UPlayerBaseAnimInstance* AnimInstance = Player->GetPlayerAnimInstance();
+	if (!AnimInstance)
+		return;
+
+	FVector CurLocation = FMath::Lerp(StartLocation, TargetLocation, AnimInstance->GetCurveValue(FName("Char_Translation_Y")));
+	CurLocation.Z = FMath::Lerp(StartLocation.Z, TargetLocation.Z, AnimInstance->GetCurveValue(FName("Char_Translation_Z")));
 
 	Player->SetActorLocation(CurLocation);
 }
 
 void URideComponent::NormalDismountTimer()
 {
-	if (!Player || !Player->CharacterBaseAnim)
+	if (!Player || !Player->GetPlayerAnimInstance())
 		return;
 
-	const float HorizontalAlpha = Player->CharacterBaseAnim->GetCurveValue(FName("Char_Translation_Y"));
-	const float VerticalAlpha = Player->CharacterBaseAnim->GetCurveValue(FName("Char_Translation_Z"));
+	UPlayerBaseAnimInstance* AnimInstance = Player->GetPlayerAnimInstance();
+	const float HorizontalAlpha = AnimInstance->GetCurveValue(FName("Char_Translation_Y"));
+	const float VerticalAlpha = AnimInstance->GetCurveValue(FName("Char_Translation_Z"));
 	const float RotationAlpha = FMath::Clamp(HorizontalAlpha, 0.0f, 1.0f);
 
 	FVector CurLocation = FMath::Lerp(
@@ -307,7 +312,7 @@ void URideComponent::BlendPlayerCameraToRide(ARide* Ride, FVector InitVelocity)
 	if (!Player || !Ride)
 		return;
 
-	FRotator SourceControlRotation = Player->GetControllerRotation_Implementation();
+	FRotator SourceControlRotation = Player->GetControllerRotation();
 
 	APlayerController* PlayerController = UGameplayStatics::GetPlayerController(GetWorld(), 0);
 	if (PlayerController)
@@ -343,8 +348,7 @@ void URideComponent::BlendPlayerCameraToRide(ARide* Ride, FVector InitVelocity)
 		PlayerController->Possess(Ride);
 		PlayerController->SetControlRotation(SourceControlRotation);
 
-		Ride->SpringArm->UpdateComponentToWorld();
-		Ride->Camera->UpdateComponentToWorld();
+		Ride->RefreshRideCameraComponents();
 
 		PlayerController->SetViewTargetWithBlend(Ride, 0.25f, VTBlend_Cubic);
 	}
@@ -364,7 +368,7 @@ void URideComponent::BlendRideCameraToPlayer()
 		InitControllerRotator = PlayerController->GetControlRotation();
 	}
 
-	InitControllerRotator = CurrentRide->GetControllerRotation_Implementation();
+	InitControllerRotator = CurrentRide->GetControllerRotation();
 
 	ACameraActor* TransitionCamera = nullptr;
 	if (PlayerController)
@@ -399,8 +403,7 @@ void URideComponent::BlendRideCameraToPlayer()
 		PlayerController->Possess(Player);
 		PlayerController->SetControlRotation(InitControllerRotator);
 
-		Player->SpringArm->UpdateComponentToWorld();
-		Player->Camera->UpdateComponentToWorld();
+		Player->RefreshPlayerCameraComponents();
 
 		PlayerController->SetViewTargetWithBlend(Player, 0.25f, VTBlend_Cubic);
 	}

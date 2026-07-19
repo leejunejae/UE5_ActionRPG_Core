@@ -12,9 +12,6 @@
 // 구조체, 자료형
 
 
-// 인터페이스
-#include "Characters/Player/Interfaces/ViewDataInterface.h"
-
 // 태그
 #include "GameplayTagContainer.h"
 
@@ -36,11 +33,19 @@ enum class HorseDirection : uint8
 	Front UMETA(DisplayName = "Front"),
 };
 
+UENUM(BlueprintType)
+enum class ERideGait : uint8
+{
+	Idle UMETA(DisplayName = "Idle"),
+	Walk UMETA(DisplayName = "Walk"),
+	Run UMETA(DisplayName = "Run"),
+	Gallop UMETA(DisplayName = "Gallop"),
+};
+
 UCLASS()
-class UE5PROJECT_API ARide : public ACharacter, public IViewDataInterface
+class UE5PROJECT_API ARide : public ACharacter
 {
 	GENERATED_BODY()
-	friend class URideComponent;
 
 public:
 	// Sets default values for this character's properties
@@ -54,6 +59,9 @@ private:
 
 private:
 	float Direction;
+	float TurnRate = 0.0f;
+	bool bBraking = false;
+	ERideGait CurrentGait = ERideGait::Idle;
 	bool MountRight = false;
 
 	ACharacter* Rider;
@@ -125,6 +133,9 @@ public:
 	virtual void PostInitializeComponents() override;
 
 	float GetDirection() const;
+	float GetTurnRate() const { return TurnRate; }
+	bool IsBraking() const { return bBraking; }
+	ERideGait GetCurrentGait() const { return CurrentGait; }
 
 #pragma region Mount And DisMount
 public:
@@ -140,6 +151,7 @@ public:
 	FTransform GetMountTransform() const;
 	FTransform GetDismountTransform() const;
 	bool IsMovingDismount() const;
+	void RefreshRideCameraComponents();
 
 protected:
 	bool CanDismount;
@@ -180,14 +192,20 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float MaxAnimDirection = 90.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float WalkSpeedThreshold = 150.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float RunSpeedThreshold = 450.0f;
 #pragma endregion
 
 #pragma region Need for Conversion Possess
 public:
-	virtual FTransform GetCameraTransform_Implementation();
-	virtual FTransform GetSpringArmTransform_Implementation();
-	virtual float GetTargetArmLength_Implementation();
-	virtual FRotator GetControllerRotation_Implementation();
+	FTransform GetCameraTransform() const;
+	FTransform GetSpringArmTransform() const;
+	float GetTargetArmLength() const;
+	FRotator GetControllerRotation() const;
 
 #pragma endregion
 

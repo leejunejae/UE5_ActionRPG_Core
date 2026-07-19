@@ -23,6 +23,9 @@ void URideAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 		Speed = Character->GetVelocity().Length();//FMath::FInterpTo(Speed, VelocityLength, DeltaSeconds, 20.0f);
 		Direction = Character->GetDirection();
+		TurnRate = Character->GetTurnRate();
+		bBraking = Character->IsBraking();
+		CurrentGait = Character->GetCurrentGait();
 
 		/*
 		if (GetCurveValue(FName("TurnLock")) > 0.0f)

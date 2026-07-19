@@ -13,7 +13,6 @@
 #include "Characters/Player/Interfaces/PlayerInterface.h"
 #include "Combat/Interfaces/HitReactionInterface.h"
 #include "Combat/Interfaces/AttackSourceInterface.h"
-#include "Characters/Player/Interfaces/ViewDataInterface.h"
 #include "Characters/Interfaces/CharacterTransformInterface.h"
 #include "PlayerBase.generated.h"
 
@@ -50,12 +49,10 @@ DECLARE_DELEGATE(FOnSingleDelegate);
 UCLASS()
 class UE5PROJECT_API APlayerBase : public ACharacterBase,
 	public IPlayerInterface,
-	public IViewDataInterface,
 	public ICharacterTransformInterface,
 	public IAttackSourceInterface
 {
 	GENERATED_BODY()
-	friend class URideComponent;
 
 public:
 	APlayerBase(const FObjectInitializer& ObjectInitializer);
@@ -194,6 +191,9 @@ public:
 protected:
 	UPROPERTY(VisibleAnywhere, Category = Animation)
 	TObjectPtr<UPlayerBaseAnimInstance> CharacterBaseAnim;
+
+public:
+	FORCEINLINE UPlayerBaseAnimInstance* GetPlayerAnimInstance() const { return CharacterBaseAnim; }
 #pragma endregion Animation
 
 	/* ============================================================
@@ -271,11 +271,13 @@ protected:
 
 public:
 	FORCEINLINE URideComponent* GetRideComponent() const { return RideComponent; }
-	virtual FTransform GetCameraTransform_Implementation();
-	virtual FTransform GetSpringArmTransform_Implementation();
-	virtual float GetTargetArmLength_Implementation();
-	virtual FRotator GetControllerRotation_Implementation();
-	void DespawnRide_Implementation(FVector InitVelocity);
+	FORCEINLINE TSubclassOf<APlayerRide> GetRideClass() const { return RideClass; }
+	FORCEINLINE float GetMovingDismountSpeedThreshold() const { return MovingDismountSpeedThreshold; }
+	void RefreshPlayerCameraComponents();
+	FTransform GetCameraTransform() const;
+	FTransform GetSpringArmTransform() const;
+	float GetTargetArmLength() const;
+	FRotator GetControllerRotation() const;
 
 #pragma endregion Ride
 

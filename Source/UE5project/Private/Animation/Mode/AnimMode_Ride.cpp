@@ -34,6 +34,13 @@ void UAnimMode_Ride::Tick(float DeltaSeconds)
 		{
 			Anim->Speed = RideComponent->GetRideSpeed();
 			Anim->Direction = RideComponent->GetRideDirection();
+
+			if (ARide* Ride = RideComponent->GetCurrentRide())
+			{
+				Anim->RideTurnRate = Ride->GetTurnRate();
+				Anim->bRideBraking = Ride->IsBraking();
+				Anim->RideGait = Ride->GetCurrentGait();
+			}
 		}
 	}
 
