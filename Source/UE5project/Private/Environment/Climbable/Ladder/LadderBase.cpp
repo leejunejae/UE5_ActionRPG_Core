@@ -228,11 +228,20 @@ void ALadderBase::BeginPlay()
 		}
 	}
 
-	if(ClimbMeshes.Last()->DoesSocketExist(FName("EnterTopLeftSocket")))
-		TopEnterLeftHandTarget->SetWorldLocation(ClimbMeshes.Last()->GetSocketLocation(FName("EnterTopLeftSocket")));
+	if (ClimbMeshes.IsEmpty())
+	{
+		UE_LOG(LogTemp, Error,
+			TEXT("[Ladder] '%s' generated no mesh components. LadderLevel=%d, ClimbStaticMesh=%s"),
+			*GetName(), LadderLevel, *GetNameSafe(ClimbStaticMesh));
+		return;
+	}
 
-	if (ClimbMeshes.Last()->DoesSocketExist(FName("EnterTopLeftSocket")))
-		TopEnterRightHandTarget->SetWorldLocation(ClimbMeshes.Last()->GetSocketLocation(FName("EnterTopRightSocket")));
+	UStaticMeshComponent* TopClimbMesh = ClimbMeshes.Last();
+	if (TopClimbMesh->DoesSocketExist(FName("EnterTopLeftSocket")))
+		TopEnterLeftHandTarget->SetWorldLocation(TopClimbMesh->GetSocketLocation(FName("EnterTopLeftSocket")));
+
+	if (TopClimbMesh->DoesSocketExist(FName("EnterTopRightSocket")))
+		TopEnterRightHandTarget->SetWorldLocation(TopClimbMesh->GetSocketLocation(FName("EnterTopRightSocket")));
 
 	ClimbTopTrigger->SetRelativeLocation(FVector(-80.0f, 0.0f, AdditionalHeight + CumulativeHeight + ClimbTopTrigger->Bounds.BoxExtent.Z));
 	ClimbTopLocation->SetRelativeLocation(FVector(-80.0f, 0.0f, AdditionalHeight + CumulativeHeight + 92.0f));

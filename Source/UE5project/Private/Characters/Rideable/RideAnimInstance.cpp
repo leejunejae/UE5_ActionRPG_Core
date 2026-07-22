@@ -26,16 +26,5 @@ void URideAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		TurnRate = Character->GetTurnRate();
 		bBraking = Character->IsBraking();
 		CurrentGait = Character->GetCurrentGait();
-
-		/*
-		if (GetCurveValue(FName("TurnLock")) > 0.0f)
-		{
-			bQuickTurn = false;
-		}
-		else
-		{
-			bQuickTurn = Direction > 160.0f || Direction < -160.0f ? bQuickTurn = true : bQuickTurn = false;
-		}
-		*/
 	}
 }

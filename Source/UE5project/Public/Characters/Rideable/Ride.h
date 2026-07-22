@@ -24,6 +24,9 @@ class UInputAction;
 class USpringArmComponent;
 class UCameraComponent;
 class URideComponent;
+class UCurveFloat;
+class UAnimMontage;
+class UAnimInstance;
 
 UENUM(BlueprintType)
 enum class HorseDirection : uint8
@@ -39,7 +42,7 @@ enum class ERideGait : uint8
 	Idle UMETA(DisplayName = "Idle"),
 	Walk UMETA(DisplayName = "Walk"),
 	Run UMETA(DisplayName = "Run"),
-	Gallop UMETA(DisplayName = "Gallop"),
+	Sprint UMETA(DisplayName = "Sprint"),
 };
 
 UCLASS()
@@ -74,7 +77,17 @@ protected:
 	void Move(const FInputActionValue& value);
 	void StopMove(const FInputActionValue& value);
 	void Look(const FInputActionValue& value);
+	void StartWalk(const FInputActionValue& value);
+	void StopWalk(const FInputActionValue& value);
+	void StartSprint(const FInputActionValue& value);
+	void StopSprint(const FInputActionValue& value);
 	void UpdateRideMovement(float DeltaTime);
+	void UpdatePivotTurn(float DeltaTime);
+	bool CanStartPivotTurn(float DotProductDegree) const;
+	float GetPivotTurnCurveAlpha(UAnimInstance* AnimInstance) const;
+	void FinishPivotTurn();
+	float GetRideSpeedForGait(ERideGait Gait) const;
+	ERideGait GetDesiredRideGait(const FVector2D& MoveInput) const;
 
 	bool FindMountPos();
 
@@ -103,11 +116,19 @@ protected:
 	UPROPERTY(EditAnywhere, Category = Input)
 		UInputAction* DisMountAction;
 
+	UPROPERTY(EditAnywhere, Category = Input)
+		UInputAction* WalkAction;
+
+	UPROPERTY(EditAnywhere, Category = Input)
+		UInputAction* SprintAction;
+
 
 	bool IsMovementInput;
 	FInputActionValue MovementInputValue;
 	FVector2D RideMoveInput = FVector2D::ZeroVector;
 	float CurrentThrottle = 0.0f;
+	bool bWantsWalk = false;
+	bool bWantsSprint = false;
 
 	/* �� �Է� */
 
@@ -170,6 +191,18 @@ protected:
 	float MaxRideSpeed = 800.0f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float WalkRideSpeed = 250.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float RunRideSpeed = 550.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float SprintRideSpeed = 800.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
+	float WalkInputThreshold = 0.55f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float AccelerationInterpSpeed = 2.5f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
@@ -182,7 +215,7 @@ protected:
 	float MinTurnRateAtMaxSpeed = 110.0f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
-	float QuickTurnAngle = 160.0f;
+	float PivotTurnMinAngle = 160.0f;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float InputDeadZone = 0.05f;
@@ -193,11 +226,29 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float MaxAnimDirection = 90.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
-	float WalkSpeedThreshold = 150.0f;
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|PivotTurn")
+	float PivotTurnMaxStartSpeed = 180.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
-	float RunSpeedThreshold = 450.0f;
+	UPROPERTY(EditAnywhere, Category = "Ride|PivotTurn")
+	TObjectPtr<UAnimMontage> PivotTurnMontage;
+
+	UPROPERTY(EditAnywhere, Category = "Ride|PivotTurn")
+	TObjectPtr<UCurveFloat> PivotTurnAlphaCurve;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|PivotTurn")
+	bool bUseNormalizedPivotTurnCurveTime = true;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|PivotTurn")
+	FName PivotTurnLeftSection = TEXT("TurnLeft");
+
+	UPROPERTY(EditDefaultsOnly, Category = "Ride|PivotTurn")
+	FName PivotTurnRightSection = TEXT("TurnRight");
+
+	bool bPivotTurning = false;
+	float PivotTurnDirection = 0.0f;
+	float PivotTurnStartYaw = 0.0f;
+	float PivotTurnTargetDeltaYaw = 0.0f;
+	float PivotTurnPreviousYaw = 0.0f;
 #pragma endregion
 
 #pragma region Need for Conversion Possess
@@ -209,12 +260,6 @@ public:
 
 #pragma endregion
 
-#pragma region Turn
-protected:
-	UPROPERTY(EditAnywhere, Category = Turn)
-		TObjectPtr<UAnimMontage> TurnMontage;
-
 public:
-	void QuickTurn(float TurnDirection);
-#pragma endregion Turn
+	void PivotTurn(float TargetDeltaYaw);
 };

@@ -28,12 +28,11 @@
 
 // 애니메이션
 #include "Characters/Rideable/RideAnimInstance.h"
+#include "Animation/AnimMontage.h"
+#include "Curves/CurveFloat.h"
 
 // 컴포넌트
 #include "Characters/Components/RideComponent.h"
-
-
-
 
 // Sets default values
 ARide::ARide()
@@ -160,12 +159,27 @@ void ARide::InputSetting()
 	{
 		DisMountAction = IP_DisMount.Object;
 	}
+
+	static ConstructorHelpers::FObjectFinder<UInputAction>IP_Walk(TEXT("/Game/00_Character/C_Input/C_Walk.C_Walk"));
+	if (IP_Walk.Succeeded())
+	{
+		WalkAction = IP_Walk.Object;
+	}
+
+	static ConstructorHelpers::FObjectFinder<UInputAction>IP_Sprint(TEXT("/Game/00_Character/C_Input/C_Sprint.C_Sprint"));
+	if (IP_Sprint.Succeeded())
+	{
+		SprintAction = IP_Sprint.Object;
+	}
 }
 
 // Called when the game starts or when spawned
 void ARide::BeginPlay()
 {
 	Super::BeginPlay();
+
+	MaxRideSpeed = FMath::Max(WalkRideSpeed, FMath::Max(RunRideSpeed, SprintRideSpeed));
+	GetCharacterMovement()->MaxWalkSpeed = MaxRideSpeed;
 	
 	APlayerController* PlayerController = Cast<APlayerController>(GetController());
 	if (PlayerController)
@@ -216,6 +230,20 @@ void ARide::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Canceled, this, &ARide::StopMove);
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ARide::Look);
 		EnhancedInputComponent->BindAction(DisMountAction, ETriggerEvent::Triggered, this, &ARide::DisMount);
+
+		if (WalkAction)
+		{
+			EnhancedInputComponent->BindAction(WalkAction, ETriggerEvent::Started, this, &ARide::StartWalk);
+			EnhancedInputComponent->BindAction(WalkAction, ETriggerEvent::Completed, this, &ARide::StopWalk);
+			EnhancedInputComponent->BindAction(WalkAction, ETriggerEvent::Canceled, this, &ARide::StopWalk);
+		}
+
+		if (SprintAction)
+		{
+			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &ARide::StartSprint);
+			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Completed, this, &ARide::StopSprint);
+			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Canceled, this, &ARide::StopSprint);
+		}
 	}
 }
 
@@ -239,8 +267,34 @@ void ARide::StopMove(const FInputActionValue& value)
 	RideMoveInput = FVector2D::ZeroVector;
 }
 
+void ARide::StartWalk(const FInputActionValue& value)
+{
+	bWantsWalk = true;
+}
+
+void ARide::StopWalk(const FInputActionValue& value)
+{
+	bWantsWalk = false;
+}
+
+void ARide::StartSprint(const FInputActionValue& value)
+{
+	bWantsSprint = true;
+}
+
+void ARide::StopSprint(const FInputActionValue& value)
+{
+	bWantsSprint = false;
+}
+
 void ARide::UpdateRideMovement(float DeltaTime)
 {
+	if (bPivotTurning)
+	{
+		UpdatePivotTurn(DeltaTime);
+		return;
+	}
+
 	FVector2D RawInput = RideMoveInput;
 	if (RawInput.SizeSquared() > 1.0f)
 	{
@@ -255,7 +309,9 @@ void ARide::UpdateRideMovement(float DeltaTime)
 
 	if (bHasMoveInput)
 	{
-		TargetThrottle = RawInput.Size();
+		const ERideGait DesiredGait = GetDesiredRideGait(RawInput);
+		const float TargetSpeed = GetRideSpeedForGait(DesiredGait);
+		TargetThrottle = FMath::Clamp(TargetSpeed / FMath::Max(MaxRideSpeed, 1.0f), 0.0f, 1.0f);
 
 		const FRotator Rotation = GetControlRotation();
 		const FRotator YawRotation(0, Rotation.Yaw, 0);
@@ -284,9 +340,16 @@ void ARide::UpdateRideMovement(float DeltaTime)
 		TargetDirection = RotationAxis.Z > 0.0f ? DotProductDegree : -1.0f * DotProductDegree;
 		TargetDirection = FMath::Clamp(TargetDirection, -MaxAnimDirection, MaxAnimDirection);
 
-		if (DotProductDegree > QuickTurnAngle)
+		if (DotProductDegree > PivotTurnMinAngle)
 		{
-			QuickTurn(RotationAxis.Z);
+			if (CanStartPivotTurn(DotProductDegree))
+			{
+				const float DesiredYaw = LastInputDirection.Rotation().Yaw;
+				const float TargetDeltaYaw = FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw, DesiredYaw);
+				PivotTurn(TargetDeltaYaw);
+				return;
+			}
+
 			TargetThrottle = 0.0f;
 		}
 
@@ -311,24 +374,145 @@ void ARide::UpdateRideMovement(float DeltaTime)
 		: 0.0f;
 
 	const float Speed2D = GetVelocity().Size2D();
-	bBraking = !bHasMoveInput && Speed2D > WalkSpeedThreshold;
+	bBraking = !bHasMoveInput && Speed2D > WalkRideSpeed * 0.5f;
 
 	if (Speed2D < KINDA_SMALL_NUMBER)
 	{
 		CurrentGait = ERideGait::Idle;
 	}
-	else if (Speed2D < WalkSpeedThreshold)
+	else if (Speed2D < (WalkRideSpeed + RunRideSpeed) * 0.5f)
 	{
 		CurrentGait = ERideGait::Walk;
 	}
-	else if (Speed2D < RunSpeedThreshold)
+	else if (Speed2D < (RunRideSpeed + SprintRideSpeed) * 0.5f)
 	{
 		CurrentGait = ERideGait::Run;
 	}
 	else
 	{
-		CurrentGait = ERideGait::Gallop;
+		CurrentGait = ERideGait::Sprint;
 	}
+}
+
+void ARide::UpdatePivotTurn(float DeltaTime)
+{
+	if (!PivotTurnMontage)
+	{
+		FinishPivotTurn();
+		return;
+	}
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (AnimInstance)
+	{
+		if (!AnimInstance->Montage_IsPlaying(PivotTurnMontage))
+		{
+			FinishPivotTurn();
+			return;
+		}
+	}
+	else
+	{
+		FinishPivotTurn();
+		return;
+	}
+
+	const float Alpha = GetPivotTurnCurveAlpha(AnimInstance);
+	const float TargetYaw = PivotTurnStartYaw + (PivotTurnTargetDeltaYaw * Alpha);
+
+	FRotator NewRotation = GetActorRotation();
+	NewRotation.Yaw = TargetYaw;
+	SetActorRotation(NewRotation);
+
+	TurnRate = DeltaTime > KINDA_SMALL_NUMBER
+		? FMath::FindDeltaAngleDegrees(PivotTurnPreviousYaw, TargetYaw) / DeltaTime
+		: 0.0f;
+	PivotTurnPreviousYaw = TargetYaw;
+
+	CurrentThrottle = 0.0f;
+	Direction = PivotTurnDirection * MaxAnimDirection;
+	bBraking = false;
+	CurrentGait = ERideGait::Idle;
+}
+
+bool ARide::CanStartPivotTurn(float DotProductDegree) const
+{
+	return !bPivotTurning
+		&& DotProductDegree > PivotTurnMinAngle
+		&& GetVelocity().Size2D() <= PivotTurnMaxStartSpeed;
+}
+
+float ARide::GetRideSpeedForGait(ERideGait Gait) const
+{
+	switch (Gait)
+	{
+	case ERideGait::Walk:
+		return WalkRideSpeed;
+	case ERideGait::Run:
+		return RunRideSpeed;
+	case ERideGait::Sprint:
+		return SprintRideSpeed;
+	case ERideGait::Idle:
+	default:
+		return 0.0f;
+	}
+}
+
+ERideGait ARide::GetDesiredRideGait(const FVector2D& MoveInput) const
+{
+	if (MoveInput.SizeSquared() <= FMath::Square(InputDeadZone))
+		return ERideGait::Idle;
+
+	if (bWantsWalk || MoveInput.Size() < WalkInputThreshold)
+		return ERideGait::Walk;
+
+	if (bWantsSprint && MoveInput.Y > 0.0f)
+		return ERideGait::Sprint;
+
+	return ERideGait::Run;
+}
+
+float ARide::GetPivotTurnCurveAlpha(UAnimInstance* AnimInstance) const
+{
+	if (!AnimInstance || !PivotTurnMontage)
+		return 0.0f;
+
+	const float MontagePosition = AnimInstance->Montage_GetPosition(PivotTurnMontage);
+	const FName CurrentSection = AnimInstance->Montage_GetCurrentSection(PivotTurnMontage);
+	const int32 SectionIndex = PivotTurnMontage->GetSectionIndex(CurrentSection);
+
+	float SectionStartTime = 0.0f;
+	float SectionEndTime = PivotTurnMontage->GetPlayLength();
+	if (SectionIndex != INDEX_NONE)
+	{
+		PivotTurnMontage->GetSectionStartAndEndTime(SectionIndex, SectionStartTime, SectionEndTime);
+	}
+
+	const float SectionLength = FMath::Max(SectionEndTime - SectionStartTime, KINDA_SMALL_NUMBER);
+	const float SectionTime = FMath::Clamp(MontagePosition - SectionStartTime, 0.0f, SectionLength);
+	const float SectionAlpha = FMath::Clamp((MontagePosition - SectionStartTime) / SectionLength, 0.0f, 1.0f);
+	const float CurveTime = bUseNormalizedPivotTurnCurveTime ? SectionAlpha : SectionTime;
+	const float CurveAlpha = PivotTurnAlphaCurve ? PivotTurnAlphaCurve->GetFloatValue(CurveTime) : SectionAlpha;
+
+	return FMath::Clamp(CurveAlpha, 0.0f, 1.0f);
+}
+
+void ARide::FinishPivotTurn()
+{
+	if (!bPivotTurning)
+		return;
+
+	const float FinalYaw = PivotTurnStartYaw + PivotTurnTargetDeltaYaw;
+
+	FRotator FinalRotation = GetActorRotation();
+	FinalRotation.Yaw = FinalYaw;
+	SetActorRotation(FinalRotation);
+
+	bPivotTurning = false;
+	PivotTurnDirection = 0.0f;
+	PivotTurnTargetDeltaYaw = 0.0f;
+	Direction = 0.0f;
+	TurnRate = 0.0f;
 }
 
 void ARide::Look(const FInputActionValue& value)
@@ -437,17 +621,32 @@ FRotator ARide::GetControllerRotation() const
 	return GetController()->GetControlRotation();
 }
 
-void ARide::QuickTurn(float TurnDirection)
+void ARide::PivotTurn(float TargetDeltaYaw)
 {
-	if (UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance())
-	{
-		// 이미 재생 중이면 무시
-		if (AnimInstance->Montage_IsPlaying(TurnMontage))
-			return;
+	if (bPivotTurning)
+		return;
 
-		AnimInstance->Montage_Play(TurnMontage);
-		AnimInstance->Montage_JumpToSection(FName("TurnLeft"));
-	}
+	if (!PivotTurnMontage)
+		return;
+
+	UAnimInstance* AnimInstance = GetMesh()->GetAnimInstance();
+	if (!AnimInstance || AnimInstance->Montage_IsPlaying(PivotTurnMontage))
+		return;
+
+	const float MontageLength = AnimInstance->Montage_Play(PivotTurnMontage);
+	if (MontageLength <= 0.0f)
+		return;
+
+	PivotTurnTargetDeltaYaw = TargetDeltaYaw;
+	PivotTurnDirection = PivotTurnTargetDeltaYaw >= 0.0f ? 1.0f : -1.0f;
+	bPivotTurning = true;
+	PivotTurnStartYaw = GetActorRotation().Yaw;
+	PivotTurnPreviousYaw = PivotTurnStartYaw;
+	CurrentThrottle = 0.0f;
+
+	GetCharacterMovement()->StopMovementImmediately();
+
+	AnimInstance->Montage_JumpToSection(PivotTurnDirection > 0.0f ? PivotTurnRightSection : PivotTurnLeftSection, PivotTurnMontage);
 }
 
 float ARide::GetRideSpeed() const

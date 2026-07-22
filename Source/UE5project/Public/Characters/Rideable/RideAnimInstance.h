@@ -49,8 +49,5 @@ private:
 		bool bBraking;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Character, Meta = (AllowPrivateAccess = true))
-		bool bQuickTurn;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Character, Meta = (AllowPrivateAccess = true))
 		ERideGait CurrentGait = ERideGait::Idle;
 };
