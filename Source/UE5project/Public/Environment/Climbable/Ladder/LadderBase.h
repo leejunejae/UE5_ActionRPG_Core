@@ -28,6 +28,10 @@ public:
 // Methods For Ladder Basic Composition
 ////////////////////////////////////
 private:
+	void ClearGeneratedLadder();
+	void RebuildLadder();
+	void BuildRuntimeGripData();
+	bool HasValidGeneratedMeshes() const;
 	void SetInitTopPosition();
 	void SetInitBottomPosition();
 
@@ -54,9 +58,6 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = Mesh)
 		TArray<UStaticMeshComponent*> ClimbMeshes;
-
-	UPROPERTY(EditAnywhere, Category = Mesh)
-		TArray<UBoxComponent*> GripCollisions;
 
 	UPROPERTY(EditAnywhere, Category = Mesh)
 		TObjectPtr<USceneComponent> TopEnterLeftHandTarget;

@@ -19,13 +19,15 @@ struct FLimbData
 	GENERATED_BODY()
 
 public:
-	FGripNode1D* LimbTargetGrip;
+	int32 LimbTargetGripIndex = INDEX_NONE;
+	int32 PreviousGripIndex = INDEX_NONE;
 	FVector LimbLocation;
 
 public:
 	FLimbData() {}
-	FLimbData(FGripNode1D* InLimbTargetGrip, FVector InLimbLocation)
-		: LimbTargetGrip(InLimbTargetGrip)
+	FLimbData(int32 InLimbTargetGripIndex, FVector InLimbLocation, int32 InPreviousGripIndex = INDEX_NONE)
+		: LimbTargetGripIndex(InLimbTargetGripIndex)
+		, PreviousGripIndex(InPreviousGripIndex)
 		, LimbLocation(InLimbLocation)
 	{}
 };
@@ -59,6 +61,10 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = "Setting")
 		bool HasEnterPhase = true;
+
+	/** Extra gap between the character capsule and the ladder origin plane. */
+	UPROPERTY(EditAnywhere, Category = "Setting", meta = (ClampMin = "0.0"))
+		float LadderSurfaceClearance = 10.0f;
 
 protected:
 	UCurveVector* GetClimbCurve(const FClimbCurveKey& Key) const;
@@ -96,15 +102,15 @@ public:
 
 	void SetGrip1DRelation(float MinInterval, float MaxInterval);
 	bool CheckGripListValid();
-	FGripNode1D* GetLimbPlaceGrip(ELimbList LimbName);
+	int32 GetLimbPlaceGripIndex(ELimbList LimbName) const;
 	FVector GetLimbIKTarget(ELimbList LimbName);
 	FORCEINLINE EClimbPhase GetLadderStance() const { return LadderStance; }
 	/// <summary>
 	/// Getter Function For Find Grip about various rule
 	/// </summary>
 
-	FGripNode1D* GetLowestGrip1D();
-	FGripNode1D* GetHighestGrip1D();
+	int32 GetLowestGrip1DIndex() const;
+	int32 GetHighestGrip1DIndex() const;
 
 	void SetLowestGrip1D(float MinHeight = 0.0f, float Comparision = 0.0f);
 
@@ -120,6 +126,13 @@ private:
 
 private:
 	void OnEnterClimbMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+	FVector CalculateLadderAlignmentLocation(const ACharacter* Character) const;
+	FRotator CalculateLadderAlignmentRotation() const;
+	FGripNode1D* GetGripNode(int32 GripIndex);
+	const FGripNode1D* GetGripNode(int32 GripIndex) const;
+	int32 GetNeighborGripIndex(int32 GripIndex, bool bUp, int32 Count = 1) const;
+	FVector GetGripWorldPosition(int32 GripIndex) const;
+	FVector CalculateBodyTargetLocation(int32 FootGripIndex, int32 HandGripIndex, const FVector& CurrentLocation) const;
 
 /// <summary>
 /// Setter Function For Setting Value
@@ -151,7 +164,7 @@ private:
 	UPROPERTY(VisibleAnyWhere, Category = "ClimbState")
 	float AnimTime;
 
-	FVector SetBoneIKTargetLadder(const FGripNode1D* TargetGrip, const FVector CurveValue, const float LimbXDistance = 0.0f, const FGripNode1D* StartGrip = nullptr, const float LimbYDistance = -15.0f, bool IsDebug = false);
+	FVector SetBoneIKTargetLadder(int32 TargetGripIndex, const FVector CurveValue, const float LimbXDistance = 0.0f, int32 StartGripIndex = INDEX_NONE, const float LimbYDistance = -15.0f, bool IsDebug = false);
 	FVector SetBoneIKTargetLadder(const FVector TargetLoc, const FVector CurveValue, const FVector StartLoc = FVector(), const float LimbXDistance = 0.0f, const float LimbYDistance = -15.0f, bool IsDebug = false);
 #pragma endregion Ladder Climbing
 };

@@ -63,12 +63,12 @@ struct FNeighborInfo
 {
 	GENERATED_BODY()
 
-	FGripNode1D* Neighbor;
-	float Distance;
+	int32 NeighborIndex = INDEX_NONE;
+	float Distance = 0.0f;
 
 	inline bool operator==(const FNeighborInfo& Other) const
 	{
-		return Neighbor == Other.Neighbor;
+		return NeighborIndex == Other.NeighborIndex;
 	}
 };
 
@@ -91,40 +91,16 @@ struct FGripNode1D
 	GENERATED_BODY()
 
 public:
-	FVector Position;
+	FVector LocalPosition;
 	int32 Level = 0;
 	int32 GripIndex = 0;
 	TArray<FName> Tag;
 	FNeighborInfo NeighborUp;
 	FNeighborInfo NeighborDown;
-	TObjectPtr<FGripNode1D> PrevGrip;
-
-public:
-	FGripNode1D* GetNeighborUp(int32 Count = 1)
-	{ 
-		FGripNode1D* GripNode = this;
-		while (GripNode && Count-- > 0)
-		{
-			GripNode = GripNode->NeighborUp.Neighbor;
-		}
-		return GripNode;
-	}
-
-	FGripNode1D* GetNeighborDown(int32 Count = 1)
-	{
-		FGripNode1D* GripNode = this;
-		while (GripNode && Count-- > 0)
-		{
-			GripNode = GripNode->NeighborDown.Neighbor;
-		}
-		return GripNode;
-	}
-
-
 
 	inline bool operator==(const FGripNode1D& Other) const
 	{
-		return Position == Other.Position;
+		return LocalPosition == Other.LocalPosition;
 	}
 };
 
