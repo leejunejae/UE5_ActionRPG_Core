@@ -4,6 +4,8 @@
 #include "Environment/Climbable/Ladder/LadderBase.h"
 
 #include "Components/BoxComponent.h"
+#include "DrawDebugHelpers.h"
+#include "Utils/CoreLog.h"
 
 ALadderBase::ALadderBase()
 {
@@ -13,10 +15,6 @@ ALadderBase::ALadderBase()
 
 	ClimbObjectTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Climbable.Ladder")));
 
-	EnterPosition = CreateDefaultSubobject<USceneComponent>(TEXT("EnterTopPosition"));
-	EnterPosition->SetupAttachment(ObjectRoot);
-	EnterPosition->ComponentTags.Add(FName("Enter"));
-
 	TopEnterLeftHandTarget = CreateDefaultSubobject<USceneComponent>(TEXT("TopEnterLeftHandTarget"));
 	TopEnterLeftHandTarget->SetupAttachment(ObjectRoot);
 
@@ -24,10 +22,107 @@ ALadderBase::ALadderBase()
 	TopEnterRightHandTarget->SetupAttachment(ObjectRoot);
 }
 
+void ALadderBase::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (bDrawLadderSpaceDebug)
+	{
+		DrawLadderSpaceDebug();
+	}
+}
+
+bool ALadderBase::ShouldTickIfViewportsOnly() const
+{
+	return bDrawLadderSpaceDebug;
+}
+
 void ALadderBase::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 	RebuildLadder();
+	DrawLadderSpaceDebug();
+}
+
+float ALadderBase::GetLadderProgressAtWorldLocation_Implementation(const FVector& WorldLocation) const
+{
+	return GetActorTransform().InverseTransformPosition(WorldLocation).Z;
+}
+
+FVector ALadderBase::GetLadderWorldLocationAtProgress_Implementation(
+	float LadderProgress,
+	float ForwardOffset,
+	float RightOffset) const
+{
+	return GetActorTransform().TransformPosition(
+		FVector(ForwardOffset, RightOffset, LadderProgress));
+}
+
+FTransform ALadderBase::GetBottomAttachBaseTransform_Implementation() const
+{
+	// The ladder only owns the stable base frame. Character/animation-specific
+	// body offsets are supplied by the ladder climb profile.
+	// ClimbBottomLocation is an approach/exit point adjusted by a runtime ground
+	// trace, so using it here made the warp target change when PIE began.
+	const FVector AttachLocation = GetLadderWorldLocationAtProgress(
+		AdditionalHeight,
+		0.0f,
+		0.0f);
+	const FRotator AttachRotation = (-GetActorForwardVector()).Rotation();
+
+	return FTransform(
+		FRotator(0.0f, AttachRotation.Yaw, 0.0f),
+		AttachLocation);
+}
+
+void ALadderBase::DrawLadderSpaceDebug() const
+{
+	if (!bDrawLadderSpaceDebug || !GetWorld())
+	{
+		return;
+	}
+
+	const FTransform AttachTransform = GetBottomAttachBaseTransform();
+	const FVector AttachLocation = AttachTransform.GetLocation();
+	const float DebugDuration = 0.0f;
+
+	DrawDebugCoordinateSystem(
+		GetWorld(),
+		GetActorLocation(),
+		GetActorRotation(),
+		50.0f,
+		false,
+		DebugDuration,
+		0,
+		1.5f);
+	DrawDebugSphere(
+		GetWorld(),
+		AttachLocation,
+		12.0f,
+		16,
+		FColor::Cyan,
+		false,
+		DebugDuration,
+		0,
+		2.0f);
+	DrawDebugString(
+		GetWorld(),
+		AttachLocation + GetActorUpVector() * 15.0f,
+		TEXT("Bottom Attach Base"),
+		nullptr,
+		FColor::Cyan,
+		DebugDuration,
+		false);
+	DrawDebugDirectionalArrow(
+		GetWorld(),
+		AttachLocation,
+		AttachLocation + AttachTransform.GetRotation().GetForwardVector() * 50.0f,
+		12.0f,
+		FColor::Cyan,
+		false,
+		DebugDuration,
+		0,
+		2.0f);
 }
 
 void ALadderBase::ClearGeneratedLadder()
@@ -50,7 +145,7 @@ void ALadderBase::RebuildLadder()
 
 	if (LadderLevel <= 0 || !IsValid(ClimbStaticMesh))
 	{
-		UE_LOG(LogTemp, Error, TEXT("[Ladder] Invalid construction settings on '%s': LadderLevel=%d, ClimbStaticMesh=%s"),
+		UE_LOG(Log_Climb_Ladder, Error, TEXT("[Ladder] Invalid construction settings on '%s': LadderLevel=%d, ClimbStaticMesh=%s"),
 			*GetName(), LadderLevel, *GetNameSafe(ClimbStaticMesh));
 		return;
 	}
@@ -99,7 +194,7 @@ void ALadderBase::BuildRuntimeGripData()
 
 	if (!HasValidGeneratedMeshes())
 	{
-		UE_LOG(LogTemp, Error, TEXT("[Ladder] Cannot build runtime Grip data for '%s': generated meshes are invalid."), *GetName());
+		UE_LOG(Log_Climb_Ladder, Error, TEXT("[Ladder] Cannot build runtime Grip data for '%s': generated meshes are invalid."), *GetName());
 		return;
 	}
 
@@ -187,7 +282,7 @@ void ALadderBase::SetInitTopPosition()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Trace Doesnt Hit"));
+		UE_LOG(Log_Climb_Ladder, Warning, TEXT("[Ladder] Bottom ground trace did not hit for '%s'."), *GetName());
 	}
 }
 
@@ -235,7 +330,7 @@ void ALadderBase::SetInitBottomPosition()
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Trace Doesnt Hit"));
+		UE_LOG(Log_Climb_Ladder, Warning, TEXT("[Ladder] Top ground trace did not hit for '%s'."), *GetName());
 	}
 }
 
@@ -245,9 +340,10 @@ void ALadderBase::BeginPlay()
 
 	if (!HasValidGeneratedMeshes())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[Ladder] Rebuilding invalid generated meshes once at runtime for '%s'."), *GetName());
+		UE_LOG(Log_Climb_Ladder, Warning, TEXT("[Ladder] Rebuilding invalid generated meshes once at runtime for '%s'."), *GetName());
 		RebuildLadder();
 	}
 
 	BuildRuntimeGripData();
+	DrawLadderSpaceDebug();
 }

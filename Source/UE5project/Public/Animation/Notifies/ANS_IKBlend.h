@@ -64,7 +64,4 @@ public:
 
 private:
     float ApplyCurve(float T, EBlendCurve Curve);
-
-    float TotalLen = 0.f;
-    float Elapsed = 0.f;
 };

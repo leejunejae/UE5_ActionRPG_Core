@@ -3,7 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Interaction/Climb/Interfaces/LadderInterface.h"
 #include "Environment/Climbable/ClimbableObjectBase.h"
 #include "Interaction/Climb/Data/ClimbHeader.h"
 #include "LadderBase.generated.h"
@@ -12,16 +11,41 @@
  * 
  */
 UCLASS()
-class UE5PROJECT_API ALadderBase : public AClimbableObjectBase, public ILadderInterface
+class UE5PROJECT_API ALadderBase : public AClimbableObjectBase
 {
 	GENERATED_BODY()
 	
 public:
 	ALadderBase();
 
-	virtual const USceneComponent* GetInitClimbTarget_Implementation() const {	return EnterPosition; }
-	virtual const USceneComponent* GetInitEnterTarget_Implementation(bool IsTop) const { return IsTop ? ClimbTopLocation : ClimbBottomLocation; }
-	virtual const USceneComponent* GetTopEnterHandTarget_Implementation(bool IsRight) const { return IsRight ? TopEnterRightHandTarget : TopEnterLeftHandTarget; }
+	virtual void Tick(float DeltaSeconds) override;
+	virtual bool ShouldTickIfViewportsOnly() const override;
+
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Ladder|Transition")
+	const USceneComponent* GetInitEnterTarget(bool bIsTop) const;
+	virtual const USceneComponent* GetInitEnterTarget_Implementation(bool bIsTop) const { return bIsTop ? ClimbTopLocation : ClimbBottomLocation; }
+
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Ladder|Transition")
+	const USceneComponent* GetTopEnterHandTarget(bool bIsRight) const;
+	virtual const USceneComponent* GetTopEnterHandTarget_Implementation(bool bIsRight) const { return bIsRight ? TopEnterRightHandTarget : TopEnterLeftHandTarget; }
+
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Ladder|Space")
+	float GetLadderProgressAtWorldLocation(const FVector& WorldLocation) const;
+	virtual float GetLadderProgressAtWorldLocation_Implementation(const FVector& WorldLocation) const;
+
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Ladder|Space")
+	FVector GetLadderWorldLocationAtProgress(
+		float LadderProgress,
+		float ForwardOffset,
+		float RightOffset) const;
+	virtual FVector GetLadderWorldLocationAtProgress_Implementation(
+		float LadderProgress,
+		float ForwardOffset,
+		float RightOffset) const;
+
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Ladder|Transition")
+	FTransform GetBottomAttachBaseTransform() const;
+	virtual FTransform GetBottomAttachBaseTransform_Implementation() const;
 
 #pragma region Ladder Basic Composition
 ////////////////////////////////////
@@ -34,6 +58,7 @@ private:
 	bool HasValidGeneratedMeshes() const;
 	void SetInitTopPosition();
 	void SetInitBottomPosition();
+	void DrawLadderSpaceDebug() const;
 
 protected:
 	virtual void BeginPlay() override;
@@ -44,9 +69,6 @@ protected:
 // Variables For Ladder Basic Composition
 ////////////////////////////////////
 protected:
-	UPROPERTY(VisibleAnywhere, Category = Interact)
-	TObjectPtr<USceneComponent> EnterPosition;
-
 	UPROPERTY(EditAnywhere, Category = LadderSetting) // Layer for modular ladder
 		int32 LadderLevel;
 
@@ -55,6 +77,9 @@ protected:
 
 	UPROPERTY(EditAnywhere, Category = LadderSetting)
 		float AdditionalHeight;
+
+	UPROPERTY(EditAnywhere, Category = "LadderSetting|Debug")
+	bool bDrawLadderSpaceDebug = false;
 
 	UPROPERTY(EditAnywhere, Category = Mesh)
 		TArray<UStaticMeshComponent*> ClimbMeshes;

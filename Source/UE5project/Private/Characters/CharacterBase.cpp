@@ -9,6 +9,7 @@
 #include "Characters/Components/CharacterStatusComponent.h"
 #include "Characters/Components/StatComponent.h"
 #include "Interaction/Climb/Components/ClimbComponent.h"
+#include "MotionWarpingComponent.h"
 #include "Utils/CoreLog.h"
 
 // Sets default values
@@ -32,6 +33,8 @@ ACharacterBase::ACharacterBase(const FObjectInitializer& ObjectInitializer)
 
 	ClimbComponent = CreateDefaultSubobject<UClimbComponent>(TEXT("ClimbComponent"));
 	ClimbComponent->bAutoActivate = true;
+
+	MotionWarpingComponent = CreateDefaultSubobject<UMotionWarpingComponent>(TEXT("MotionWarpingComponent"));
 
 	ClimbComponent->SetMinGripInterval(MinGripInterval);
 	ClimbComponent->SetMaxGripInterval(MaxGripInterval);

@@ -21,6 +21,7 @@ class UHitReactionComponent;
 class UCharacterStatusComponent;
 class UStatComponent;
 class UClimbComponent;
+class UMotionWarpingComponent;
 
 UCLASS()
 class UE5PROJECT_API ACharacterBase : public ACharacter,
@@ -110,6 +111,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = Climb)
 		TObjectPtr<UClimbComponent> ClimbComponent;
 
+	UPROPERTY(VisibleAnywhere, Category = Climb)
+		TObjectPtr<UMotionWarpingComponent> MotionWarpingComponent;
+
 	UPROPERTY(EditAnywhere)
 		float MinGripInterval = 15.0f;
 	UPROPERTY(EditAnywhere)
@@ -119,6 +123,7 @@ protected:
 
 public:
 	FORCEINLINE UClimbComponent* GetClimbComponent() const { return ClimbComponent; }
+	FORCEINLINE UMotionWarpingComponent* GetMotionWarpingComponent() const { return MotionWarpingComponent; }
 #pragma endregion Ladder
 
 #pragma region Animation

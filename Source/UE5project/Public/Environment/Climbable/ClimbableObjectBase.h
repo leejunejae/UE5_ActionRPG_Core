@@ -8,7 +8,6 @@
 
 // 인터페이스
 #include "Interaction/Interfaces/InteractInterface.h"
-#include "Environment/Climbable/Interfaces/ClimbObjectInterface.h"
 
 // 태그
 #include "GameplayTagContainer.h"
@@ -24,7 +23,7 @@ class UBoxComponent;
  * 
  */
 UCLASS()
-class UE5PROJECT_API AClimbableObjectBase : public AMapObjectBase, public IInteractInterface, public IClimbObjectInterface
+class UE5PROJECT_API AClimbableObjectBase : public AMapObjectBase, public IInteractInterface
 {
 	GENERATED_BODY()
 	
@@ -43,10 +42,7 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tags")
 	FGameplayTagContainer ClimbObjectTags;
 
-#pragma region ClimbObjectInterface
-	virtual TArray<FGripNode1D> GetGripList1D_Implementation();
-
-#pragma endregion
+	const TArray<FGripNode1D>& GetGripList1D() const { return GripList1D; }
 
 protected:
 	virtual void BeginPlay() override;

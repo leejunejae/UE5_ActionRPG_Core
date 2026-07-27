@@ -36,6 +36,16 @@ enum class EClimbStepSide : uint8
 	Right UMETA(DisplayName = "Right"),
 };
 
+UENUM(BlueprintType)
+enum class ELadderTransitionState : uint8
+{
+	None,
+	EnterBottom,
+	EnterTop,
+	ExitBottom,
+	ExitTop
+};
+
 USTRUCT(BlueprintType)
 struct FClimbCurveKey
 {
