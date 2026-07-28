@@ -7,6 +7,28 @@
 #include "Interaction/Climb/Data/ClimbHeader.h"
 #include "LadderClimbDataAsset.generated.h"
 
+USTRUCT(BlueprintType)
+struct FLadderWarpCheckpoint
+{
+	GENERATED_BODY()
+
+	// Entry montage that consumes this checkpoint.
+	UPROPERTY(EditAnywhere, Category = "Warp Checkpoint")
+	EClimbPhase Phase = EClimbPhase::Enter_From_Top;
+
+	// Must match the Motion Warping notify state's target name.
+	UPROPERTY(EditAnywhere, Category = "Warp Checkpoint")
+	FName TargetName = NAME_None;
+
+	// Animation-authored checkpoint transform relative to the final body
+	// target, expressed in ladder-local Forward/Right/Up axes.
+	UPROPERTY(EditAnywhere, Category = "Warp Checkpoint", meta = (Units = "cm"))
+	FVector OffsetFromFinalBody = FVector::ZeroVector;
+
+	UPROPERTY(EditAnywhere, Category = "Warp Checkpoint")
+	FRotator RotationOffset = FRotator::ZeroRotator;
+};
+
 /**
  * 
  */
@@ -23,27 +45,72 @@ public:
 	TMap<EClimbPhase, UAnimMontage*> Montages;
 
 	UPROPERTY(EditAnywhere, Category = "Montage")
-	FName BottomEnterWarpTargetName = TEXT("LadderAttach");
+	FName EnterWarpTargetName = TEXT("LadderAttach");
 
-	// Final capsule/body offset from the ladder's bottom attach base.
-	// X: ladder Forward, Y: ladder Right, Z: ladder Up.
-	UPROPERTY(EditAnywhere, Category = "Body Anchor", meta = (Units = "cm"))
-	FVector BottomEnterBodyOffset = FVector(55.0f, 0.0f, 90.0f);
+	// Optional animation-specific intermediate targets. An empty array keeps
+	// the entry montage on the single final LadderAttach target.
+	UPROPERTY(EditAnywhere, Category = "Montage")
+	TArray<FLadderWarpCheckpoint> EnterWarpCheckpoints;
 
-	// Limb assignment for the first four grips, ordered from bottom to top.
-	// This belongs to the entry animation profile rather than the ladder actor.
-	UPROPERTY(EditAnywhere, Category = "Grip")
-	TArray<ELimbList> BottomEnterGripOrder =
+	// A larger remaining error means motion warping did not reach the authored
+	// final attach transform and must not be hidden by an end-of-montage snap.
+	UPROPERTY(EditAnywhere, Category = "Montage", meta = (ClampMin = "0.0", Units = "cm"))
+	float TopEnterCompletionTolerance = 5.0f;
+
+	// Final idle pose reached by the bottom-entry animation. Values are
+	// measured from BottomEnterIdleReferenceLimb along ladder-local Up.
+	UPROPERTY(EditAnywhere, Category = "Grip|Bottom Enter|Final Idle")
+	TMap<ELimbList, float> BottomEnterIdleGripHeightOffsets =
 	{
-		ELimbList::FootR,
-		ELimbList::FootL,
-		ELimbList::HandL,
-		ELimbList::HandR
+		{ ELimbList::HandR, 0.0f },
+		{ ELimbList::HandL, -30.0f },
+		{ ELimbList::FootL, -90.0f },
+		{ ELimbList::FootR, -120.0f }
 	};
 
-	// Capsule/body anchor offset from the midpoint of the supporting foot and
-	// hand, measured along the ladder's local Up axis. This is authored for
-	// the character body type and ladder locomotion animation set.
+	UPROPERTY(EditAnywhere, Category = "Grip|Bottom Enter|Final Idle")
+	ELimbList BottomEnterIdleReferenceLimb = ELimbList::HandR;
+
+	// Final idle pose reached by the top-entry animation. It is intentionally
+	// separate because top and bottom entry may finish on opposite step sides.
+	UPROPERTY(EditAnywhere, Category = "Grip|Top Enter|Final Idle")
+	TMap<ELimbList, float> TopEnterIdleGripHeightOffsets =
+	{
+		{ ELimbList::HandL, 0.0f },
+		{ ELimbList::HandR, -30.0f },
+		{ ELimbList::FootR, -90.0f },
+		{ ELimbList::FootL, -120.0f }
+	};
+
+	UPROPERTY(EditAnywhere, Category = "Grip|Top Enter|Final Idle")
+	ELimbList TopEnterIdleReferenceLimb = ELimbList::HandL;
+
+	// Initial contacts authored by the top-entry animation. The route between
+	// these contacts and TopEnterIdleGripHeightOffsets is distributed across
+	// the montage's Ladder Grip Transition notify states.
+	UPROPERTY(EditAnywhere, Category = "Grip|Top Enter|Initial")
+	TMap<ELimbList, float> TopEnterInitialGripHeightOffsets =
+	{
+		{ ELimbList::HandL, 0.0f },
+		{ ELimbList::HandR, -30.0f },
+		{ ELimbList::FootL, -30.0f },
+		{ ELimbList::FootR, -60.0f }
+	};
+
+	UPROPERTY(EditAnywhere, Category = "Grip|Top Enter|Initial")
+	ELimbList TopEnterInitialReferenceLimb = ELimbList::HandL;
+
+	UPROPERTY(EditAnywhere, Category = "Grip", meta = (ClampMin = "0.0", Units = "cm"))
+	float GripMatchTolerance = 10.0f;
+
+	// Offsets from the centroid of all four final limb grips. These values are
+	// authored for the character body type and ladder animation set.
+	UPROPERTY(EditAnywhere, Category = "Body Anchor", meta = (Units = "cm"))
+	float BodyAnchorForwardOffset = 55.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Body Anchor", meta = (Units = "cm"))
+	float BodyAnchorRightOffset = 0.0f;
+
 	UPROPERTY(EditAnywhere, Category = "Body Anchor", meta = (Units = "cm"))
 	float BodyAnchorUpOffset = 3.0f;
 };

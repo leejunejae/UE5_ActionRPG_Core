@@ -51,9 +51,6 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Climb|Ladder")
 	TObjectPtr<ULadderClimbDataAsset> LadderClimbProfile;
 
-	UPROPERTY(EditAnywhere, Category = "Curve")
-		TObjectPtr<UCurveFloat> EnterRotatorCurve;
-
 	/** Extra gap between the character capsule and the ladder origin plane. */
 	UPROPERTY(EditAnywhere, Category = "Setting", meta = (ClampMin = "0.0"))
 		float LadderSurfaceClearance = 10.0f;
@@ -94,6 +91,13 @@ public:
 	void EnterLadderFloat();
 	void ExitLadderFloat();
 	void ForceDetachFromLadder(bool bBroadcastExit = false);
+	bool BeginLimbGripTransition(
+		ELimbList Limb,
+		ELadderGripDirection Direction,
+		UCurveVector* TrajectoryCurve);
+	void UpdateLimbGripTransition(ELimbList Limb, float NormalizedTime);
+	void CompleteLimbGripTransition(ELimbList Limb);
+	void CancelLimbGripTransition(ELimbList Limb);
 
 	void SetGrip1DRelation(float MinInterval, float MaxInterval);
 	bool CheckGripListValid();
@@ -127,17 +131,29 @@ private:
 	void ClearLadderSession();
 	void ResetLadderIKState(bool bRestoreGroundPhase);
 	void HandleOwnerDeathStarted();
-	bool PlayBottomEnterMontage();
-	bool UpdateBottomEnterWarpTarget();
+	bool PlayEnterMontage(EClimbPhase EnterPhase);
+	bool UpdateEnterWarpTarget(EClimbPhase EnterPhase);
 	void ClearTransitionWarpTargets();
 	void DrawBottomEnterContactDebug() const;
-	bool ResolveBottomEnterGripAssignment(TMap<ELimbList, int32>& OutAssignment) const;
-	FTransform CalculateBottomAttachTransform(ALadderBase* Ladder) const;
+	bool ResolveGripPattern(
+		const TMap<ELimbList, float>& HeightOffsets,
+		ELimbList ReferenceLimb,
+		bool bPreferTop,
+		TMap<ELimbList, int32>& OutAssignment) const;
+	bool BuildTopEnterGripRoute(
+		const TMap<ELimbList, int32>& InitialAssignment,
+		const TMap<ELimbList, int32>& FinalAssignment,
+		TMap<ELimbList, int32>& OutValidatedInitialAssignment);
+	EClimbPhase ResolveIdlePhaseFromGripState() const;
+	bool ValidateTopEnterFinalGripAssignment() const;
 	FGripNode1D* GetGripNode(int32 GripIndex);
 	const FGripNode1D* GetGripNode(int32 GripIndex) const;
 	int32 GetNeighborGripIndex(int32 GripIndex, bool bUp, int32 Count = 1) const;
 	FVector GetGripWorldPosition(int32 GripIndex) const;
-	FVector CalculateBodyTargetLocation(int32 FootGripIndex, int32 HandGripIndex, const FVector& CurrentLocation) const;
+	FVector CalculateBodyTargetLocation(const FVector& FallbackLocation) const;
+	FVector CalculateBodyTargetLocation(
+		const TMap<ELimbList, int32>& GripAssignment,
+		const FVector& FallbackLocation) const;
 
 /// <summary>
 /// Setter Function For Setting Value
@@ -159,7 +175,7 @@ public:
 
 private:
 	UPROPERTY(VisibleAnyWhere, Category = "ClimbState")
-	EClimbPhase LadderStance;
+	EClimbPhase LadderStance = EClimbPhase::Idle_Right;
 
 	UPROPERTY(VisibleAnyWhere, Category = "ClimbState")
 	TObjectPtr<ALadderBase> ClimbObject;
@@ -171,10 +187,20 @@ private:
 	ELadderTransitionState LadderTransitionState = ELadderTransitionState::None;
 
 	bool bHasCharacterStateSnapshot = false;
-	bool bBottomEnterMontageActive = false;
+	bool bEnterMontageActive = false;
 	uint8 SavedMovementMode = 0;
 	uint8 SavedCustomMovementMode = 0;
 	bool bSavedOrientRotationToMovement = false;
+
+	struct FLimbGripTransitionState
+	{
+		int32 StartGripIndex = INDEX_NONE;
+		int32 TargetGripIndex = INDEX_NONE;
+		TWeakObjectPtr<UCurveVector> TrajectoryCurve;
+	};
+
+	TMap<ELimbList, FLimbGripTransitionState> ActiveLimbGripTransitions;
+	TMap<ELimbList, TArray<int32>> PlannedLimbGripTargets;
 
 	FVector SetBoneIKTargetLadder(int32 TargetGripIndex, const FVector CurveValue, float LimbXDistance = 0.0f, int32 StartGripIndex = INDEX_NONE, float LimbYDistance = -15.0f);
 	FVector SetBoneIKTargetLadder(const FVector TargetLoc, const FVector CurveValue, const FVector StartLoc = FVector(), float LimbXDistance = 0.0f, float LimbYDistance = -15.0f);

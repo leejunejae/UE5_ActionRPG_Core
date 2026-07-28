@@ -25,10 +25,6 @@ public:
 	const USceneComponent* GetInitEnterTarget(bool bIsTop) const;
 	virtual const USceneComponent* GetInitEnterTarget_Implementation(bool bIsTop) const { return bIsTop ? ClimbTopLocation : ClimbBottomLocation; }
 
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Ladder|Transition")
-	const USceneComponent* GetTopEnterHandTarget(bool bIsRight) const;
-	virtual const USceneComponent* GetTopEnterHandTarget_Implementation(bool bIsRight) const { return bIsRight ? TopEnterRightHandTarget : TopEnterLeftHandTarget; }
-
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Ladder|Space")
 	float GetLadderProgressAtWorldLocation(const FVector& WorldLocation) const;
 	virtual float GetLadderProgressAtWorldLocation_Implementation(const FVector& WorldLocation) const;
@@ -84,10 +80,5 @@ protected:
 	UPROPERTY(EditAnywhere, Category = Mesh)
 		TArray<UStaticMeshComponent*> ClimbMeshes;
 
-	UPROPERTY(EditAnywhere, Category = Mesh)
-		TObjectPtr<USceneComponent> TopEnterLeftHandTarget;
-
-	UPROPERTY(EditAnywhere, Category = Mesh)
-		TObjectPtr<USceneComponent> TopEnterRightHandTarget;
 #pragma endregion
 };

@@ -35,6 +35,7 @@ public:
 	virtual void PostInitializeComponents() override;
 
 	virtual USceneComponent* GetEnterInteractLocation_Implementation(AActor* Target);
+	virtual USceneComponent* GetNavigationInteractLocation_Implementation(AActor* Target);
 
 
 	void GetInteractionTags_Implementation(FGameplayTagContainer& OutTags) const;
@@ -61,6 +62,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = Interact)
 		TObjectPtr<USceneComponent> ClimbTopLocation;
+
+	UPROPERTY(VisibleAnywhere, Category = Interact)
+		TObjectPtr<USceneComponent> ClimbTopApproachLocation;
 
 	UPROPERTY(VisibleAnywhere, Category = Interact)
 		TObjectPtr<USceneComponent> ClimbBottomLocation;

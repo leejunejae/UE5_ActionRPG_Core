@@ -90,15 +90,31 @@ bool UInteractComponent::MovetoInteractPos()
 	if (Character == nullptr || InteractActor == nullptr)
 		return false;
 
-	USceneComponent* Target = IInteractInterface::Execute_GetEnterInteractLocation(InteractActor, Character);
-	if (Target)
+	USceneComponent* AlignmentTarget =
+		IInteractInterface::Execute_GetEnterInteractLocation(
+			InteractActor,
+			Character);
+	USceneComponent* NavigationTarget =
+		IInteractInterface::Execute_GetNavigationInteractLocation(
+			InteractActor,
+			Character);
+	if (!NavigationTarget)
 	{
-		FVector DestLoc = Target->GetComponentLocation();
+		NavigationTarget = AlignmentTarget;
+	}
+
+	if (AlignmentTarget && NavigationTarget)
+	{
+		FVector DestLoc = NavigationTarget->GetComponentLocation();
 		FRotator DestRot = UKismetMathLibrary::FindLookAtRotation(Character->GetActorLocation(), DestLoc);
 		Character->SetActorRotation(FRotator(0.0f, DestRot.Yaw, 0.0f));
 		UAIBlueprintHelperLibrary::SimpleMoveToLocation(Character->GetController(), DestLoc);
 
-		InteractTimerDelegate.BindUObject(this, &UInteractComponent::InteractPosCheckTimer, Target);
+		InteractTimerDelegate.BindUObject(
+			this,
+			&UInteractComponent::InteractPosCheckTimer,
+			NavigationTarget,
+			AlignmentTarget);
 		GetOwner()->GetWorldTimerManager().SetTimer(InteractTimerHandle, InteractTimerDelegate, 0.1f, true);
 	}
 	else
@@ -109,14 +125,20 @@ bool UInteractComponent::MovetoInteractPos()
 	return true;
 }
 
-void UInteractComponent::InteractPosCheckTimer(USceneComponent* Target)
+void UInteractComponent::InteractPosCheckTimer(
+	USceneComponent* NavigationTarget,
+	USceneComponent* AlignmentTarget)
 {
 	ACharacter* Character = Cast<ACharacter>(GetOwner());
-	if (Character == nullptr)
+	if (Character == nullptr ||
+		!IsValid(NavigationTarget) ||
+		!IsValid(AlignmentTarget))
 		return;
 
 	FVector2D CharLoc = FVector2D(Character->GetActorLocation().X, Character->GetActorLocation().Y);
-	FVector2D TargetLoc2D = FVector2D(Target->GetComponentLocation().X, Target->GetComponentLocation().Y);
+	FVector2D TargetLoc2D = FVector2D(
+		NavigationTarget->GetComponentLocation().X,
+		NavigationTarget->GetComponentLocation().Y);
 	float Distance = FVector2D::Distance(CharLoc, TargetLoc2D);
 	if (Distance < 50.0f)
 	{
@@ -129,8 +151,11 @@ void UInteractComponent::InteractPosCheckTimer(USceneComponent* Target)
 
 		UKismetSystemLibrary::MoveComponentTo(
 			Character->GetCapsuleComponent(),
-			FVector(Target->GetComponentLocation().X, Target->GetComponentLocation().Y, Target->GetComponentLocation().Z + 92.0f),
-			Target->GetComponentRotation(),
+			FVector(
+				AlignmentTarget->GetComponentLocation().X,
+				AlignmentTarget->GetComponentLocation().Y,
+				AlignmentTarget->GetComponentLocation().Z + 92.0f),
+			AlignmentTarget->GetComponentRotation(),
 			false,
 			false,
 			0.2f,

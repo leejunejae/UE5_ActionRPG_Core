@@ -38,7 +38,9 @@ public:
 	void RemoveInteractObject(AActor* InteractObject);
 	bool SetInteractActorByDegree(AActor* StartActor, float SearchDegrees);
 	bool MovetoInteractPos();
-	void InteractPosCheckTimer(USceneComponent* Target);
+	void InteractPosCheckTimer(
+		USceneComponent* NavigationTarget,
+		USceneComponent* AlignmentTarget);
 
 	UFUNCTION()
 		void OnMovetoInteractPosEnd();

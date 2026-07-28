@@ -15,11 +15,6 @@ ALadderBase::ALadderBase()
 
 	ClimbObjectTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Climbable.Ladder")));
 
-	TopEnterLeftHandTarget = CreateDefaultSubobject<USceneComponent>(TEXT("TopEnterLeftHandTarget"));
-	TopEnterLeftHandTarget->SetupAttachment(ObjectRoot);
-
-	TopEnterRightHandTarget = CreateDefaultSubobject<USceneComponent>(TEXT("TopEnterRightHandTarget"));
-	TopEnterRightHandTarget->SetupAttachment(ObjectRoot);
 }
 
 void ALadderBase::Tick(float DeltaSeconds)
@@ -167,7 +162,15 @@ void ALadderBase::RebuildLadder()
 	}
 
 	ClimbTopTrigger->SetRelativeLocation(FVector(-80.0f, 0.0f, AdditionalHeight + CumulativeHeight + ClimbTopTrigger->Bounds.BoxExtent.Z));
-	ClimbTopLocation->SetRelativeLocation(FVector(-80.0f, 0.0f, AdditionalHeight + CumulativeHeight + 92.0f));
+	ClimbTopApproachLocation->SetRelativeLocation(
+		FVector(-80.0f, 0.0f, AdditionalHeight + CumulativeHeight + 92.0f));
+	ClimbTopLocation->SetRelativeLocation(
+		FVector(-20.0f, 0.0f, AdditionalHeight + CumulativeHeight + 92.0f));
+	// The interaction move uses this component's rotation as the montage
+	// start rotation. Top entry must already face the ladder before root
+	// motion and motion warping begin.
+	ClimbTopLocation->SetRelativeRotation(FRotator(0.0f, 180.0f, 0.0f));
+	ClimbTopApproachLocation->SetRelativeRotation(FRotator(0.0f, 180.0f, 0.0f));
 }
 
 bool ALadderBase::HasValidGeneratedMeshes() const
@@ -212,17 +215,6 @@ void ALadderBase::BuildRuntimeGripData()
 				ClimbMesh->GetSocketLocation(SocketName));
 			GripList1D.Add({ LocalSocketLocation, MeshIndex + 1, {} });
 		}
-	}
-
-	UStaticMeshComponent* TopClimbMesh = ClimbMeshes.Last();
-	if (TopClimbMesh->DoesSocketExist(FName("EnterTopLeftSocket")))
-	{
-		TopEnterLeftHandTarget->SetWorldLocation(TopClimbMesh->GetSocketLocation(FName("EnterTopLeftSocket")));
-	}
-
-	if (TopClimbMesh->DoesSocketExist(FName("EnterTopRightSocket")))
-	{
-		TopEnterRightHandTarget->SetWorldLocation(TopClimbMesh->GetSocketLocation(FName("EnterTopRightSocket")));
 	}
 
 	SetInitTopPosition();
@@ -279,6 +271,10 @@ void ALadderBase::SetInitTopPosition()
 	if (bHit)
 	{
 		ClimbTopLocation->SetWorldLocation(HitResult.ImpactPoint);
+		FVector ApproachLocation =
+			ClimbTopApproachLocation->GetComponentLocation();
+		ApproachLocation.Z = HitResult.ImpactPoint.Z;
+		ClimbTopApproachLocation->SetWorldLocation(ApproachLocation);
 	}
 	else
 	{

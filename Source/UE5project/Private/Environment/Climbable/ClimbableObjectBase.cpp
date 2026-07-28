@@ -38,6 +38,10 @@ AClimbableObjectBase::AClimbableObjectBase()
 	ClimbTopLocation->SetupAttachment(ObjectRoot);
 	ClimbTopLocation->ComponentTags.Add(FName("Top"));
 
+	ClimbTopApproachLocation = CreateDefaultSubobject<USceneComponent>(TEXT("ClimbTopApproachLocation"));
+	ClimbTopApproachLocation->SetupAttachment(ObjectRoot);
+	ClimbTopApproachLocation->ComponentTags.Add(FName("TopApproach"));
+
 	ClimbBottomLocation = CreateDefaultSubobject<USceneComponent>(TEXT("ClimbBottomLocation"));
 	ClimbBottomLocation->SetupAttachment(ObjectRoot);
 	ClimbBottomLocation->ComponentTags.Add(FName("Bottom"));
@@ -74,6 +78,15 @@ USceneComponent* AClimbableObjectBase::GetEnterInteractLocation_Implementation(A
 	FVector DistBottomLoc = Target->GetActorLocation() - ClimbBottomLocation->GetComponentLocation();
 
 	return DistTopLoc.Length() < DistBottomLoc.Length() ? ClimbTopLocation : ClimbBottomLocation;
+}
+
+USceneComponent* AClimbableObjectBase::GetNavigationInteractLocation_Implementation(AActor* Target)
+{
+	USceneComponent* EntryLocation =
+		GetEnterInteractLocation_Implementation(Target);
+	return EntryLocation == ClimbTopLocation
+		? ClimbTopApproachLocation.Get()
+		: EntryLocation;
 }
 
 void AClimbableObjectBase::GetInteractionTags_Implementation(FGameplayTagContainer& OutTags) const

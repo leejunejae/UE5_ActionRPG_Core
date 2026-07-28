@@ -36,5 +36,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 		USceneComponent* GetEnterInteractLocation(AActor* Target = nullptr);
 
+	// Optional NavMesh-safe point used before the final interaction alignment.
+	// Returning nullptr falls back to GetEnterInteractLocation.
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
+		USceneComponent* GetNavigationInteractLocation(AActor* Target = nullptr);
+
 	void GetInteractionTags(FGameplayTagContainer& OutTags) const;
 };
