@@ -77,3 +77,7 @@ DerivedDataCache/*
 
 # Ignore Contents file for Capacity(Contents file are managed locally)
 Content/
+
+.codex_tmp/
+.claude/
+.agents/

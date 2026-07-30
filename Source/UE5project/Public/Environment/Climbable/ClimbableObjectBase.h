@@ -30,8 +30,6 @@ class UE5PROJECT_API AClimbableObjectBase : public AMapObjectBase, public IInter
 public:
 	AClimbableObjectBase();
 
-	virtual void Tick(float DeltaTime) override;
-
 	virtual void PostInitializeComponents() override;
 
 	virtual USceneComponent* GetEnterInteractLocation_Implementation(AActor* Target);
@@ -46,8 +44,6 @@ public:
 	const TArray<FGripNode1D>& GetGripList1D() const { return GripList1D; }
 
 protected:
-	virtual void BeginPlay() override;
-
 	UFUNCTION()
 		void TriggerBegin(class UPrimitiveComponent* OverlappedComp, class AActor* OtherActor, class UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult);
 
@@ -65,6 +61,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = Interact)
 		TObjectPtr<USceneComponent> ClimbTopApproachLocation;
+
+	UPROPERTY(VisibleAnywhere, Category = Interact)
+		TObjectPtr<USceneComponent> ClimbTopExitLocation;
 
 	UPROPERTY(VisibleAnywhere, Category = Interact)
 		TObjectPtr<USceneComponent> ClimbBottomLocation;

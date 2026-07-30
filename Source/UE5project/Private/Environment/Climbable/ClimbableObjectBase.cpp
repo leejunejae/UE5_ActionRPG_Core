@@ -19,7 +19,7 @@
 
 AClimbableObjectBase::AClimbableObjectBase()
 {
-	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bCanEverTick = false;
 
 	Tags.Add("Climbable");
 	
@@ -42,19 +42,13 @@ AClimbableObjectBase::AClimbableObjectBase()
 	ClimbTopApproachLocation->SetupAttachment(ObjectRoot);
 	ClimbTopApproachLocation->ComponentTags.Add(FName("TopApproach"));
 
+	ClimbTopExitLocation = CreateDefaultSubobject<USceneComponent>(TEXT("ClimbTopExitLocation"));
+	ClimbTopExitLocation->SetupAttachment(ObjectRoot);
+	ClimbTopExitLocation->ComponentTags.Add(FName("TopExit"));
+
 	ClimbBottomLocation = CreateDefaultSubobject<USceneComponent>(TEXT("ClimbBottomLocation"));
 	ClimbBottomLocation->SetupAttachment(ObjectRoot);
 	ClimbBottomLocation->ComponentTags.Add(FName("Bottom"));
-}
-
-void AClimbableObjectBase::BeginPlay()
-{
-	Super::BeginPlay();
-}
-
-void AClimbableObjectBase::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
 }
 
 void AClimbableObjectBase::PostInitializeComponents()

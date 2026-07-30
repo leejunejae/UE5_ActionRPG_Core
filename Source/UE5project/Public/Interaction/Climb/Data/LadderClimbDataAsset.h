@@ -12,7 +12,7 @@ struct FLadderWarpCheckpoint
 {
 	GENERATED_BODY()
 
-	// Entry montage that consumes this checkpoint.
+	// Transition montage that consumes this checkpoint.
 	UPROPERTY(EditAnywhere, Category = "Warp Checkpoint")
 	EClimbPhase Phase = EClimbPhase::Enter_From_Top;
 
@@ -52,10 +52,19 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Montage")
 	TArray<FLadderWarpCheckpoint> EnterWarpCheckpoints;
 
+	UPROPERTY(EditAnywhere, Category = "Montage")
+	FName ExitWarpTargetName = TEXT("LadderExit");
+
+	UPROPERTY(EditAnywhere, Category = "Montage")
+	TArray<FLadderWarpCheckpoint> ExitWarpCheckpoints;
+
 	// A larger remaining error means motion warping did not reach the authored
 	// final attach transform and must not be hidden by an end-of-montage snap.
 	UPROPERTY(EditAnywhere, Category = "Montage", meta = (ClampMin = "0.0", Units = "cm"))
 	float TopEnterCompletionTolerance = 5.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Montage", meta = (ClampMin = "0.0", Units = "cm"))
+	float ExitCompletionTolerance = 5.0f;
 
 	// Final idle pose reached by the bottom-entry animation. Values are
 	// measured from BottomEnterIdleReferenceLimb along ladder-local Up.

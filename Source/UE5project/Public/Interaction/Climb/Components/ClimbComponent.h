@@ -119,9 +119,15 @@ private:
 	float MaxGripInterval = TNumericLimits<float>::Max();
 
 	FOnMontageEnded EnterClimbEndedDelegate;
+	FOnMontageEnded ExitClimbEndedDelegate;
+	FOnMontageBlendingOutStarted ExitClimbBlendingOutDelegate;
 
 private:
 	void OnEnterClimbMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+	void OnExitClimbMontageBlendingOut(
+		UAnimMontage* Montage,
+		bool bInterrupted);
+	void OnExitClimbMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	FVector CalculateLadderAlignmentLocation(const ACharacter* Character) const;
 	FRotator CalculateLadderAlignmentRotation() const;
 	bool BeginLadderTransition(ELadderTransitionState NewTransition);
@@ -132,7 +138,9 @@ private:
 	void ResetLadderIKState(bool bRestoreGroundPhase);
 	void HandleOwnerDeathStarted();
 	bool PlayEnterMontage(EClimbPhase EnterPhase);
+	bool PlayExitMontage(EClimbPhase ExitPhase);
 	bool UpdateEnterWarpTarget(EClimbPhase EnterPhase);
+	bool UpdateExitWarpTarget(EClimbPhase ExitPhase);
 	void ClearTransitionWarpTargets();
 	void DrawBottomEnterContactDebug() const;
 	bool ResolveGripPattern(
@@ -140,10 +148,13 @@ private:
 		ELimbList ReferenceLimb,
 		bool bPreferTop,
 		TMap<ELimbList, int32>& OutAssignment) const;
-	bool BuildTopEnterGripRoute(
-		const TMap<ELimbList, int32>& InitialAssignment,
-		const TMap<ELimbList, int32>& FinalAssignment,
-		TMap<ELimbList, int32>& OutValidatedInitialAssignment);
+	bool BuildGripRoute(
+		UAnimMontage* Montage,
+		const TMap<ELimbList, int32>& StartAssignment,
+		const TMap<ELimbList, int32>& EndAssignment);
+	bool BuildTopExitGripRoute(EClimbPhase ExitPhase);
+	bool ValidatePlannedGripRouteEnd(
+		const TMap<ELimbList, int32>& ExpectedAssignment) const;
 	EClimbPhase ResolveIdlePhaseFromGripState() const;
 	bool ValidateTopEnterFinalGripAssignment() const;
 	FGripNode1D* GetGripNode(int32 GripIndex);
@@ -188,6 +199,8 @@ private:
 
 	bool bHasCharacterStateSnapshot = false;
 	bool bEnterMontageActive = false;
+	bool bExitMontageActive = false;
+	bool bExitVisualStateReleased = false;
 	uint8 SavedMovementMode = 0;
 	uint8 SavedCustomMovementMode = 0;
 	bool bSavedOrientRotationToMovement = false;
@@ -201,6 +214,7 @@ private:
 
 	TMap<ELimbList, FLimbGripTransitionState> ActiveLimbGripTransitions;
 	TMap<ELimbList, TArray<int32>> PlannedLimbGripTargets;
+	TMap<ELimbList, int32> PlannedGripRouteEndAssignment;
 
 	FVector SetBoneIKTargetLadder(int32 TargetGripIndex, const FVector CurveValue, float LimbXDistance = 0.0f, int32 StartGripIndex = INDEX_NONE, float LimbYDistance = -15.0f);
 	FVector SetBoneIKTargetLadder(const FVector TargetLoc, const FVector CurveValue, const FVector StartLoc = FVector(), float LimbXDistance = 0.0f, float LimbYDistance = -15.0f);
