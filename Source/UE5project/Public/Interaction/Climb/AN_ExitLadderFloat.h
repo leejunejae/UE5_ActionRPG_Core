@@ -7,13 +7,11 @@
 #include "AN_ExitLadderFloat.generated.h"
 
 /**
- * 
+ * Deprecated compatibility shell for animation assets that still serialize
+ * this notify. Montage completion now owns ladder exit cleanup.
  */
 UCLASS()
 class UE5PROJECT_API UAN_ExitLadderFloat : public UAnimNotify
 {
 	GENERATED_BODY()
-	
-public:
-	virtual void Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation) override;
 };

@@ -122,18 +122,6 @@ struct FLadderClimbCurveSet
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enter")
-		TObjectPtr<UCurveVector> BottomEnterBodyCurve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Enter")
-		TObjectPtr<UCurveVector> TopEnterBodyCurve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Exit")
-		TObjectPtr<UCurveVector> BottomExitBodyCurve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Exit")
-		TObjectPtr<UCurveVector> TopExitBodyCurve;
-
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ClimbUp")
 		TObjectPtr<UCurveVector> ClimbUpRightBodyCurve;
 

@@ -7,13 +7,11 @@
 #include "AN_EnterLadderFloat.generated.h"
 
 /**
- * 
+ * Deprecated compatibility shell for animation assets that still serialize
+ * this notify. Ladder entry setup is now owned by UClimbComponent.
  */
 UCLASS()
 class UE5PROJECT_API UAN_EnterLadderFloat : public UAnimNotify
 {
 	GENERATED_BODY()
-	
-public:
-	virtual void Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation) override;
 };

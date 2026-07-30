@@ -88,8 +88,7 @@ public:
 	bool RequestEnterLadder(AActor* TargetLadder);
 	bool RequestExitLadder(bool bExitTop);
 
-	void EnterLadderFloat();
-	void ExitLadderFloat();
+	void PrepareCharacterForLadderTransition();
 	void ForceDetachFromLadder(bool bBroadcastExit = false);
 	bool BeginLimbGripTransition(
 		ELimbList Limb,

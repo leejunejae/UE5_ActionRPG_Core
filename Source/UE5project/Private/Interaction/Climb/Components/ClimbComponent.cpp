@@ -320,7 +320,7 @@ bool UClimbComponent::RequestEnterLadder(AActor* TargetLadder)
 	Character->GetCapsuleComponent()->IgnoreActorWhenMoving(TargetLadder, true);
 
 	bIsClimbing = true;
-	EnterLadderFloat();
+	PrepareCharacterForLadderTransition();
 
 	const EClimbPhase EnterPhase = bEnterFromBottom
 		? EClimbPhase::Enter_From_Bottom
@@ -460,18 +460,13 @@ bool UClimbComponent::RequestExitLadder(bool bExitTop)
 	return true;
 }
 
-void UClimbComponent::EnterLadderFloat()
+void UClimbComponent::PrepareCharacterForLadderTransition()
 {
 	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
 	{
 		CaptureCharacterState();
 		Character->GetCharacterMovement()->SetMovementMode(MOVE_Flying);
 	}
-}
-
-void UClimbComponent::ExitLadderFloat()
-{
-	CompleteLadderTransition();
 }
 
 bool UClimbComponent::BeginLadderTransition(ELadderTransitionState NewTransition)
