@@ -48,6 +48,7 @@ private:
 	void NormalDismountTimer();
 	void BlendPlayerCameraToRide(ARide* Ride, FVector InitVelocity);
 	void BlendRideCameraToPlayer();
+	void RestoreGroundIKPhase();
 
 	UPROPERTY(Transient)
 	TObjectPtr<APlayerBase> Player = nullptr;

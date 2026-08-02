@@ -9,33 +9,16 @@
 
 void UANS_IKBlend::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, float TotalDuration, const FAnimNotifyEventReference& EventReference)
 {
-    if (MeshComp && MeshComp->GetAnimInstance() && MeshComp->GetAnimInstance()->GetClass()->ImplementsInterface(UIAnimInstance::StaticClass()))
+    if (UAnimInstance* AnimInstance = GetCompatibleAnimInstance(MeshComp))
     {
-        if (!bInitAlphaValue)
-            return;
-
-        float TargetAlpha = bAlphaToZero ? 1.0f : 0.0f;
-
-        switch (Mode)
-        {
-        case EIKConvertMode::Phase:
-        {
-            IIAnimInstance::Execute_SetIKPhaseAlpha(MeshComp->GetAnimInstance(), ToPhaseTag, TargetAlpha);
-            IIAnimInstance::Execute_SetIKPhaseAlpha(MeshComp->GetAnimInstance(), FromPhaseTag, 1.0f - TargetAlpha);
-            break;
-        }
-        case EIKConvertMode::Layer:
-        {
-            IIAnimInstance::Execute_SetIKLayerAlpha(MeshComp->GetAnimInstance(), LayerTag, TargetLimb, TargetAlpha);
-            break;
-        }
-        }
+        ActiveBlends.FindOrAdd(AnimInstance) =
+            CaptureStartAlphas(AnimInstance, bInitAlphaValue);
     }
 }
 
 void UANS_IKBlend::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, float FrameDeltaTime, const FAnimNotifyEventReference& EventReference)
 {
-    if (MeshComp && MeshComp->GetAnimInstance() && MeshComp->GetAnimInstance()->GetClass()->ImplementsInterface(UIAnimInstance::StaticClass()))
+    if (UAnimInstance* AnimInstance = GetCompatibleAnimInstance(MeshComp))
     {
         if (const FAnimNotifyEvent* Notify = EventReference.GetNotify())
         {
@@ -46,7 +29,7 @@ void UANS_IKBlend::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSequenceBas
             if (const UAnimMontage* Montage = Cast<UAnimMontage>(Anim))
             {
                 const float MontagePosition =
-                    MeshComp->GetAnimInstance()->Montage_GetPosition(Montage);
+                    AnimInstance->Montage_GetPosition(Montage);
                 CurrentRatio = FMath::Clamp(
                     (MontagePosition - StartTime) / InterpDuration,
                     0.0f,
@@ -58,57 +41,123 @@ void UANS_IKBlend::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSequenceBas
                     UAnimNotifyLibrary::GetCurrentAnimationNotifyStateTimeRatio(EventReference);
             }
 
-            const float OutAlpha = bAlphaToZero ? 1.0f - ApplyCurve(CurrentRatio, BlendMode) : ApplyCurve(CurrentRatio, BlendMode);
-
-            float CurrentAlpha;
-
-            CurrentAlpha = Mode == EIKConvertMode::Phase
-                ? IIAnimInstance::Execute_GetIKPhaseAlpha(MeshComp->GetAnimInstance(), ToPhaseTag)
-                : IIAnimInstance::Execute_GetIKLayerAlpha(MeshComp->GetAnimInstance(), LayerTag, TargetLimb);
-
-            if (!bAlphaToZero ? OutAlpha <= CurrentAlpha : OutAlpha >= CurrentAlpha)
-                return;
-
-
-            switch (Mode)
+            FActiveIKBlend* Blend = ActiveBlends.Find(AnimInstance);
+            if (!Blend)
             {
-            case EIKConvertMode::Phase:
-            {
-                IIAnimInstance::Execute_SetIKPhaseAlpha(MeshComp->GetAnimInstance(), ToPhaseTag, OutAlpha);
-                IIAnimInstance::Execute_SetIKPhaseAlpha(MeshComp->GetAnimInstance(), FromPhaseTag, 1.0f - OutAlpha);
-                break;
+                Blend = &ActiveBlends.Add(
+                    AnimInstance,
+                    CaptureStartAlphas(AnimInstance, false));
             }
-            case EIKConvertMode::Layer:
-            {
-                IIAnimInstance::Execute_SetIKLayerAlpha(MeshComp->GetAnimInstance(), LayerTag, TargetLimb, OutAlpha);
-                break;
-            }
-            }
+
+            ApplyBlendAlphas(
+                AnimInstance,
+                *Blend,
+                ApplyCurve(CurrentRatio, BlendMode));
         }
     }
 }
 
 void UANS_IKBlend::NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, const FAnimNotifyEventReference& EventReference)
 {
-    if (MeshComp && MeshComp->GetAnimInstance() && MeshComp->GetAnimInstance()->GetClass()->ImplementsInterface(UIAnimInstance::StaticClass()))
+    if (UAnimInstance* AnimInstance = GetCompatibleAnimInstance(MeshComp))
     {
+        ApplyFinalAlphas(AnimInstance);
+        ActiveBlends.Remove(AnimInstance);
+    }
+}
 
-        float TargetAlpha = bAlphaToZero ? 0.0f : 1.0f;
+UAnimInstance* UANS_IKBlend::GetCompatibleAnimInstance(
+    USkeletalMeshComponent* MeshComp) const
+{
+    UAnimInstance* AnimInstance = MeshComp ? MeshComp->GetAnimInstance() : nullptr;
+    return AnimInstance &&
+        AnimInstance->GetClass()->ImplementsInterface(UIAnimInstance::StaticClass())
+        ? AnimInstance
+        : nullptr;
+}
 
-        switch (Mode)
+UANS_IKBlend::FActiveIKBlend UANS_IKBlend::CaptureStartAlphas(
+    UAnimInstance* AnimInstance,
+    bool bApplyInitialValue) const
+{
+    FActiveIKBlend Blend;
+    const float InitialToOrLayerAlpha = bAlphaToZero ? 1.0f : 0.0f;
+
+    if (Mode == EIKConvertMode::Phase)
+    {
+        Blend.ToOrLayerStartAlpha = bApplyInitialValue
+            ? InitialToOrLayerAlpha
+            : IIAnimInstance::Execute_GetIKPhaseAlpha(AnimInstance, ToPhaseTag);
+        Blend.FromStartAlpha = bApplyInitialValue
+            ? 1.0f - InitialToOrLayerAlpha
+            : IIAnimInstance::Execute_GetIKPhaseAlpha(AnimInstance, FromPhaseTag);
+
+        if (bApplyInitialValue)
         {
-        case EIKConvertMode::Phase:
+            IIAnimInstance::Execute_SetIKPhaseAlpha(
+                AnimInstance, ToPhaseTag, Blend.ToOrLayerStartAlpha);
+            IIAnimInstance::Execute_SetIKPhaseAlpha(
+                AnimInstance, FromPhaseTag, Blend.FromStartAlpha);
+        }
+    }
+    else
+    {
+        Blend.ToOrLayerStartAlpha = bApplyInitialValue
+            ? InitialToOrLayerAlpha
+            : IIAnimInstance::Execute_GetIKLayerAlpha(
+                AnimInstance, LayerTag, TargetLimb);
+
+        if (bApplyInitialValue)
         {
-            IIAnimInstance::Execute_SetIKPhaseAlpha(MeshComp->GetAnimInstance(), ToPhaseTag, TargetAlpha);
-            IIAnimInstance::Execute_SetIKPhaseAlpha(MeshComp->GetAnimInstance(), FromPhaseTag, 1.0f - TargetAlpha);
-            break;
+            IIAnimInstance::Execute_SetIKLayerAlpha(
+                AnimInstance, LayerTag, TargetLimb,
+                Blend.ToOrLayerStartAlpha);
         }
-        case EIKConvertMode::Layer:
-        {
-            IIAnimInstance::Execute_SetIKLayerAlpha(MeshComp->GetAnimInstance(), LayerTag, TargetLimb, TargetAlpha);
-            break;
-        }
-        }
+    }
+
+    return Blend;
+}
+
+void UANS_IKBlend::ApplyBlendAlphas(
+    UAnimInstance* AnimInstance,
+    const FActiveIKBlend& Blend,
+    float Progress) const
+{
+    const float TargetAlpha = bAlphaToZero ? 0.0f : 1.0f;
+    const float ClampedProgress = FMath::Clamp(Progress, 0.0f, 1.0f);
+    const float ToOrLayerAlpha = FMath::Lerp(
+        Blend.ToOrLayerStartAlpha, TargetAlpha, ClampedProgress);
+
+    if (Mode == EIKConvertMode::Phase)
+    {
+        const float FromAlpha = FMath::Lerp(
+            Blend.FromStartAlpha, 1.0f - TargetAlpha, ClampedProgress);
+        IIAnimInstance::Execute_SetIKPhaseAlpha(
+            AnimInstance, ToPhaseTag, ToOrLayerAlpha);
+        IIAnimInstance::Execute_SetIKPhaseAlpha(
+            AnimInstance, FromPhaseTag, FromAlpha);
+    }
+    else
+    {
+        IIAnimInstance::Execute_SetIKLayerAlpha(
+            AnimInstance, LayerTag, TargetLimb, ToOrLayerAlpha);
+    }
+}
+
+void UANS_IKBlend::ApplyFinalAlphas(UAnimInstance* AnimInstance) const
+{
+    const float TargetAlpha = bAlphaToZero ? 0.0f : 1.0f;
+    if (Mode == EIKConvertMode::Phase)
+    {
+        IIAnimInstance::Execute_SetIKPhaseAlpha(
+            AnimInstance, ToPhaseTag, TargetAlpha);
+        IIAnimInstance::Execute_SetIKPhaseAlpha(
+            AnimInstance, FromPhaseTag, 1.0f - TargetAlpha);
+    }
+    else
+    {
+        IIAnimInstance::Execute_SetIKLayerAlpha(
+            AnimInstance, LayerTag, TargetLimb, TargetAlpha);
     }
 }
 

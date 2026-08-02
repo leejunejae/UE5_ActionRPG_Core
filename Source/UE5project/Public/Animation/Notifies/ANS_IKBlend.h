@@ -63,5 +63,17 @@ public:
     virtual void NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, const FAnimNotifyEventReference& EventReference) override;
 
 private:
+    struct FActiveIKBlend
+    {
+        float ToOrLayerStartAlpha = 0.0f;
+        float FromStartAlpha = 0.0f;
+    };
+
+    TMap<TWeakObjectPtr<UAnimInstance>, FActiveIKBlend> ActiveBlends;
+
+    UAnimInstance* GetCompatibleAnimInstance(USkeletalMeshComponent* MeshComp) const;
+    FActiveIKBlend CaptureStartAlphas(UAnimInstance* AnimInstance, bool bApplyInitialValue) const;
+    void ApplyBlendAlphas(UAnimInstance* AnimInstance, const FActiveIKBlend& Blend, float Progress) const;
+    void ApplyFinalAlphas(UAnimInstance* AnimInstance) const;
     float ApplyCurve(float T, EBlendCurve Curve);
 };

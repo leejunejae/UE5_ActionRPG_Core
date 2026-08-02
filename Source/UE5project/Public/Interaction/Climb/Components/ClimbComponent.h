@@ -45,6 +45,7 @@ public:
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 #pragma region Owner Data
 protected:
@@ -135,7 +136,11 @@ private:
 	void RestoreCharacterState();
 	void ClearLadderSession();
 	void ResetLadderIKState(bool bRestoreGroundPhase);
+	void StopActiveTransitionMontage();
 	void HandleOwnerDeathStarted();
+
+	UFUNCTION()
+	void HandleClimbObjectDestroyed(AActor* DestroyedActor);
 	bool PlayEnterMontage(EClimbPhase EnterPhase);
 	bool PlayExitMontage(EClimbPhase ExitPhase);
 	bool UpdateEnterWarpTarget(EClimbPhase EnterPhase);

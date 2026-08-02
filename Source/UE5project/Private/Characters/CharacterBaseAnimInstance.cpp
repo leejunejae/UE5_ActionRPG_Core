@@ -41,8 +41,10 @@ void UCharacterBaseAnimInstance::NativeInitializeAnimation()
 		AnimModeMap.Add(TAG_State_Ground, NewObject<UAnimMode_Ground>(this));
 		AnimModeMap.Add(TAG_State_Ladder, NewObject<UAnimMode_Ladder>(this));
 
-		IKPhase.Add(FGameplayTag::RequestGameplayTag(TEXT("IK.Phase.Ground")), 1.0f);
-		IKPhase.Add(FGameplayTag::RequestGameplayTag(TEXT("IK.Phase.Ladder")), 0.0f);
+		SetIKPhaseAlpha_Native(TAG_IK_Phase_Ground, 1.0f);
+		SetIKPhaseAlpha_Native(TAG_IK_Phase_Ladder, 0.0f);
+		SetIKPhaseAlpha_Native(TAG_IK_Phase_Ride, 0.0f);
+		InitializeIKLayers();
 
 		for (auto& Pair : AnimModeMap)
 		{
@@ -166,25 +168,134 @@ void UCharacterBaseAnimInstance::SetIKPhaseAlpha_Native(FGameplayTag TargetIKPha
 {
 	if (!ensure(TargetIKPhase.MatchesTag(TAG_IK_Phase))) return;
 
-	IKPhase.FindOrAdd(TargetIKPhase) = FMath::Clamp(Weight, 0.0f, 1.0f);
+	const float ClampedWeight = FMath::Clamp(Weight, 0.0f, 1.0f);
+	if (TargetIKPhase.MatchesTagExact(TAG_IK_Phase_Ground))
+	{
+		GroundIKPhaseAlpha = ClampedWeight;
+	}
+	else if (TargetIKPhase.MatchesTagExact(TAG_IK_Phase_Ladder))
+	{
+		LadderIKPhaseAlpha = ClampedWeight;
+	}
+	else if (TargetIKPhase.MatchesTagExact(TAG_IK_Phase_Ride))
+	{
+		RideIKPhaseAlpha = ClampedWeight;
+	}
+	else
+	{
+		ensureMsgf(
+			false,
+			TEXT("Unsupported IK phase tag: %s"),
+			*TargetIKPhase.ToString());
+		return;
+	}
+
+	BaseIKPhaseAlpha = 1.0f - FMath::Clamp(
+		GroundIKPhaseAlpha +
+		LadderIKPhaseAlpha +
+		RideIKPhaseAlpha,
+		0.0f,
+		1.0f);
+
 }
 
 float UCharacterBaseAnimInstance::GetIKPhaseAlpha_Native(FGameplayTag TargetIKPhase)
 {
-	return IKPhase.FindRef(TargetIKPhase);
+	if (TargetIKPhase.MatchesTagExact(TAG_IK_Phase_Ground))
+	{
+		return GroundIKPhaseAlpha;
+	}
+	if (TargetIKPhase.MatchesTagExact(TAG_IK_Phase_Ladder))
+	{
+		return LadderIKPhaseAlpha;
+	}
+	if (TargetIKPhase.MatchesTagExact(TAG_IK_Phase_Ride))
+	{
+		return RideIKPhaseAlpha;
+	}
+
+	return 0.0f;
 }
 
 void UCharacterBaseAnimInstance::SetIKLayerAlpha_Native(FGameplayTag TargetIKLayer, ELimbList Limb, float Weight)
 {
 	if (!ensure(TargetIKLayer.MatchesTag(TAG_IK_Layer))) return;
 
-	IKLayer.FindOrAdd(TargetIKLayer).LimbWeights.FindOrAdd(Limb) = Weight;
-	//.Set(Limb, FMath::Clamp(Weight, 0.0f, 1.0f));
+	const float ClampedWeight = FMath::Clamp(Weight, 0.0f, 1.0f);
+	if (FIKLimbWeights* LayerWeights = FindIKLayerWeights(TargetIKLayer))
+	{
+		LayerWeights->Set(Limb, ClampedWeight);
+	}
+	else
+	{
+		ensureMsgf(false, TEXT("Unsupported IK layer tag: %s"),
+			*TargetIKLayer.ToString());
+	}
 }
 
 float UCharacterBaseAnimInstance::GetIKLayerAlpha_Native(FGameplayTag TargetIKLayer, ELimbList Limb)
 {
-	return IKLayer.FindRef(TargetIKLayer).LimbWeights.FindRef(Limb);
+	const FIKLimbWeights* LayerWeights = FindIKLayerWeights(TargetIKLayer);
+	return LayerWeights ? LayerWeights->Get(Limb) : 0.0f;
+}
+
+void UCharacterBaseAnimInstance::InitializeIKLayers()
+{
+	GroundLocomotionIKLayer = FIKLimbWeights{};
+	GroundHandWeaponIKLayer = FIKLimbWeights{};
+	LadderClimbIKLayer = FIKLimbWeights{};
+	RideLocomotionIKLayer = FIKLimbWeights{};
+
+	// Ground locomotion is the initial mode. Transition notifies enable the
+	// ladder and ride limbs when those modes become active.
+	GroundLocomotionIKLayer.Set(ELimbList::FootL, 1.0f);
+	GroundLocomotionIKLayer.Set(ELimbList::FootR, 1.0f);
+}
+
+FIKLimbWeights* UCharacterBaseAnimInstance::FindIKLayerWeights(
+	FGameplayTag TargetIKLayer)
+{
+	if (TargetIKLayer.MatchesTagExact(TAG_IK_Layer_Ground_Locomotion))
+	{
+		return &GroundLocomotionIKLayer;
+	}
+	if (TargetIKLayer.MatchesTagExact(TAG_IK_Layer_Ground_HandWeapon))
+	{
+		return &GroundHandWeaponIKLayer;
+	}
+	if (TargetIKLayer.MatchesTagExact(TAG_IK_Layer_Ladder_Climb))
+	{
+		return &LadderClimbIKLayer;
+	}
+	if (TargetIKLayer.MatchesTagExact(TAG_IK_Layer_Ride_Locomotion))
+	{
+		return &RideLocomotionIKLayer;
+	}
+
+	return nullptr;
+}
+
+const FIKLimbWeights* UCharacterBaseAnimInstance::FindIKLayerWeights(
+	FGameplayTag TargetIKLayer) const
+{
+	if (TargetIKLayer.MatchesTagExact(TAG_IK_Layer_Ground_Locomotion))
+	{
+		return &GroundLocomotionIKLayer;
+	}
+	if (TargetIKLayer.MatchesTagExact(TAG_IK_Layer_Ground_HandWeapon))
+	{
+		return &GroundHandWeaponIKLayer;
+	}
+	if (TargetIKLayer.MatchesTagExact(TAG_IK_Layer_Ladder_Climb))
+	{
+		return &LadderClimbIKLayer;
+	}
+	if (TargetIKLayer.MatchesTagExact(TAG_IK_Layer_Ride_Locomotion))
+	{
+		return &RideLocomotionIKLayer;
+	}
+
+	return nullptr;
 }
 
 void UCharacterBaseAnimInstance::SetIKPhaseAlpha_Implementation(FGameplayTag TargetIKPhase, float Weight)

@@ -57,33 +57,37 @@ public:
 };
 
 
+/** Fixed runtime representation used by the AnimGraph. */
 USTRUCT(BlueprintType)
-struct FIKContextWeights
+struct FIKLimbWeights
 {
 	GENERATED_BODY()
 
-public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = IK)
-		TMap<ELimbList, float> LimbWeights;
-	/*
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float HandL = 0.f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float HandR = 0.f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float FootL = 0.f;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float FootR = 0.f;
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = IK)
+	float HandL = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = IK)
+	float HandR = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = IK)
+	float FootL = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = IK)
+	float FootR = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = IK)
+	float Body = 0.0f;
 
 	void Set(ELimbList Limb, float Weight)
 	{
-		Weight = FMath::Clamp(Weight, 0.f, 1.f);
+		const float ClampedWeight = FMath::Clamp(Weight, 0.0f, 1.0f);
 		switch (Limb)
 		{
-		case ELimbList::HandL: HandL = Weight; break;
-		case ELimbList::HandR: HandR = Weight; break;
-		case ELimbList::FootL: FootL = Weight; break;
-		case ELimbList::FootR: FootR = Weight; break;
+		case ELimbList::HandL: HandL = ClampedWeight; break;
+		case ELimbList::HandR: HandR = ClampedWeight; break;
+		case ELimbList::FootL: FootL = ClampedWeight; break;
+		case ELimbList::FootR: FootR = ClampedWeight; break;
+		case ELimbList::Body: Body = ClampedWeight; break;
 		default: break;
 		}
 	}
@@ -96,10 +100,11 @@ public:
 		case ELimbList::HandR: return HandR;
 		case ELimbList::FootL: return FootL;
 		case ELimbList::FootR: return FootR;
-		default: return 0.f;
+		case ELimbList::Body: return Body;
+		default: return 0.0f;
 		}
 	}
-	*/
+
 };
 
 UCLASS()

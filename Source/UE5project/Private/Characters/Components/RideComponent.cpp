@@ -10,6 +10,8 @@
 #include "Characters/Player/PlayerRide.h"
 #include "Characters/Player/Components/PlayerStatusComponent.h"
 #include "Characters/Rideable/Ride.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/Interfaces/IAnimInstance.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -92,6 +94,7 @@ bool URideComponent::RequestDismount(FVector InitVelocity)
 
 		Player->LaunchCharacter(DisMountVelocity, true, true);
 		Player->GetCharacterStatusComponent()->SetState(TAG_State_Ground);
+		RestoreGroundIKPhase();
 
 		ClearCurrentRide();
 		EndRideCollision(Ride);
@@ -175,11 +178,35 @@ void URideComponent::HandleDismountEnd()
 	Player->GetCharacterMovement()->SetMovementMode(MOVE_Walking);
 	Player->SetSkipJumpStart(false);
 	Player->GetCharacterStatusComponent()->SetState(TAG_State_Ground);
+	RestoreGroundIKPhase();
 
 	FDetachmentTransformRules DetachmentRules = FDetachmentTransformRules(
 		EDetachmentRule::KeepWorld, false);
 
 	Player->DetachFromActor(DetachmentRules);
+}
+
+void URideComponent::RestoreGroundIKPhase()
+{
+	UAnimInstance* AnimInstance =
+		Player && Player->GetMesh()
+			? Player->GetMesh()->GetAnimInstance()
+			: nullptr;
+	if (!IsValid(AnimInstance) ||
+		!AnimInstance->GetClass()->ImplementsInterface(
+			UIAnimInstance::StaticClass()))
+	{
+		return;
+	}
+
+	IIAnimInstance::Execute_SetIKPhaseAlpha(
+		AnimInstance,
+		TAG_IK_Phase_Ride,
+		0.0f);
+	IIAnimInstance::Execute_SetIKPhaseAlpha(
+		AnimInstance,
+		TAG_IK_Phase_Ground,
+		1.0f);
 }
 
 float URideComponent::GetRideSpeed() const

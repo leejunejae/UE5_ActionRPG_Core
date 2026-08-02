@@ -43,6 +43,21 @@ void UClimbComponent::BeginPlay()
 	}
 }
 
+void UClimbComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (ACharacterBase* Character = Cast<ACharacterBase>(GetOwner()))
+	{
+		if (UCharacterStatusComponent* StatusComponent =
+			Character->GetCharacterStatusComponent())
+		{
+			StatusComponent->OnDeathStarted.RemoveAll(this);
+		}
+	}
+
+	ForceDetachFromLadder(false);
+	Super::EndPlay(EndPlayReason);
+}
+
 UCurveVector* UClimbComponent::GetClimbCurve(const FClimbCurveKey& Key) const
 {
 	if (!LadderClimbProfile) return nullptr;
@@ -550,6 +565,13 @@ void UClimbComponent::RestoreCharacterState()
 
 void UClimbComponent::ClearLadderSession()
 {
+	if (ClimbObject)
+	{
+		ClimbObject->OnDestroyed.RemoveDynamic(
+			this,
+			&UClimbComponent::HandleClimbObjectDestroyed);
+	}
+
 	ClearTransitionWarpTargets();
 	bEnterMontageActive = false;
 	bExitMontageActive = false;
@@ -610,6 +632,60 @@ void UClimbComponent::ResetLadderIKState(bool bRestoreGroundPhase)
 	}
 }
 
+void UClimbComponent::StopActiveTransitionMontage()
+{
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	UAnimInstance* AnimInstance = Character && Character->GetMesh()
+		? Character->GetMesh()->GetAnimInstance()
+		: nullptr;
+	if (!IsValid(AnimInstance))
+	{
+		return;
+	}
+
+	UAnimMontage* TransitionMontage = nullptr;
+	FOnMontageEnded EmptyEndedDelegate;
+	FOnMontageBlendingOutStarted EmptyBlendingOutDelegate;
+	if (bEnterMontageActive)
+	{
+		const EClimbPhase EnterPhase =
+			LadderTransitionState == ELadderTransitionState::EnterTop
+				? EClimbPhase::Enter_From_Top
+				: EClimbPhase::Enter_From_Bottom;
+		TransitionMontage = GetClimbMontage(EnterPhase);
+		if (IsValid(TransitionMontage))
+		{
+			AnimInstance->Montage_SetEndDelegate(
+				EmptyEndedDelegate,
+				TransitionMontage);
+		}
+	}
+	else if (bExitMontageActive)
+	{
+		TransitionMontage = GetClimbMontage(LadderStance);
+		if (IsValid(TransitionMontage))
+		{
+			AnimInstance->Montage_SetEndDelegate(
+				EmptyEndedDelegate,
+				TransitionMontage);
+			AnimInstance->Montage_SetBlendingOutDelegate(
+				EmptyBlendingOutDelegate,
+				TransitionMontage);
+		}
+	}
+
+	EnterClimbEndedDelegate.Unbind();
+	ExitClimbEndedDelegate.Unbind();
+	ExitClimbBlendingOutDelegate.Unbind();
+	bEnterMontageActive = false;
+	bExitMontageActive = false;
+	if (IsValid(TransitionMontage) &&
+		AnimInstance->Montage_IsPlaying(TransitionMontage))
+	{
+		AnimInstance->Montage_Stop(0.1f, TransitionMontage);
+	}
+}
+
 void UClimbComponent::ForceDetachFromLadder(bool bBroadcastExit)
 {
 	const bool bShouldBroadcastExit =
@@ -625,6 +701,7 @@ void UClimbComponent::ForceDetachFromLadder(bool bBroadcastExit)
 		}
 	}
 
+	StopActiveTransitionMontage();
 	ResetLadderIKState(bRestoreGroundPhase);
 
 	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
@@ -783,6 +860,14 @@ void UClimbComponent::CancelLimbGripTransition(ELimbList Limb)
 void UClimbComponent::HandleOwnerDeathStarted()
 {
 	ForceDetachFromLadder(false);
+}
+
+void UClimbComponent::HandleClimbObjectDestroyed(AActor* DestroyedActor)
+{
+	if (DestroyedActor == ClimbObject)
+	{
+		ForceDetachFromLadder(true);
+	}
 }
 
 bool UClimbComponent::PlayEnterMontage(EClimbPhase EnterPhase)
@@ -2317,6 +2402,12 @@ void UClimbComponent::RegisterClimbObject(ALadderBase* Ladder)
 	}
 
 	ClimbObject = Ladder;
+	ClimbObject->OnDestroyed.RemoveDynamic(
+		this,
+		&UClimbComponent::HandleClimbObjectDestroyed);
+	ClimbObject->OnDestroyed.AddDynamic(
+		this,
+		&UClimbComponent::HandleClimbObjectDestroyed);
 	GripList1D = ClimbObject->GetGripList1D();
 	if (!GripList1D.IsEmpty())
 	{

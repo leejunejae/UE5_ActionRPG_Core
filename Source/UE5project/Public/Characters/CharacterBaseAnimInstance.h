@@ -66,11 +66,30 @@ protected:
 
 #pragma region State & Stance_IK
 protected:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = IK)
-		TMap<FGameplayTag, float> IKPhase;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "IK|Layer")
+	FIKLimbWeights GroundLocomotionIKLayer;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = IK)
-		TMap<FGameplayTag, FIKContextWeights> IKLayer;
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "IK|Layer")
+	FIKLimbWeights GroundHandWeaponIKLayer;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "IK|Layer")
+	FIKLimbWeights LadderClimbIKLayer;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "IK|Layer")
+	FIKLimbWeights RideLocomotionIKLayer;
+
+	/** Phase values consumed directly by the AnimGraph. */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "IK|Phase")
+	float GroundIKPhaseAlpha = 1.0f;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "IK|Phase")
+	float LadderIKPhaseAlpha = 0.0f;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "IK|Phase")
+	float RideIKPhaseAlpha = 0.0f;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "IK|Phase")
+	float BaseIKPhaseAlpha = 0.0f;
 
 public:
 	void SetIKPhaseAlpha_Native(FGameplayTag TargetIKPhase, float Weight);
@@ -82,6 +101,11 @@ public:
 	float GetIKPhaseAlpha_Implementation(FGameplayTag TargetIKPhase) override;
 	void SetIKLayerAlpha_Implementation(FGameplayTag TargetIKLayer, ELimbList Limb, float Weight) override;
 	float GetIKLayerAlpha_Implementation(FGameplayTag TargetIKLayer, ELimbList Limb) override;
+
+private:
+	void InitializeIKLayers();
+	FIKLimbWeights* FindIKLayerWeights(FGameplayTag TargetIKLayer);
+	const FIKLimbWeights* FindIKLayerWeights(FGameplayTag TargetIKLayer) const;
 #pragma endregion State & Stance_IK
 
 private:
