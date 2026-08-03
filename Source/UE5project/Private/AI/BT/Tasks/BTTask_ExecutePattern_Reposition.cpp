@@ -153,7 +153,7 @@ EBTNodeResult::Type UBTTask_ExecutePattern_Reposition::ExecuteTask(UBehaviorTree
 void UBTTask_ExecutePattern_Reposition::OnMoveCompleted(FAIRequestID RequestID, EPathFollowingResult::Type Result)
 {
 	// 우리 요청이 아니면 무시
-	if (RequestID != CurrentMoveRequestID) return;
+	if (RequestID != CurrentMoveRequestID || !IsValid(OwnerCompRef)) return;
 
 	// 타임아웃 타이머 취소
 	if (UWorld* World = GetWorld())
@@ -161,7 +161,7 @@ void UBTTask_ExecutePattern_Reposition::OnMoveCompleted(FAIRequestID RequestID, 
 		World->GetTimerManager().ClearTimer(TimeoutTimerHandle);
 	}
 
-	const bool bSuccess = (Result == EPathFollowingResult::Success) || (Result == EPathFollowingResult::Aborted);  // 인터럽트도 정상 종료로 처리
+	const bool bSuccess = Result == EPathFollowingResult::Success;
 
 	UE_LOG(Log_AI, Log, TEXT("[Reposition] MoveCompleted: %s"), bSuccess ? TEXT("Success") : TEXT("Failed"));
 
@@ -173,18 +173,22 @@ void UBTTask_ExecutePattern_Reposition::OnMoveCompleted(FAIRequestID RequestID, 
 // ============================================================
 void UBTTask_ExecutePattern_Reposition::OnTimeout()
 {
-	if (!OwnerCompRef) return;
+	UBehaviorTreeComponent* OwnerComp = OwnerCompRef;
+	if (!IsValid(OwnerComp)) return;
 
 	UE_LOG(Log_AI, Log, TEXT("[Reposition] Timeout — finishing task"));
 
 	// MoveTo 강제 중단
-	if (AEnemyBaseAIController* AIC = Cast<AEnemyBaseAIController>(OwnerCompRef->GetAIOwner()))
+	if (AEnemyBaseAIController* AIC = Cast<AEnemyBaseAIController>(OwnerComp->GetAIOwner()))
 	{
+		// StopMovement()가 동기적으로 OnMoveCompleted를 호출할 수 있으므로 먼저 해제
+		AIC->ReceiveMoveCompleted.RemoveDynamic(this, &UBTTask_ExecutePattern_Reposition::OnMoveCompleted);
+		CurrentMoveRequestID = FAIRequestID();
 		AIC->StopMovement();
 	}
 
 	// 타임아웃은 "도달 못 했어도 자연스럽게 종료" — 성공으로 처리
-	FinishLatentTask(*OwnerCompRef, EBTNodeResult::Succeeded);
+	FinishLatentTask(*OwnerComp, EBTNodeResult::Succeeded);
 }
 
 // ============================================================

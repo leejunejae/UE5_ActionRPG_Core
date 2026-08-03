@@ -193,20 +193,17 @@ void UBTTask_ExecutePattern_Alert::OnMoveCompleted(FAIRequestID RequestID, EPath
     UE_LOG(Log_AI_Task_Combat_Alert, Verbose, TEXT("[Task_Alert] OnMoveCompleted: incoming ID=%d, our ID=%d"),
         RequestID.GetID(), CurrentMoveRequestID.GetID());
 
-    if (RequestID != CurrentMoveRequestID)
+    if (RequestID != CurrentMoveRequestID || !IsValid(OwnerCompRef))
     {
-        UE_LOG(Log_AI_Task_Combat_Alert, Verbose, TEXT("[Task_Alert] Ignoring (different ID)"));
+        UE_LOG(Log_AI_Task_Combat_Alert, Verbose, TEXT("[Task_Alert] Ignoring (different ID or inactive task)"));
         return;
     }
 
-    const bool bSuccess = (Result == EPathFollowingResult::Success) || (Result == EPathFollowingResult::Aborted);
+    const bool bSuccess = Result == EPathFollowingResult::Success;
 
     UE_LOG(Log_AI_Task_Combat_Alert, Log, TEXT("[Task_Alert] MoveCompleted: %s"), bSuccess ? TEXT("Success") : TEXT("Failed"));
 
-    if (OwnerCompRef)
-    {
-        FinishLatentTask(*OwnerCompRef, bSuccess ? EBTNodeResult::Succeeded : EBTNodeResult::Failed);
-    }
+    FinishLatentTask(*OwnerCompRef, bSuccess ? EBTNodeResult::Succeeded : EBTNodeResult::Failed);
 }
 
 // ============================================================
@@ -214,16 +211,21 @@ void UBTTask_ExecutePattern_Alert::OnMoveCompleted(FAIRequestID RequestID, EPath
 // ============================================================
 void UBTTask_ExecutePattern_Alert::OnTimeout()
 {
-    if (!OwnerCompRef) return;
+    UBehaviorTreeComponent* OwnerComp = OwnerCompRef;
+    if (!IsValid(OwnerComp)) return;
 
     UE_LOG(Log_AI_Task_Combat_Alert, Log, TEXT("[Task_Alert] Timeout — finishing task"));
 
-    if (AEnemyBaseAIController* AIC = Cast<AEnemyBaseAIController>(OwnerCompRef->GetAIOwner()))
+    if (AEnemyBaseAIController* AIC = Cast<AEnemyBaseAIController>(OwnerComp->GetAIOwner()))
     {
+        // StopMovement() can synchronously broadcast ReceiveMoveCompleted.
+        // Unbind first so this timeout remains the task's only completion path.
+        AIC->ReceiveMoveCompleted.RemoveDynamic(this, &UBTTask_ExecutePattern_Alert::OnMoveCompleted);
+        CurrentMoveRequestID = FAIRequestID();
         AIC->StopMovement();
     }
 
-    FinishLatentTask(*OwnerCompRef, EBTNodeResult::Succeeded);
+    FinishLatentTask(*OwnerComp, EBTNodeResult::Succeeded);
 }
 
 // ============================================================
