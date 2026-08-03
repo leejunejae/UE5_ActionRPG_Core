@@ -13,26 +13,28 @@ void UAnimMode_Ladder::Tick(float DeltaSeconds)
 
 	auto* Ch = Character.Get();
 	auto* Anim = AnimInst.Get();
+	UClimbComponent* ClimbComponent = Ch->GetClimbComponent();
+	if (!IsValid(ClimbComponent)) return;
 
-	Anim->CurLadderStance = Ch->GetClimbComponent()->GetLadderStance();
+	Anim->CurLadderStance = ClimbComponent->GetLadderStance();
 
 	FVector Hand_L_Location = Character->GetMesh()->GetSocketLocation(FName("Hand_L_Offset"));
 	FVector Palm_L_Location = Character->GetMesh()->GetSocketLocation(FName("Palm_L"));
-	Anim->LeftHandLadderOffset = Character->GetClimbComponent()->GetLimbIKTarget(ELimbList::HandL);
+	Anim->LeftHandLadderOffset = ClimbComponent->GetLimbIKTarget(ELimbList::HandL);
 	Anim->LeftHandLadderOffset -= Palm_L_Location - Hand_L_Location;
 
 	FVector Foot_R_Location = Character->GetMesh()->GetSocketLocation(FName("Foot_R_Offset"));
 	FVector Sole_R_Location = Character->GetMesh()->GetSocketLocation(FName("Sole_R"));
-	Anim->RightFootLadderOffset = Character->GetClimbComponent()->GetLimbIKTarget(ELimbList::FootR);
+	Anim->RightFootLadderOffset = ClimbComponent->GetLimbIKTarget(ELimbList::FootR);
 	Anim->RightFootLadderOffset -= Sole_R_Location - Foot_R_Location;
 
 	FVector Hand_R_Location = Character->GetMesh()->GetSocketLocation(FName("Hand_R_Offset"));
 	FVector Palm_R_Location = Character->GetMesh()->GetSocketLocation(FName("Palm_R"));
-	Anim->RightHandLadderOffset = Character->GetClimbComponent()->GetLimbIKTarget(ELimbList::HandR);
+	Anim->RightHandLadderOffset = ClimbComponent->GetLimbIKTarget(ELimbList::HandR);
 	Anim->RightHandLadderOffset -= Palm_R_Location - Hand_R_Location;
 
 	FVector Foot_L_Location = Character->GetMesh()->GetSocketLocation(FName("Foot_L_Offset"));
 	FVector Sole_L_Location = Character->GetMesh()->GetSocketLocation(FName("Sole_L"));
-	Anim->LeftFootLadderOffset = Character->GetClimbComponent()->GetLimbIKTarget(ELimbList::FootL);
+	Anim->LeftFootLadderOffset = ClimbComponent->GetLimbIKTarget(ELimbList::FootL);
 	Anim->LeftFootLadderOffset -= Sole_L_Location - Foot_L_Location;
 }

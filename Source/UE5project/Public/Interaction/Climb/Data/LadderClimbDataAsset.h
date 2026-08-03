@@ -29,6 +29,34 @@ struct FLadderWarpCheckpoint
 	FRotator RotationOffset = FRotator::ZeroRotator;
 };
 
+UENUM(BlueprintType)
+enum class ELadderSide : uint8
+{
+	Left,
+	Right
+};
+
+USTRUCT(BlueprintType)
+struct FLadderRepeatedStepDefinition
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, Category = "Repeated Step")
+	ELadderSide MovingHand = ELadderSide::Left;
+
+	UPROPERTY(EditAnywhere, Category = "Repeated Step")
+	ELadderSide MovingFoot = ELadderSide::Right;
+
+	UPROPERTY(EditAnywhere, Category = "Repeated Step")
+	TObjectPtr<UCurveVector> BodyCurve = nullptr;
+
+	UPROPERTY(EditAnywhere, Category = "Repeated Step")
+	TObjectPtr<UCurveVector> HandCurve = nullptr;
+
+	UPROPERTY(EditAnywhere, Category = "Repeated Step")
+	TObjectPtr<UCurveVector> FootCurve = nullptr;
+};
+
 /**
  * 
  */
@@ -40,6 +68,11 @@ class UE5PROJECT_API ULadderClimbDataAsset : public UDataAsset
 public:
 	UPROPERTY(EditAnywhere, Category = "Curve")
 	TMap<FClimbCurveKey, UCurveVector*> Curves;
+
+	// Data-driven definitions for repeated ladder steps. When a phase exists
+	// here, it takes precedence over the legacy Curves map above.
+	UPROPERTY(EditAnywhere, Category = "Repeated Step")
+	TMap<EClimbPhase, FLadderRepeatedStepDefinition> RepeatedSteps;
 
 	UPROPERTY(EditAnywhere, Category = "Montage")
 	TMap<EClimbPhase, UAnimMontage*> Montages;
@@ -65,6 +98,12 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Montage", meta = (ClampMin = "0.0", Units = "cm"))
 	float ExitCompletionTolerance = 5.0f;
+
+	// Maximum body-position error accepted when one repeated climb step ends.
+	// Errors inside this range are finalized through CharacterMovement;
+	// larger errors indicate a broken curve or blocked movement.
+	UPROPERTY(EditAnywhere, Category = "Curve", meta = (ClampMin = "0.0", Units = "cm"))
+	float RepeatedClimbCompletionTolerance = 3.0f;
 
 	// Final idle pose reached by the bottom-entry animation. Values are
 	// measured from BottomEnterIdleReferenceLimb along ladder-local Up.

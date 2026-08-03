@@ -64,6 +64,7 @@ protected:
 
 protected:
 	UCurveVector* GetClimbCurve(const FClimbCurveKey& Key) const;
+	const FLadderRepeatedStepDefinition* GetRepeatedStepDefinition(EClimbPhase Phase) const;
 	UAnimMontage* GetClimbMontage(EClimbPhase Phase) const;
 #pragma endregion Owner Data
 
@@ -169,6 +170,12 @@ private:
 	FVector CalculateBodyTargetLocation(
 		const TMap<ELimbList, int32>& GripAssignment,
 		const FVector& FallbackLocation) const;
+	bool MoveCharacterAlongClimbPath(const FVector& TargetLocation);
+	bool ResolveRepeatedStepLimbs(
+		EClimbPhase Phase,
+		ELimbList& OutMovingHand,
+		ELimbList& OutMovingFoot) const;
+	bool StartRepeatedClimbStep(bool bUp);
 
 /// <summary>
 /// Setter Function For Setting Value
@@ -220,7 +227,6 @@ private:
 	TMap<ELimbList, TArray<int32>> PlannedLimbGripTargets;
 	TMap<ELimbList, int32> PlannedGripRouteEndAssignment;
 
-	FVector SetBoneIKTargetLadder(int32 TargetGripIndex, const FVector CurveValue, float LimbXDistance = 0.0f, int32 StartGripIndex = INDEX_NONE, float LimbYDistance = -15.0f);
-	FVector SetBoneIKTargetLadder(const FVector TargetLoc, const FVector CurveValue, const FVector StartLoc = FVector(), float LimbXDistance = 0.0f, float LimbYDistance = -15.0f);
+	FVector SetBoneIKTargetLadder(int32 TargetGripIndex, const FVector CurveValue, float LimbXDistance = 0.0f, int32 StartGripIndex = INDEX_NONE);
 #pragma endregion Ladder Climbing
 };
