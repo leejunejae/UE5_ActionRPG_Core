@@ -1,4 +1,0 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
-#include "Interaction/Climb/AN_ExitLadderFloat.h"

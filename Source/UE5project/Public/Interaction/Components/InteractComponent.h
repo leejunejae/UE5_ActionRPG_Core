@@ -22,28 +22,28 @@ private:
 	FTimerDelegate InteractTimerDelegate;
 
 protected:
-	// Called when the game starts
-	virtual void BeginPlay() override;
-
 	TSet<AActor*> InteractableList;
 
-	AActor* InteractActor;
+	UPROPERTY(Transient)
+	TObjectPtr<AActor> InteractActor = nullptr;
 
 public:	
 	// Called every frame
 	AActor* GetInteractActor();
 
-	bool CheckInteractListValid();
 	void AddInteractObject(AActor* InteractObject);
 	void RemoveInteractObject(AActor* InteractObject);
 	bool SetInteractActorByDegree(AActor* StartActor, float SearchDegrees);
 	bool MovetoInteractPos();
+
+private:
+	bool CheckInteractListValid() const;
 	void InteractPosCheckTimer(
 		USceneComponent* NavigationTarget,
 		USceneComponent* AlignmentTarget);
 
 	UFUNCTION()
-		void OnMovetoInteractPosEnd();
+	void OnMovetoInteractPosEnd();
 
 public:
 	FOnSingleDelegate OnArrivedInteractionPoint;

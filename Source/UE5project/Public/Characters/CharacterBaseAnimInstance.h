@@ -123,9 +123,6 @@ private:
 		ELadderActionState LadderActionState = ELadderActionState::Detached;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
-		float RepeatedStepProgress = 0.0f;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
 		float RepeatedStepExplicitTime = 0.0f;
 
 	UPROPERTY(Transient, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))

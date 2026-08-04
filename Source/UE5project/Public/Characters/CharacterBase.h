@@ -114,11 +114,6 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = Climb)
 		TObjectPtr<UMotionWarpingComponent> MotionWarpingComponent;
 
-	UPROPERTY(EditAnywhere)
-		float MinGripInterval = 15.0f;
-	UPROPERTY(EditAnywhere)
-		float MaxGripInterval = 60.0f;
-
 public:
 	FORCEINLINE UClimbComponent* GetClimbComponent() const { return ClimbComponent; }
 	FORCEINLINE UMotionWarpingComponent* GetMotionWarpingComponent() const { return MotionWarpingComponent; }

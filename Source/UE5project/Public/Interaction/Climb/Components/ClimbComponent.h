@@ -20,19 +20,17 @@ struct FLimbData
 
 public:
 	int32 LimbTargetGripIndex = INDEX_NONE;
-	int32 PreviousGripIndex = INDEX_NONE;
 	FVector LimbLocation;
 
 public:
 	FLimbData() {}
-	FLimbData(int32 InLimbTargetGripIndex, FVector InLimbLocation, int32 InPreviousGripIndex = INDEX_NONE)
+	FLimbData(int32 InLimbTargetGripIndex, FVector InLimbLocation)
 		: LimbTargetGripIndex(InLimbTargetGripIndex)
-		, PreviousGripIndex(InPreviousGripIndex)
 		, LimbLocation(InLimbLocation)
 	{}
 };
 
-DECLARE_MULTICAST_DELEGATE(FMultiDelegate);
+DECLARE_MULTICAST_DELEGATE(FOnLadderExitDelegate);
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class UE5PROJECT_API UClimbComponent : public UActorComponent
@@ -72,9 +70,6 @@ protected:
 public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	void RegisterClimbObject(ALadderBase* Ladder);
-	void DeRegisterClimbObject();
-
 #pragma endregion Climbable Object
 
 #pragma region Grip And FootHold
@@ -82,13 +77,12 @@ protected:
 	TArray<FGripNode1D> GripList1D;
 
 	TMap<ELimbList, FLimbData> LimbToGripNode;
-	TTuple<FVector, FVector> ClimbLocation;
+	FVector TransitionTargetLocation = FVector::ZeroVector;
 
 public:
 	bool RequestEnterLadder(AActor* TargetLadder);
 	bool RequestExitLadder(bool bExitTop);
 
-	void ForceDetachFromLadder(bool bBroadcastExit = false);
 	bool BeginLimbGripTransition(
 		ELimbList Limb,
 		ELadderGripDirection Direction,
@@ -97,7 +91,6 @@ public:
 	void CompleteLimbGripTransition(ELimbList Limb);
 	void CancelLimbGripTransition(ELimbList Limb);
 
-	void SetGrip1DRelation(float MinInterval, float MaxInterval);
 	FVector GetLimbIKTarget(ELimbList LimbName) const;
 	FORCEINLINE EClimbPhase GetLadderStance() const { return LadderStance; }
 	/// <summary>
@@ -106,14 +99,21 @@ public:
 
 #pragma region Setting Value
 private:
-	float MinGripInterval = 0.0f;
-	float MaxGripInterval = TNumericLimits<float>::Max();
+	UPROPERTY(EditDefaultsOnly, Category = "Climb|Grip", meta = (ClampMin = "0.0", Units = "cm"))
+	float MinGripInterval = 15.0f;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Climb|Grip", meta = (ClampMin = "0.0", Units = "cm"))
+	float MaxGripInterval = 60.0f;
 
 	FOnMontageEnded EnterClimbEndedDelegate;
 	FOnMontageEnded ExitClimbEndedDelegate;
 	FOnMontageBlendingOutStarted ExitClimbBlendingOutDelegate;
 
 private:
+	void RegisterClimbObject(ALadderBase* Ladder);
+	void DeRegisterClimbObject();
+	void ForceDetachFromLadder(bool bBroadcastExit = false);
+	void SetGrip1DRelation(float MinInterval, float MaxInterval);
 	void OnEnterClimbMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	void OnExitClimbMontageBlendingOut(
 		UAnimMontage* Montage,
@@ -172,13 +172,6 @@ private:
 	void TickRepeatedStep(float DeltaTime);
 	void TickRepeatedStepRecovery(float DeltaTime);
 
-/// <summary>
-/// Setter Function For Setting Value
-/// </summary>
-public:
-	void SetMinGripInterval(float MinInterval);
-	void SetMaxGripInterval(float MaxInterval);
-
 #pragma endregion Setting Value
 
 #pragma region Ladder Climbing
@@ -187,12 +180,11 @@ public:
 	void ClimbDownLadder();
 	void ClearRepeatedClimbInput();
 	FORCEINLINE ELadderActionState GetLadderActionState() const { return LadderActionState; }
-	FORCEINLINE float GetRepeatedStepProgress() const { return RepeatedStepRuntime.Progress; }
 	FORCEINLINE float GetRepeatedStepExplicitTime() const { return RepeatedStepRuntime.ExplicitTime; }
 	UAnimSequence* GetLadderIdleAnimation() const;
 	FORCEINLINE UAnimSequence* GetActiveRepeatedStepAnimation() const { return RepeatedStepRuntime.Animation.Get(); }
 
-	FMultiDelegate OnLadderExit;
+	FOnLadderExitDelegate OnLadderExit;
 
 private:
 	UPROPERTY(VisibleAnyWhere, Category = "ClimbState")

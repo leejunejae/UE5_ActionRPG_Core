@@ -54,12 +54,6 @@ struct FNeighborInfo
 	GENERATED_BODY()
 
 	int32 NeighborIndex = INDEX_NONE;
-	float Distance = 0.0f;
-
-	inline bool operator==(const FNeighborInfo& Other) const
-	{
-		return NeighborIndex == Other.NeighborIndex;
-	}
 };
 
 USTRUCT(Atomic,BlueprintType)
@@ -69,15 +63,8 @@ struct FGripNode1D
 
 public:
 	FVector LocalPosition;
-	int32 Level = 0;
-	int32 GripIndex = 0;
 	FNeighborInfo NeighborUp;
 	FNeighborInfo NeighborDown;
-
-	inline bool operator==(const FGripNode1D& Other) const
-	{
-		return LocalPosition == Other.LocalPosition;
-	}
 };
 
 UCLASS()

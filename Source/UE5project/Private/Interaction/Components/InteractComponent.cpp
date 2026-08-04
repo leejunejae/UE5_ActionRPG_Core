@@ -12,21 +12,7 @@
 // Sets default values for this component's properties
 UInteractComponent::UInteractComponent()
 {
-	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
-	// off to improve performance if you don't need them.
-	PrimaryComponentTick.bCanEverTick = true;
-
-	// ...
-}
-
-
-// Called when the game starts
-void UInteractComponent::BeginPlay()
-{
-	Super::BeginPlay();
-
-	// ...
-	
+	PrimaryComponentTick.bCanEverTick = false;
 }
 
 AActor* UInteractComponent::GetInteractActor()
@@ -34,9 +20,9 @@ AActor* UInteractComponent::GetInteractActor()
 	return InteractActor;
 }
 
-bool UInteractComponent::CheckInteractListValid()
+bool UInteractComponent::CheckInteractListValid() const
 {
-	return InteractableList.IsEmpty() ? false : true;
+	return !InteractableList.IsEmpty();
 }
 
 void UInteractComponent::AddInteractObject(AActor* InteractObject)
@@ -55,13 +41,15 @@ bool UInteractComponent::SetInteractActorByDegree(AActor* StartActor, float Sear
 		return false;
 
 	AActor* TargetActor = nullptr;
-	float CurrentDegrees = 60.0f;
+	float CurrentDegrees = FMath::Max(SearchDegrees, 0.0f);
 
 	FVector CharLocation = StartActor->GetActorLocation();
 	FVector ForwardVector = StartActor->GetActorForwardVector();
 
 	for (auto& Act : InteractableList)
 	{
+		if (!IsValid(Act)) continue;
+
 		FVector ActorLocation = Act->GetActorLocation();
 
 		FVector TargetDir = ActorLocation - CharLocation;
@@ -133,7 +121,10 @@ void UInteractComponent::InteractPosCheckTimer(
 	if (Character == nullptr ||
 		!IsValid(NavigationTarget) ||
 		!IsValid(AlignmentTarget))
+	{
+		GetOwner()->GetWorldTimerManager().ClearTimer(InteractTimerHandle);
 		return;
+	}
 
 	FVector2D CharLoc = FVector2D(Character->GetActorLocation().X, Character->GetActorLocation().Y);
 	FVector2D TargetLoc2D = FVector2D(

@@ -36,10 +36,6 @@ ACharacterBase::ACharacterBase(const FObjectInitializer& ObjectInitializer)
 
 	MotionWarpingComponent = CreateDefaultSubobject<UMotionWarpingComponent>(TEXT("MotionWarpingComponent"));
 
-	ClimbComponent->SetMinGripInterval(MinGripInterval);
-	ClimbComponent->SetMaxGripInterval(MaxGripInterval);
-
-
 	GetCharacterMovement()->bEnablePhysicsInteraction = false;
 
 	TeamID = 0;

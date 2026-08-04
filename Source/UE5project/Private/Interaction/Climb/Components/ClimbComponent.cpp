@@ -352,7 +352,7 @@ bool UClimbComponent::RequestEnterLadder(AActor* TargetLadder)
 			FinalIdleGripAssignment,
 			InitCharacterPosition);
 
-	ClimbLocation = MakeTuple(GetOwner()->GetActorLocation(), InitCharacterPosition);
+	TransitionTargetLocation = InitCharacterPosition;
 	if (!BeginLadderTransition(ELadderActionState::Entering))
 	{
 		UE_LOG(Log_Climb_Ladder, Warning, TEXT("[ClimbComponent] A ladder transition is already active."));
@@ -415,7 +415,7 @@ bool UClimbComponent::RequestExitLadder(bool bExitTop)
 		FVector ExitLocation = ExitPoint->GetComponentLocation();
 		ExitLocation.Z += Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 
-		ClimbLocation = MakeTuple(GetOwner()->GetActorLocation(), ExitLocation);
+		TransitionTargetLocation = ExitLocation;
 		LadderStance =
 			ResolveIdlePhaseFromGripState() == EClimbPhase::Idle_Left
 				? EClimbPhase::Exit_From_Top_Left
@@ -466,7 +466,7 @@ bool UClimbComponent::RequestExitLadder(bool bExitTop)
 
 		FVector ExitLocation = HitResult.ImpactPoint;
 		ExitLocation.Z += Character->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
-		ClimbLocation = MakeTuple(GetOwner()->GetActorLocation(), ExitLocation);
+		TransitionTargetLocation = ExitLocation;
 
 		LadderStance =
 			ResolveIdlePhaseFromGripState() == EClimbPhase::Idle_Left
@@ -590,6 +590,7 @@ void UClimbComponent::ClearLadderSession()
 	LimbToGripNode.Empty();
 	GripList1D.Empty();
 	ClimbObject = nullptr;
+	TransitionTargetLocation = FVector::ZeroVector;
 	TransitionRuntime.Reset();
 	RepeatedStepRuntime.Reset();
 	LadderStance = EClimbPhase::Idle_Right;
@@ -778,7 +779,6 @@ bool UClimbComponent::BeginLimbGripTransition(
 	Transition.TargetGripIndex = TargetGripIndex;
 	Transition.TrajectoryCurve = TrajectoryCurve;
 
-	LimbData->PreviousGripIndex = StartGripIndex;
 	LimbData->LimbTargetGripIndex = TargetGripIndex;
 	return true;
 }
@@ -836,7 +836,6 @@ void UClimbComponent::CompleteLimbGripTransition(ELimbList Limb)
 		Transition->TargetGripIndex,
 		FVector::ZeroVector,
 		LimbSideOffset);
-	LimbData->PreviousGripIndex = INDEX_NONE;
 	TransitionRuntime.ActiveGripTransitions.Remove(Limb);
 }
 
@@ -851,7 +850,6 @@ void UClimbComponent::CancelLimbGripTransition(ELimbList Limb)
 	}
 
 	LimbData->LimbTargetGripIndex = Transition->StartGripIndex;
-	LimbData->PreviousGripIndex = INDEX_NONE;
 	const float LimbSideOffset =
 		Limb == ELimbList::HandL || Limb == ELimbList::FootL
 			? 15.0f
@@ -956,7 +954,7 @@ bool UClimbComponent::UpdateEnterWarpTarget(EClimbPhase EnterPhase)
 	{
 		AttachTransform = FTransform(
 			CalculateLadderAlignmentRotation(),
-			ClimbLocation.Value);
+			TransitionTargetLocation);
 	}
 	else
 	{
@@ -1109,7 +1107,7 @@ bool UClimbComponent::UpdateExitWarpTarget(EClimbPhase ExitPhase)
 		bTopExit
 			? ExitPoint->GetComponentRotation()
 			: Character->GetActorRotation(),
-		ClimbLocation.Value);
+		TransitionTargetLocation);
 	const float CapsuleHalfHeight =
 		Character->GetCapsuleComponent()->
 			GetScaledCapsuleHalfHeight();
@@ -2131,7 +2129,6 @@ bool UClimbComponent::StartRepeatedClimbStep(bool bUp)
 
 	RepeatedStepRuntime.ActiveStep = NewStep;
 	RepeatedStepRuntime.Animation = SelectedStep->Animation.Get();
-	ClimbLocation = MakeTuple(CurrentLocation, TargetBodyLocation);
 	LadderStance = SelectedPhase;
 	LadderActionState = ELadderActionState::ClimbingStep;
 	RepeatedStepRuntime.Progress = 0.0f;
@@ -2207,7 +2204,7 @@ void UClimbComponent::OnEnterClimbMontageEnded(UAnimMontage* Montage, bool bInte
 	{
 		const float CompletionError = FVector::Distance(
 			GetOwner()->GetActorLocation(),
-			ClimbLocation.Value);
+			TransitionTargetLocation);
 		const float CompletionTolerance = IsValid(LadderClimbProfile)
 			? FMath::Max(
 				LadderClimbProfile->TopEnterCompletionTolerance,
@@ -2226,7 +2223,7 @@ void UClimbComponent::OnEnterClimbMontageEnded(UAnimMontage* Montage, bool bInte
 		}
 	}
 
-	GetOwner()->SetActorLocation(ClimbLocation.Value);
+	GetOwner()->SetActorLocation(TransitionTargetLocation);
 	LadderStance = ResolveIdlePhaseFromGripState();
 	LadderActionState = ELadderActionState::Recovering;
 	RepeatedStepRuntime.Progress = 0.0f;
@@ -2267,7 +2264,7 @@ void UClimbComponent::OnExitClimbMontageEnded(
 
 	const float CompletionError = FVector::Distance(
 		GetOwner()->GetActorLocation(),
-		ClimbLocation.Value);
+		TransitionTargetLocation);
 	const float CompletionTolerance = IsValid(LadderClimbProfile)
 		? FMath::Max(
 			LadderClimbProfile->ExitCompletionTolerance,
@@ -2291,7 +2288,7 @@ void UClimbComponent::OnExitClimbMontageEnded(
 			StopMovementImmediately();
 	}
 
-	GetOwner()->SetActorLocation(ClimbLocation.Value);
+	GetOwner()->SetActorLocation(TransitionTargetLocation);
 	if (bWasTopExit &&
 		IsValid(ClimbObject) &&
 		IsValid(ClimbObject->GetTopExitTarget()))
@@ -2475,16 +2472,6 @@ void UClimbComponent::DeRegisterClimbObject()
 	ForceDetachFromLadder(false);
 }
 
-void UClimbComponent::SetMinGripInterval(float MinInterval)
-{
-	MinGripInterval = MinInterval;
-}
-
-void UClimbComponent::SetMaxGripInterval(float MaxInterval)
-{
-	MaxGripInterval = MaxInterval;
-}
-
 FVector UClimbComponent::GetLimbIKTarget(ELimbList LimbName) const
 {
 	const FLimbData* LimbData = LimbToGripNode.Find(LimbName);
@@ -2532,9 +2519,7 @@ void UClimbComponent::FinishActiveRepeatedStep()
 		return;
 	}
 
-	HandData->PreviousGripIndex = INDEX_NONE;
 	HandData->LimbTargetGripIndex = CompletedStep.HandTargetGrip;
-	FootData->PreviousGripIndex = INDEX_NONE;
 	FootData->LimbTargetGripIndex = CompletedStep.FootTargetGrip;
 	RepeatedStepRuntime.ActiveStep.Reset();
 	LadderStance = ResolveIdlePhaseFromGripState();
@@ -2600,7 +2585,7 @@ void UClimbComponent::SetGrip1DRelation(float MinInterval, float MaxInterval)
 			float DistanceToLowerGrip = FVector::Dist(GetGripWorldPosition(i), GetGripWorldPosition(lowerindex));
 			if (DistanceToLowerGrip >= MinInterval && DistanceToLowerGrip <= MaxInterval)
 			{
-				GripList1D[i].NeighborDown = { lowerindex, DistanceToLowerGrip };
+				GripList1D[i].NeighborDown.NeighborIndex = lowerindex;
 				break;
 			}
 			else if (DistanceToLowerGrip < MinInterval)
@@ -2619,7 +2604,7 @@ void UClimbComponent::SetGrip1DRelation(float MinInterval, float MaxInterval)
 			float DistanceToUpperGrip = FVector::Dist(GetGripWorldPosition(i), GetGripWorldPosition(upperindex));
 			if (DistanceToUpperGrip >= MinInterval && DistanceToUpperGrip <= MaxInterval)
 			{
-				GripList1D[i].NeighborUp = { upperindex, DistanceToUpperGrip };
+				GripList1D[i].NeighborUp.NeighborIndex = upperindex;
 				break;
 			}
 			else if (DistanceToUpperGrip < MinInterval)

@@ -117,7 +117,9 @@ void ALadderBase::BuildRuntimeGripData()
 
 			const FVector LocalSocketLocation = GetActorTransform().InverseTransformPosition(
 				ClimbMesh->GetSocketLocation(SocketName));
-			GripList1D.Add({ LocalSocketLocation, MeshIndex + 1 });
+			FGripNode1D GripNode;
+			GripNode.LocalPosition = LocalSocketLocation;
+			GripList1D.Add(GripNode);
 		}
 	}
 
@@ -128,11 +130,6 @@ void ALadderBase::BuildRuntimeGripData()
 	{
 		return A.LocalPosition.Z < B.LocalPosition.Z;
 	});
-
-	for (int32 GripIndex = 0; GripIndex < GripList1D.Num(); ++GripIndex)
-	{
-		GripList1D[GripIndex].GripIndex = GripIndex;
-	}
 }
 
 void ALadderBase::SetInitTopPosition()

@@ -3,16 +3,8 @@
 
 #include "Environment/Climbable/ClimbableObjectBase.h"
 
-// 네비게이션
-#include "NavMesh/NavMeshBoundsVolume.h"
-#include "NavigationSystem.h"
-
 // 컴포넌트
-#include "Components/BrushComponent.h"
 #include "Components/BoxComponent.h"
-
-// 태그
-#include "GameplayTagsManager.h"
 
 // 인터페이스
 #include "Characters/Player/Interfaces/PlayerInterface.h"
@@ -25,8 +17,6 @@ AClimbableObjectBase::AClimbableObjectBase()
 	
 	ClimbObjectTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Climbable")));
 	ClimbObjectTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Interactable.Climb")));
-
-	ClimbStaticMesh = CreateDefaultSubobject<UStaticMesh>(TEXT("ClimbStaticMesh"));
 
 	ClimbTopTrigger = CreateDefaultSubobject<UBoxComponent>(TEXT("ClimbTopTrigger"));
 	ClimbTopTrigger->SetupAttachment(ObjectRoot);
@@ -63,7 +53,7 @@ void AClimbableObjectBase::PostInitializeComponents()
 
 USceneComponent* AClimbableObjectBase::GetEnterInteractLocation_Implementation(AActor* Target)
 {
-	IInteractInterface::GetEnterInteractLocation_Implementation(Target);
+	if (!IsValid(Target)) return nullptr;
 
 	if (ClimbTopTrigger->IsOverlappingActor(Target)) return ClimbTopLocation;
 	if (ClimbBottomTrigger->IsOverlappingActor(Target)) return ClimbBottomLocation;
