@@ -38,7 +38,6 @@ ACharacterBase::ACharacterBase(const FObjectInitializer& ObjectInitializer)
 
 	ClimbComponent->SetMinGripInterval(MinGripInterval);
 	ClimbComponent->SetMaxGripInterval(MaxGripInterval);
-	ClimbComponent->SetMinFirstGripHeight(MinFirstGripHeight);
 
 
 	GetCharacterMovement()->bEnablePhysicsInteraction = false;

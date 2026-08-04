@@ -418,6 +418,10 @@ void APlayerBase::StartMoveInput()
 void APlayerBase::EndMoveInput()
 {
 	IsMovementInput = false;
+	if (IsValid(ClimbComponent))
+	{
+		ClimbComponent->ClearRepeatedClimbInput();
+	}
 }
 
 /* ============================================================

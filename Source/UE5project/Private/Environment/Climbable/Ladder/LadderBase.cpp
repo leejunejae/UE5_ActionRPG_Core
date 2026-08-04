@@ -4,7 +4,6 @@
 #include "Environment/Climbable/Ladder/LadderBase.h"
 
 #include "Components/BoxComponent.h"
-#include "DrawDebugHelpers.h"
 #include "Utils/CoreLog.h"
 
 ALadderBase::ALadderBase()
@@ -118,7 +117,7 @@ void ALadderBase::BuildRuntimeGripData()
 
 			const FVector LocalSocketLocation = GetActorTransform().InverseTransformPosition(
 				ClimbMesh->GetSocketLocation(SocketName));
-			GripList1D.Add({ LocalSocketLocation, MeshIndex + 1, {} });
+			GripList1D.Add({ LocalSocketLocation, MeshIndex + 1 });
 		}
 	}
 
@@ -155,24 +154,6 @@ void ALadderBase::SetInitTopPosition()
 		CollisionParams
 	);
 
-	FVector TraceVec = EndLoc - StartLoc;
-	FVector Center = StartLoc + TraceVec * 0.5f;
-	float HalfHeight = FVector::Dist(StartLoc, EndLoc) * 0.5f;
-	FQuat CapsuleRot = FRotationMatrix::MakeFromZ(TraceVec).ToQuat();
-	FColor DrawColor = bHit ? FColor::Green : FColor::Red;
-	float DebugLifeTime = 5.0f;
-
-	DrawDebugCapsule(
-		GetWorld(),
-		Center,
-		HalfHeight,
-		20.0f,
-		CapsuleRot,
-		DrawColor,
-		false,
-		DebugLifeTime
-	);
-
 	if (bHit)
 	{
 		ClimbTopLocation->SetWorldLocation(HitResult.ImpactPoint);
@@ -187,7 +168,7 @@ void ALadderBase::SetInitTopPosition()
 	}
 	else
 	{
-		UE_LOG(Log_Climb_Ladder, Warning, TEXT("[Ladder] Bottom ground trace did not hit for '%s'."), *GetName());
+		UE_LOG(Log_Climb_Ladder, Warning, TEXT("[Ladder] Top ground trace did not hit for '%s'."), *GetName());
 	}
 }
 
@@ -211,31 +192,13 @@ void ALadderBase::SetInitBottomPosition()
 		CollisionParams
 	);
 
-	FVector TraceVec = EndLoc - StartLoc;
-	FVector Center = StartLoc + TraceVec * 0.5f;
-	float HalfHeight = FVector::Dist(StartLoc, EndLoc) * 0.5f;
-	FQuat CapsuleRot = FRotationMatrix::MakeFromZ(TraceVec).ToQuat();
-	FColor DrawColor = bHit ? FColor::Green : FColor::Red;
-	float DebugLifeTime = 5.0f;
-
-	DrawDebugCapsule(
-		GetWorld(),
-		Center,
-		HalfHeight,
-		20.0f,
-		CapsuleRot,
-		DrawColor,
-		false,
-		DebugLifeTime
-	);
-
 	if (bHit)
 	{
 		ClimbBottomLocation->SetWorldLocation(HitResult.ImpactPoint);
 	}
 	else
 	{
-		UE_LOG(Log_Climb_Ladder, Warning, TEXT("[Ladder] Top ground trace did not hit for '%s'."), *GetName());
+		UE_LOG(Log_Climb_Ladder, Warning, TEXT("[Ladder] Bottom ground trace did not hit for '%s'."), *GetName());
 	}
 }
 

@@ -3,8 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Curves/CurveVector.h"
-#include "Curves/CurveFloat.h"
 #include "Characters/Data/IKData.h"
 #include "UObject/NoExportTypes.h"
 #include "ClimbHeader.generated.h"
@@ -33,13 +31,14 @@ enum class EClimbPhase : uint8
 };
 
 UENUM(BlueprintType)
-enum class ELadderTransitionState : uint8
+enum class ELadderActionState : uint8
 {
-	None,
-	EnterBottom,
-	EnterTop,
-	ExitBottom,
-	ExitTop
+	Detached,
+	Entering,
+	Idle,
+	ClimbingStep,
+	Recovering,
+	Exiting
 };
 
 UENUM(BlueprintType)
@@ -48,28 +47,6 @@ enum class ELadderGripDirection : uint8
 	Up,
 	Down
 };
-
-USTRUCT(BlueprintType)
-struct FClimbCurveKey
-{
-	GENERATED_BODY()
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly) 
-		EClimbPhase Phase = EClimbPhase::Idle_Right;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly) 
-		ELimbList Limb = ELimbList::Body;
-
-	bool operator==(const FClimbCurveKey& Other) const
-	{
-		return Phase == Other.Phase && Limb == Other.Limb;
-	}
-};
-
-FORCEINLINE uint32 GetTypeHash(const FClimbCurveKey& K)
-{
-	return HashCombine(uint32(K.Phase), uint32(K.Limb));
-}
 
 USTRUCT(Atomic, BlueprintType)
 struct FNeighborInfo
@@ -85,19 +62,6 @@ struct FNeighborInfo
 	}
 };
 
-USTRUCT(BlueprintType)
-struct FGripNode2D
-{
-	GENERATED_BODY()
-
-	FVector Position;
-	TArray<FName> Tag;
-	TArray<FGripNode2D*> NeighborsUp;
-	TArray<FGripNode2D*> NeighborsDown;
-	TArray<FGripNode2D*> NeighborsRight;
-	TArray<FGripNode2D*> NeighborsLeft;
-};
-
 USTRUCT(Atomic,BlueprintType)
 struct FGripNode1D
 {
@@ -107,7 +71,6 @@ public:
 	FVector LocalPosition;
 	int32 Level = 0;
 	int32 GripIndex = 0;
-	TArray<FName> Tag;
 	FNeighborInfo NeighborUp;
 	FNeighborInfo NeighborDown;
 
@@ -115,48 +78,6 @@ public:
 	{
 		return LocalPosition == Other.LocalPosition;
 	}
-};
-
-USTRUCT(BlueprintType)
-struct FLadderClimbCurveSet
-{
-	GENERATED_BODY()
-public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ClimbUp")
-		TObjectPtr<UCurveVector> ClimbUpRightBodyCurve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ClimbUp")
-		TObjectPtr<UCurveVector> ClimbUpLeftBodyCurve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ClimbUp")
-		TObjectPtr<UCurveVector> ClimbUpLeftHandCurve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ClimbUp")
-		TObjectPtr<UCurveVector> ClimbUpRightHandCurve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ClimbUp")
-		TObjectPtr<UCurveVector> ClimbUpLeftFootCurve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ClimbUp")
-		TObjectPtr<UCurveVector> ClimbUpRightFootCurve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ClimbDown")
-		TObjectPtr<UCurveVector> ClimbDownRightBodyCurve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ClimbDown")
-		TObjectPtr<UCurveVector> ClimbDownLeftBodyCurve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ClimbDown")
-		TObjectPtr<UCurveVector> ClimbDownLeftHandCurve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ClimbDown")
-		TObjectPtr<UCurveVector> ClimbDownRightHandCurve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ClimbDown")
-		TObjectPtr<UCurveVector> ClimbDownLeftFootCurve;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "ClimbDown")
-		TObjectPtr<UCurveVector> ClimbDownRightFootCurve;
 };
 
 UCLASS()

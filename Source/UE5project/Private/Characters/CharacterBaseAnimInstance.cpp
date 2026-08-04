@@ -159,11 +159,6 @@ void UCharacterBaseAnimInstance::AnimNotify_NOT_DisableRootLock()
 	SetRootMotionMode(ERootMotionMode::IgnoreRootMotion);
 }
 
-void UCharacterBaseAnimInstance::AnimNotify_NOT_ResetClimbState()
-{
-	Character->GetClimbComponent()->ResetClimbState();
-}
-
 void UCharacterBaseAnimInstance::SetIKPhaseAlpha_Native(FGameplayTag TargetIKPhase, float Weight)
 {
 	if (!ensure(TargetIKPhase.MatchesTag(TAG_IK_Phase))) return;

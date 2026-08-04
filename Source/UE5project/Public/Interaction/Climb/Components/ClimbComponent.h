@@ -11,6 +11,7 @@
 #include "ClimbComponent.generated.h"
 
 class ALadderBase;
+class UAnimSequence;
 
 USTRUCT(BlueprintType)
 struct FLimbData
@@ -63,7 +64,6 @@ protected:
 		float BottomEnterContactDebugDuration = 10.0f;
 
 protected:
-	UCurveVector* GetClimbCurve(const FClimbCurveKey& Key) const;
 	const FLadderRepeatedStepDefinition* GetRepeatedStepDefinition(EClimbPhase Phase) const;
 	UAnimMontage* GetClimbMontage(EClimbPhase Phase) const;
 #pragma endregion Owner Data
@@ -84,13 +84,10 @@ protected:
 	TMap<ELimbList, FLimbData> LimbToGripNode;
 	TTuple<FVector, FVector> ClimbLocation;
 
-	bool bIsClimbing;
-
 public:
 	bool RequestEnterLadder(AActor* TargetLadder);
 	bool RequestExitLadder(bool bExitTop);
 
-	void PrepareCharacterForLadderTransition();
 	void ForceDetachFromLadder(bool bBroadcastExit = false);
 	bool BeginLimbGripTransition(
 		ELimbList Limb,
@@ -101,21 +98,14 @@ public:
 	void CancelLimbGripTransition(ELimbList Limb);
 
 	void SetGrip1DRelation(float MinInterval, float MaxInterval);
-	bool CheckGripListValid();
 	FVector GetLimbIKTarget(ELimbList LimbName) const;
 	FORCEINLINE EClimbPhase GetLadderStance() const { return LadderStance; }
 	/// <summary>
 	/// Getter Function For Find Grip about various rule
 	/// </summary>
 
-	int32 GetLowestGrip1DIndex() const;
-	int32 GetHighestGrip1DIndex() const;
-
-	void SetLowestGrip1D(float MinHeight = 0.0f, float Comparision = 0.0f);
-
 #pragma region Setting Value
 private:
-	float MinFirstGripHeight = 0.0f;
 	float MinGripInterval = 0.0f;
 	float MaxGripInterval = TNumericLimits<float>::Max();
 
@@ -129,10 +119,11 @@ private:
 		UAnimMontage* Montage,
 		bool bInterrupted);
 	void OnExitClimbMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+	void PrepareCharacterForLadderTransition();
 	FVector CalculateLadderAlignmentLocation(const ACharacter* Character) const;
 	FRotator CalculateLadderAlignmentRotation() const;
-	bool BeginLadderTransition(ELadderTransitionState NewTransition);
-	void CompleteLadderTransition();
+	bool BeginLadderTransition(ELadderActionState NewState);
+	void CompleteExitTransition();
 	void CaptureCharacterState();
 	void RestoreCharacterState();
 	void ClearLadderSession();
@@ -175,13 +166,16 @@ private:
 		EClimbPhase Phase,
 		ELimbList& OutMovingHand,
 		ELimbList& OutMovingFoot) const;
+	bool CanStartRepeatedClimb() const;
 	bool StartRepeatedClimbStep(bool bUp);
+	void FinishActiveRepeatedStep();
+	void TickRepeatedStep(float DeltaTime);
+	void TickRepeatedStepRecovery(float DeltaTime);
 
 /// <summary>
 /// Setter Function For Setting Value
 /// </summary>
 public:
-	void SetMinFirstGripHeight(float MinValue);
 	void SetMinGripInterval(float MinInterval);
 	void SetMaxGripInterval(float MaxInterval);
 
@@ -191,7 +185,12 @@ public:
 public:	
 	void ClimbUpLadder();
 	void ClimbDownLadder();
-	void ResetClimbState();
+	void ClearRepeatedClimbInput();
+	FORCEINLINE ELadderActionState GetLadderActionState() const { return LadderActionState; }
+	FORCEINLINE float GetRepeatedStepProgress() const { return RepeatedStepRuntime.Progress; }
+	FORCEINLINE float GetRepeatedStepExplicitTime() const { return RepeatedStepRuntime.ExplicitTime; }
+	UAnimSequence* GetLadderIdleAnimation() const;
+	FORCEINLINE UAnimSequence* GetActiveRepeatedStepAnimation() const { return RepeatedStepRuntime.Animation.Get(); }
 
 	FMultiDelegate OnLadderExit;
 
@@ -202,16 +201,10 @@ private:
 	UPROPERTY(VisibleAnyWhere, Category = "ClimbState")
 	TObjectPtr<ALadderBase> ClimbObject;
 
-	UPROPERTY(VisibleAnyWhere, Category = "ClimbState")
-	float AnimTime;
-
 	UPROPERTY(VisibleAnywhere, Category = "ClimbState")
-	ELadderTransitionState LadderTransitionState = ELadderTransitionState::None;
+	ELadderActionState LadderActionState = ELadderActionState::Detached;
 
 	bool bHasCharacterStateSnapshot = false;
-	bool bEnterMontageActive = false;
-	bool bExitMontageActive = false;
-	bool bExitVisualStateReleased = false;
 	uint8 SavedMovementMode = 0;
 	uint8 SavedCustomMovementMode = 0;
 	bool bSavedOrientRotationToMovement = false;
@@ -223,9 +216,59 @@ private:
 		TWeakObjectPtr<UCurveVector> TrajectoryCurve;
 	};
 
-	TMap<ELimbList, FLimbGripTransitionState> ActiveLimbGripTransitions;
-	TMap<ELimbList, TArray<int32>> PlannedLimbGripTargets;
-	TMap<ELimbList, int32> PlannedGripRouteEndAssignment;
+	struct FTransitionRuntime
+	{
+		TMap<ELimbList, FLimbGripTransitionState> ActiveGripTransitions;
+		TMap<ELimbList, TArray<int32>> PlannedGripTargets;
+		TMap<ELimbList, int32> PlannedRouteEndAssignment;
+		bool bVisualStateReleased = false;
+
+		void Reset()
+		{
+			ActiveGripTransitions.Empty();
+			PlannedGripTargets.Empty();
+			PlannedRouteEndAssignment.Empty();
+			bVisualStateReleased = false;
+		}
+	};
+
+	struct FActiveRepeatedStep
+	{
+		EClimbPhase Phase = EClimbPhase::Idle_Right;
+		ELimbList MovingHand = ELimbList::Body;
+		ELimbList MovingFoot = ELimbList::Body;
+		int32 HandStartGrip = INDEX_NONE;
+		int32 HandTargetGrip = INDEX_NONE;
+		int32 FootStartGrip = INDEX_NONE;
+		int32 FootTargetGrip = INDEX_NONE;
+		FVector BodyStart = FVector::ZeroVector;
+		FVector BodyTarget = FVector::ZeroVector;
+		float ElapsedTime = 0.0f;
+		float Duration = 0.0f;
+	};
+
+	struct FRepeatedStepRuntime
+	{
+		TOptional<FActiveRepeatedStep> ActiveStep;
+		TWeakObjectPtr<UAnimSequence> Animation;
+		float Progress = 0.0f;
+		float ExplicitTime = 0.0f;
+		float RecoveryElapsed = 0.0f;
+		int8 InputDirection = 0;
+
+		void Reset()
+		{
+			ActiveStep.Reset();
+			Animation.Reset();
+			Progress = 0.0f;
+			ExplicitTime = 0.0f;
+			RecoveryElapsed = 0.0f;
+			InputDirection = 0;
+		}
+	};
+
+	FTransitionRuntime TransitionRuntime;
+	FRepeatedStepRuntime RepeatedStepRuntime;
 
 	FVector SetBoneIKTargetLadder(int32 TargetGripIndex, const FVector CurveValue, float LimbXDistance = 0.0f, int32 StartGripIndex = INDEX_NONE);
 #pragma endregion Ladder Climbing

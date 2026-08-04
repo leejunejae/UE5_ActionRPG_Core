@@ -30,6 +30,7 @@ DECLARE_MULTICAST_DELEGATE(FOnAnimInstanceMulDel);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnMulOneParamDelegate, FName);
 
 class ACharacterBase;
+class UAnimSequence;
 
 UCLASS()
 class UE5PROJECT_API UCharacterBaseAnimInstance : public UAnimInstance, public IIAnimInstance
@@ -117,6 +118,21 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
 		EClimbPhase CurLadderStance;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
+		ELadderActionState LadderActionState = ELadderActionState::Detached;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
+		float RepeatedStepProgress = 0.0f;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
+		float RepeatedStepExplicitTime = 0.0f;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
+		TObjectPtr<UAnimSequence> LadderIdleAnimation = nullptr;
+
+	UPROPERTY(Transient, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
+		TObjectPtr<UAnimSequence> ActiveRepeatedStepAnimation = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
 		ERideAnimPhase CurRideAnimPhase;
@@ -255,8 +271,6 @@ private:
 #pragma endregion Ladder_IK
 
 protected:
-	UFUNCTION(BlueprintCallable)
-	void AnimNotify_NOT_ResetClimbState();
 #pragma endregion Ladder
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = IK_Ride, Meta = (AllowPrivateAccess = true))
 	FVector IK_FootL_Ride_Locomotion;

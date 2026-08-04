@@ -72,5 +72,4 @@ protected:
 		TObjectPtr<UStaticMesh> ClimbStaticMesh;
 
 	TArray<FGripNode1D> GripList1D;
-	TArray<FGripNode2D> GripList2D;
 };

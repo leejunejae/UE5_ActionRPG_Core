@@ -11,8 +11,10 @@
 #include "Characters/CharacterBase.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
+#include "Animation/AnimSequence.h"
 #include "Animation/Notifies/ANS_LadderGripTransition.h"
 #include "Animation/Interfaces/IAnimInstance.h"
+#include "Curves/CurveVector.h"
 #include "MotionWarpingComponent.h"
 #include "DrawDebugHelpers.h"
 
@@ -70,40 +72,6 @@ void UClimbComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-UCurveVector* UClimbComponent::GetClimbCurve(const FClimbCurveKey& Key) const
-{
-	if (!LadderClimbProfile) return nullptr;
-
-	if (const FLadderRepeatedStepDefinition* Step =
-		LadderClimbProfile->RepeatedSteps.Find(Key.Phase))
-	{
-		if (Key.Limb == ELimbList::Body)
-		{
-			return Step->BodyCurve.Get();
-		}
-		const ELimbList MovingHand =
-			Step->MovingHand == ELadderSide::Left
-				? ELimbList::HandL
-				: ELimbList::HandR;
-		const ELimbList MovingFoot =
-			Step->MovingFoot == ELadderSide::Left
-				? ELimbList::FootL
-				: ELimbList::FootR;
-		if (Key.Limb == MovingHand)
-		{
-			return Step->HandCurve.Get();
-		}
-		if (Key.Limb == MovingFoot)
-		{
-			return Step->FootCurve.Get();
-		}
-
-		return nullptr;
-	}
-
-	return LadderClimbProfile->Curves.FindRef(Key);
-}
-
 const FLadderRepeatedStepDefinition*
 UClimbComponent::GetRepeatedStepDefinition(EClimbPhase Phase) const
 {
@@ -118,95 +86,103 @@ UAnimMontage* UClimbComponent::GetClimbMontage(EClimbPhase Phase) const
 	return LadderClimbProfile->Montages.FindRef(Phase);
 }
 
+UAnimSequence* UClimbComponent::GetLadderIdleAnimation() const
+{
+	if (!LadderClimbProfile) return nullptr;
+	return ResolveIdlePhaseFromGripState() == EClimbPhase::Idle_Left
+		? LadderClimbProfile->IdleLeftAnimation.Get()
+		: LadderClimbProfile->IdleRightAnimation.Get();
+}
+
 void UClimbComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 
-	if (bEnterMontageActive || bExitMontageActive)
+	if (LadderActionState == ELadderActionState::ClimbingStep)
 	{
+		TickRepeatedStep(DeltaTime);
 		return;
 	}
 
-	if (!bIsClimbing)
+	if (LadderActionState == ELadderActionState::Recovering)
 	{
+		TickRepeatedStepRecovery(DeltaTime);
+	}
+}
+
+void UClimbComponent::TickRepeatedStep(float DeltaTime)
+{
+	if (!RepeatedStepRuntime.ActiveStep.IsSet() || !IsValid(ClimbObject))
+	{
+		ForceDetachFromLadder(true);
 		return;
 	}
 
-	FVector BodyCurveValue;
-	FVector HandCurveValue;
-	FVector FootCurveValue;
-
-	AnimTime += DeltaTime;
-	if (UCurveVector* BodyCurve = GetClimbCurve(FClimbCurveKey{ LadderStance, ELimbList::Body }))
+	FActiveRepeatedStep& ActiveStep = RepeatedStepRuntime.ActiveStep.GetValue();
+	const FLadderRepeatedStepDefinition* Step = GetRepeatedStepDefinition(ActiveStep.Phase);
+	if (!Step || ActiveStep.Duration <= 0.0f || !IsValid(Step->BodyCurve.Get()) ||
+		!IsValid(Step->HandCurve.Get()) || !IsValid(Step->FootCurve.Get()))
 	{
-		BodyCurveValue = BodyCurve->GetVectorValue(AnimTime);
+		ForceDetachFromLadder(true);
+		return;
 	}
 
-	const bool bUseLadderLocalMovement =
-		LadderStance == EClimbPhase::ClimbUp_Right ||
-		LadderStance == EClimbPhase::ClimbUp_Left ||
-		LadderStance == EClimbPhase::ClimbDown_Right ||
-		LadderStance == EClimbPhase::ClimbDown_Left;
+	ActiveStep.ElapsedTime = FMath::Min(ActiveStep.ElapsedTime + DeltaTime, ActiveStep.Duration);
+	RepeatedStepRuntime.Progress = FMath::Clamp(ActiveStep.ElapsedTime / ActiveStep.Duration, 0.0f, 1.0f);
+	RepeatedStepRuntime.ExplicitTime = RepeatedStepRuntime.Progress * Step->Animation->GetPlayLength();
 
-	FVector NewLocation;
-	if (bUseLadderLocalMovement && IsValid(ClimbObject))
-	{
-		const FTransform LadderTransform = ClimbObject->GetActorTransform();
-		const FVector LocalStartLocation = LadderTransform.InverseTransformPosition(ClimbLocation.Key);
-		const FVector LocalTargetLocation = LadderTransform.InverseTransformPosition(ClimbLocation.Value);
-		const FVector LocalNewLocation = FMath::Lerp(LocalStartLocation, LocalTargetLocation, BodyCurveValue);
-		NewLocation = LadderTransform.TransformPosition(LocalNewLocation);
-	}
-	else
-	{
-		NewLocation = FMath::Lerp(ClimbLocation.Key, ClimbLocation.Value, BodyCurveValue);
-	}
-
+	const FVector BodyCurveValue = Step->BodyCurve->GetVectorValue(RepeatedStepRuntime.Progress);
+	const FVector HandCurveValue = Step->HandCurve->GetVectorValue(RepeatedStepRuntime.Progress);
+	const FVector FootCurveValue = Step->FootCurve->GetVectorValue(RepeatedStepRuntime.Progress);
+	const FTransform LadderTransform = ClimbObject->GetActorTransform();
+	const FVector LocalStart = LadderTransform.InverseTransformPosition(ActiveStep.BodyStart);
+	const FVector LocalTarget = LadderTransform.InverseTransformPosition(ActiveStep.BodyTarget);
+	const FVector NewLocation = LadderTransform.TransformPosition(FMath::Lerp(LocalStart, LocalTarget, BodyCurveValue));
 	if (!MoveCharacterAlongClimbPath(NewLocation))
 	{
 		ForceDetachFromLadder(true);
 		return;
 	}
 
-	ELimbList MovingHand = ELimbList::Body;
-	ELimbList MovingFoot = ELimbList::Body;
-	if (!ResolveRepeatedStepLimbs(LadderStance, MovingHand, MovingFoot))
-	{
-		return;
-	}
-
-	if (UCurveVector* HandCurve =
-		GetClimbCurve(FClimbCurveKey{ LadderStance, MovingHand }))
-	{
-		HandCurveValue = HandCurve->GetVectorValue(AnimTime);
-	}
-	if (UCurveVector* FootCurve =
-		GetClimbCurve(FClimbCurveKey{ LadderStance, MovingFoot }))
-	{
-		FootCurveValue = FootCurve->GetVectorValue(AnimTime);
-	}
-
-	FLimbData* HandData = LimbToGripNode.Find(MovingHand);
-	FLimbData* FootData = LimbToGripNode.Find(MovingFoot);
+	FLimbData* HandData = LimbToGripNode.Find(ActiveStep.MovingHand);
+	FLimbData* FootData = LimbToGripNode.Find(ActiveStep.MovingFoot);
 	if (!HandData || !FootData)
 	{
+		ForceDetachFromLadder(true);
 		return;
 	}
 
-	const float HandSideOffset =
-		MovingHand == ELimbList::HandL ? 15.0f : -15.0f;
-	const float FootSideOffset =
-		MovingFoot == ELimbList::FootL ? 15.0f : -15.0f;
+	const float HandSideOffset = ActiveStep.MovingHand == ELimbList::HandL ? 15.0f : -15.0f;
+	const float FootSideOffset = ActiveStep.MovingFoot == ELimbList::FootL ? 15.0f : -15.0f;
 	HandData->LimbLocation = SetBoneIKTargetLadder(
-		HandData->LimbTargetGripIndex,
-		HandCurveValue,
-		HandSideOffset,
-		HandData->PreviousGripIndex);
+		ActiveStep.HandTargetGrip, HandCurveValue, HandSideOffset, ActiveStep.HandStartGrip);
 	FootData->LimbLocation = SetBoneIKTargetLadder(
-		FootData->LimbTargetGripIndex,
-		FootCurveValue,
-		FootSideOffset,
-		FootData->PreviousGripIndex);
+		ActiveStep.FootTargetGrip, FootCurveValue, FootSideOffset, ActiveStep.FootStartGrip);
+
+	if (RepeatedStepRuntime.Progress >= 1.0f)
+	{
+		FinishActiveRepeatedStep();
+	}
+}
+
+void UClimbComponent::TickRepeatedStepRecovery(float DeltaTime)
+{
+	RepeatedStepRuntime.RecoveryElapsed += DeltaTime;
+	const float RecoveryDuration = IsValid(LadderClimbProfile)
+		? FMath::Max(LadderClimbProfile->RepeatedStepRecoveryDuration, 0.0f)
+		: 0.0f;
+	if (RepeatedStepRuntime.RecoveryElapsed < RecoveryDuration)
+	{
+		return;
+	}
+
+	LadderActionState = ELadderActionState::Idle;
+	RepeatedStepRuntime.RecoveryElapsed = 0.0f;
+	SetComponentTickEnabled(false);
+	if (RepeatedStepRuntime.InputDirection != 0)
+	{
+		StartRepeatedClimbStep(RepeatedStepRuntime.InputDirection > 0);
+	}
 }
 
 bool UClimbComponent::MoveCharacterAlongClimbPath(
@@ -258,7 +234,7 @@ bool UClimbComponent::MoveCharacterAlongClimbPath(
 
 bool UClimbComponent::RequestEnterLadder(AActor* TargetLadder)
 {
-	if (IsValid(ClimbObject) || LadderTransitionState != ELadderTransitionState::None)
+	if (IsValid(ClimbObject) || LadderActionState != ELadderActionState::Detached)
 	{
 		return false;
 	}
@@ -377,9 +353,7 @@ bool UClimbComponent::RequestEnterLadder(AActor* TargetLadder)
 			InitCharacterPosition);
 
 	ClimbLocation = MakeTuple(GetOwner()->GetActorLocation(), InitCharacterPosition);
-	if (!BeginLadderTransition(bEnterFromBottom
-		? ELadderTransitionState::EnterBottom
-		: ELadderTransitionState::EnterTop))
+	if (!BeginLadderTransition(ELadderActionState::Entering))
 	{
 		UE_LOG(Log_Climb_Ladder, Warning, TEXT("[ClimbComponent] A ladder transition is already active."));
 		DeRegisterClimbObject();
@@ -388,7 +362,6 @@ bool UClimbComponent::RequestEnterLadder(AActor* TargetLadder)
 
 	Character->GetCapsuleComponent()->IgnoreActorWhenMoving(TargetLadder, true);
 
-	bIsClimbing = true;
 	PrepareCharacterForLadderTransition();
 
 	const EClimbPhase EnterPhase = bEnterFromBottom
@@ -420,7 +393,7 @@ bool UClimbComponent::RequestEnterLadder(AActor* TargetLadder)
 bool UClimbComponent::RequestExitLadder(bool bExitTop)
 {
 	ACharacter* Character = Cast<ACharacter>(GetOwner());
-	if (!IsValid(Character) || !IsValid(ClimbObject) || LadderTransitionState != ELadderTransitionState::None)
+	if (!IsValid(Character) || !IsValid(ClimbObject) || LadderActionState != ELadderActionState::Idle)
 	{
 		return false;
 	}
@@ -456,8 +429,8 @@ bool UClimbComponent::RequestExitLadder(bool bExitTop)
 				TEXT("[ClimbComponent] Ladder '%s' has no valid top-exit grip route for '%s'."),
 				*GetNameSafe(ClimbObject),
 				*UEnum::GetValueAsString(LadderStance));
-			PlannedLimbGripTargets.Empty();
-			PlannedGripRouteEndAssignment.Empty();
+			TransitionRuntime.PlannedGripTargets.Empty();
+			TransitionRuntime.PlannedRouteEndAssignment.Empty();
 			return false;
 		}
 	}
@@ -499,17 +472,14 @@ bool UClimbComponent::RequestExitLadder(bool bExitTop)
 			ResolveIdlePhaseFromGripState() == EClimbPhase::Idle_Left
 				? EClimbPhase::Exit_From_Bottom_Left
 				: EClimbPhase::Exit_From_Bottom_Right;
-		PlannedLimbGripTargets.Empty();
-		PlannedGripRouteEndAssignment.Empty();
+		TransitionRuntime.PlannedGripTargets.Empty();
+		TransitionRuntime.PlannedRouteEndAssignment.Empty();
 	}
-	if (!BeginLadderTransition(bExitTop
-		? ELadderTransitionState::ExitTop
-		: ELadderTransitionState::ExitBottom))
+	if (!BeginLadderTransition(ELadderActionState::Exiting))
 	{
 		return false;
 	}
 
-	bIsClimbing = true;
 	if (!PlayExitMontage(LadderStance))
 	{
 		UE_LOG(
@@ -517,10 +487,9 @@ bool UClimbComponent::RequestExitLadder(bool bExitTop)
 			Error,
 			TEXT("[ClimbComponent] Ladder exit was cancelled because montage '%s' could not start."),
 			*UEnum::GetValueAsString(LadderStance));
-		LadderTransitionState = ELadderTransitionState::None;
-		bIsClimbing = false;
-		PlannedLimbGripTargets.Empty();
-		PlannedGripRouteEndAssignment.Empty();
+		LadderActionState = ELadderActionState::Idle;
+		TransitionRuntime.PlannedGripTargets.Empty();
+		TransitionRuntime.PlannedRouteEndAssignment.Empty();
 		ClearTransitionWarpTargets();
 		return false;
 	}
@@ -537,39 +506,30 @@ void UClimbComponent::PrepareCharacterForLadderTransition()
 		Character->GetCharacterMovement()->SetMovementMode(MOVE_Flying);
 	}
 }
-
-bool UClimbComponent::BeginLadderTransition(ELadderTransitionState NewTransition)
+bool UClimbComponent::BeginLadderTransition(ELadderActionState NewState)
 {
-	if (NewTransition == ELadderTransitionState::None ||
-		LadderTransitionState != ELadderTransitionState::None)
+	if ((NewState != ELadderActionState::Entering && NewState != ELadderActionState::Exiting) ||
+		(NewState == ELadderActionState::Entering
+			? LadderActionState != ELadderActionState::Detached
+			: LadderActionState != ELadderActionState::Idle))
 	{
 		return false;
 	}
 
-	if (NewTransition == ELadderTransitionState::EnterBottom ||
-		NewTransition == ELadderTransitionState::EnterTop)
+	if (NewState == ELadderActionState::Entering)
 	{
 		CaptureCharacterState();
 	}
 
-	LadderTransitionState = NewTransition;
+	LadderActionState = NewState;
 	return true;
 }
 
-void UClimbComponent::CompleteLadderTransition()
+void UClimbComponent::CompleteExitTransition()
 {
-	if (LadderTransitionState == ELadderTransitionState::EnterBottom ||
-		LadderTransitionState == ELadderTransitionState::EnterTop)
+	if (LadderActionState == ELadderActionState::Exiting)
 	{
-		LadderTransitionState = ELadderTransitionState::None;
-		return;
-	}
-
-	if (LadderTransitionState == ELadderTransitionState::ExitBottom ||
-		LadderTransitionState == ELadderTransitionState::ExitTop)
-	{
-		const bool bShouldBroadcastExit =
-			!bExitVisualStateReleased;
+		const bool bShouldBroadcastExit = !TransitionRuntime.bVisualStateReleased;
 		RestoreCharacterState();
 		ClearLadderSession();
 		if (bShouldBroadcastExit)
@@ -627,19 +587,13 @@ void UClimbComponent::ClearLadderSession()
 	}
 
 	ClearTransitionWarpTargets();
-	bEnterMontageActive = false;
-	bExitMontageActive = false;
-	bExitVisualStateReleased = false;
 	LimbToGripNode.Empty();
-	ActiveLimbGripTransitions.Empty();
-	PlannedLimbGripTargets.Empty();
-	PlannedGripRouteEndAssignment.Empty();
 	GripList1D.Empty();
 	ClimbObject = nullptr;
-	bIsClimbing = false;
-	AnimTime = 0.0f;
+	TransitionRuntime.Reset();
+	RepeatedStepRuntime.Reset();
 	LadderStance = EClimbPhase::Idle_Right;
-	LadderTransitionState = ELadderTransitionState::None;
+	LadderActionState = ELadderActionState::Detached;
 	SetComponentTickEnabled(false);
 }
 
@@ -700,10 +654,10 @@ void UClimbComponent::StopActiveTransitionMontage()
 	UAnimMontage* TransitionMontage = nullptr;
 	FOnMontageEnded EmptyEndedDelegate;
 	FOnMontageBlendingOutStarted EmptyBlendingOutDelegate;
-	if (bEnterMontageActive)
+	if (LadderActionState == ELadderActionState::Entering)
 	{
 		const EClimbPhase EnterPhase =
-			LadderTransitionState == ELadderTransitionState::EnterTop
+			LadderStance == EClimbPhase::Enter_From_Top
 				? EClimbPhase::Enter_From_Top
 				: EClimbPhase::Enter_From_Bottom;
 		TransitionMontage = GetClimbMontage(EnterPhase);
@@ -714,7 +668,7 @@ void UClimbComponent::StopActiveTransitionMontage()
 				TransitionMontage);
 		}
 	}
-	else if (bExitMontageActive)
+	else if (LadderActionState == ELadderActionState::Exiting)
 	{
 		TransitionMontage = GetClimbMontage(LadderStance);
 		if (IsValid(TransitionMontage))
@@ -731,8 +685,6 @@ void UClimbComponent::StopActiveTransitionMontage()
 	EnterClimbEndedDelegate.Unbind();
 	ExitClimbEndedDelegate.Unbind();
 	ExitClimbBlendingOutDelegate.Unbind();
-	bEnterMontageActive = false;
-	bExitMontageActive = false;
 	if (IsValid(TransitionMontage) &&
 		AnimInstance->Montage_IsPlaying(TransitionMontage))
 	{
@@ -743,7 +695,7 @@ void UClimbComponent::StopActiveTransitionMontage()
 void UClimbComponent::ForceDetachFromLadder(bool bBroadcastExit)
 {
 	const bool bShouldBroadcastExit =
-		bBroadcastExit && !bExitVisualStateReleased;
+		bBroadcastExit && !TransitionRuntime.bVisualStateReleased;
 	bool bRestoreGroundPhase = true;
 	if (const ACharacterBase* Character = Cast<ACharacterBase>(GetOwner()))
 	{
@@ -778,7 +730,7 @@ bool UClimbComponent::BeginLimbGripTransition(
 	UCurveVector* TrajectoryCurve)
 {
 	if (Limb == ELimbList::Body ||
-		ActiveLimbGripTransitions.Contains(Limb))
+		TransitionRuntime.ActiveGripTransitions.Contains(Limb))
 	{
 		return false;
 	}
@@ -789,7 +741,7 @@ bool UClimbComponent::BeginLimbGripTransition(
 		return false;
 	}
 
-	TArray<int32>* PlannedTargets = PlannedLimbGripTargets.Find(Limb);
+	TArray<int32>* PlannedTargets = TransitionRuntime.PlannedGripTargets.Find(Limb);
 	if (!PlannedTargets || PlannedTargets->IsEmpty())
 	{
 		UE_LOG(
@@ -821,7 +773,7 @@ bool UClimbComponent::BeginLimbGripTransition(
 	PlannedTargets->RemoveAt(0);
 
 	FLimbGripTransitionState& Transition =
-		ActiveLimbGripTransitions.Add(Limb);
+		TransitionRuntime.ActiveGripTransitions.Add(Limb);
 	Transition.StartGripIndex = StartGripIndex;
 	Transition.TargetGripIndex = TargetGripIndex;
 	Transition.TrajectoryCurve = TrajectoryCurve;
@@ -836,7 +788,7 @@ void UClimbComponent::UpdateLimbGripTransition(
 	float NormalizedTime)
 {
 	FLimbGripTransitionState* Transition =
-		ActiveLimbGripTransitions.Find(Limb);
+		TransitionRuntime.ActiveGripTransitions.Find(Limb);
 	FLimbData* LimbData = LimbToGripNode.Find(Limb);
 	if (!Transition || !LimbData)
 	{
@@ -868,14 +820,14 @@ void UClimbComponent::UpdateLimbGripTransition(
 void UClimbComponent::CompleteLimbGripTransition(ELimbList Limb)
 {
 	FLimbData* LimbData = LimbToGripNode.Find(Limb);
-	if (!ActiveLimbGripTransitions.Contains(Limb) || !LimbData)
+	if (!TransitionRuntime.ActiveGripTransitions.Contains(Limb) || !LimbData)
 	{
 		return;
 	}
 
 	UpdateLimbGripTransition(Limb, 1.0f);
 	const FLimbGripTransitionState* Transition =
-		ActiveLimbGripTransitions.Find(Limb);
+		TransitionRuntime.ActiveGripTransitions.Find(Limb);
 	const float LimbSideOffset =
 		Limb == ELimbList::HandL || Limb == ELimbList::FootL
 			? 15.0f
@@ -885,13 +837,13 @@ void UClimbComponent::CompleteLimbGripTransition(ELimbList Limb)
 		FVector::ZeroVector,
 		LimbSideOffset);
 	LimbData->PreviousGripIndex = INDEX_NONE;
-	ActiveLimbGripTransitions.Remove(Limb);
+	TransitionRuntime.ActiveGripTransitions.Remove(Limb);
 }
 
 void UClimbComponent::CancelLimbGripTransition(ELimbList Limb)
 {
 	FLimbGripTransitionState* Transition =
-		ActiveLimbGripTransitions.Find(Limb);
+		TransitionRuntime.ActiveGripTransitions.Find(Limb);
 	FLimbData* LimbData = LimbToGripNode.Find(Limb);
 	if (!Transition || !LimbData)
 	{
@@ -908,7 +860,7 @@ void UClimbComponent::CancelLimbGripTransition(ELimbList Limb)
 		Transition->StartGripIndex,
 		FVector::ZeroVector,
 		LimbSideOffset);
-	ActiveLimbGripTransitions.Remove(Limb);
+	TransitionRuntime.ActiveGripTransitions.Remove(Limb);
 }
 
 void UClimbComponent::HandleOwnerDeathStarted()
@@ -971,11 +923,9 @@ bool UClimbComponent::PlayEnterMontage(EClimbPhase EnterPhase)
 	}
 
 	AnimInstance->SetRootMotionMode(ERootMotionMode::RootMotionFromMontagesOnly);
-	bEnterMontageActive = true;
 	const float MontageDuration = AnimInstance->Montage_Play(Montage);
 	if (MontageDuration <= 0.0f)
 	{
-		bEnterMontageActive = false;
 		ClearTransitionWarpTargets();
 		UE_LOG(Log_Climb_Ladder, Error, TEXT("[ClimbComponent] Failed to play %s-enter montage '%s'."), EntryLabel, *GetNameSafe(Montage));
 		return false;
@@ -1106,12 +1056,10 @@ bool UClimbComponent::PlayExitMontage(EClimbPhase ExitPhase)
 
 	AnimInstance->SetRootMotionMode(
 		ERootMotionMode::RootMotionFromMontagesOnly);
-	bExitMontageActive = true;
 	const float MontageDuration =
 		AnimInstance->Montage_Play(Montage);
 	if (MontageDuration <= 0.0f)
 	{
-		bExitMontageActive = false;
 		ClearTransitionWarpTargets();
 		return false;
 	}
@@ -1592,8 +1540,8 @@ bool UClimbComponent::BuildGripRoute(
 	const TMap<ELimbList, int32>& StartAssignment,
 	const TMap<ELimbList, int32>& EndAssignment)
 {
-	PlannedLimbGripTargets.Empty();
-	PlannedGripRouteEndAssignment.Empty();
+	TransitionRuntime.PlannedGripTargets.Empty();
+	TransitionRuntime.PlannedRouteEndAssignment.Empty();
 
 	if (!IsValid(Montage))
 	{
@@ -1719,7 +1667,7 @@ bool UClimbComponent::BuildGripRoute(
 		}
 
 		TArray<int32>& PlannedTargets =
-			PlannedLimbGripTargets.FindOrAdd(LimbRoute.Key);
+			TransitionRuntime.PlannedGripTargets.FindOrAdd(LimbRoute.Key);
 		int32 PreviousTargetStep = 0;
 		for (int32 TransitionIndex = 0;
 			TransitionIndex < TransitionCount;
@@ -1766,7 +1714,7 @@ bool UClimbComponent::BuildGripRoute(
 		}
 	}
 
-	PlannedGripRouteEndAssignment = EndAssignment;
+	TransitionRuntime.PlannedRouteEndAssignment = EndAssignment;
 	return true;
 }
 
@@ -1822,7 +1770,7 @@ bool UClimbComponent::BuildTopExitGripRoute(EClimbPhase ExitPhase)
 	}
 
 	const TMap<ELimbList, TArray<int32>> CanonicalEntryTargets =
-		PlannedLimbGripTargets;
+		TransitionRuntime.PlannedGripTargets;
 	UAnimMontage* ExitMontage = GetClimbMontage(ExitPhase);
 	if (!IsValid(ExitMontage))
 	{
@@ -1930,10 +1878,10 @@ bool UClimbComponent::ValidatePlannedGripRouteEnd(
 	{
 		const FLimbData* LimbData = LimbToGripNode.Find(Expected.Key);
 		const TArray<int32>* RemainingTargets =
-			PlannedLimbGripTargets.Find(Expected.Key);
+			TransitionRuntime.PlannedGripTargets.Find(Expected.Key);
 		if (!LimbData ||
 			LimbData->LimbTargetGripIndex != Expected.Value ||
-			ActiveLimbGripTransitions.Contains(Expected.Key) ||
+			TransitionRuntime.ActiveGripTransitions.Contains(Expected.Key) ||
 			(RemainingTargets && !RemainingTargets->IsEmpty()))
 		{
 			return false;
@@ -1989,10 +1937,10 @@ bool UClimbComponent::ValidateTopEnterFinalGripAssignment() const
 	{
 		const FLimbData* LimbData = LimbToGripNode.Find(Expected.Key);
 		const TArray<int32>* RemainingTargets =
-			PlannedLimbGripTargets.Find(Expected.Key);
+			TransitionRuntime.PlannedGripTargets.Find(Expected.Key);
 		if (!LimbData ||
 			LimbData->LimbTargetGripIndex != Expected.Value ||
-			ActiveLimbGripTransitions.Contains(Expected.Key) ||
+			TransitionRuntime.ActiveGripTransitions.Contains(Expected.Key) ||
 			(RemainingTargets && !RemainingTargets->IsEmpty()))
 		{
 			return false;
@@ -2019,28 +1967,12 @@ bool UClimbComponent::ResolveRepeatedStepLimbs(
 		return true;
 	}
 
-	// Compatibility defaults for profiles that have not yet migrated from
-	// the legacy phase/limb curve map.
-	switch (Phase)
-	{
-	case EClimbPhase::ClimbUp_Right:
-	case EClimbPhase::ClimbDown_Right:
-		OutMovingHand = ELimbList::HandR;
-		OutMovingFoot = ELimbList::FootL;
-		return true;
-	case EClimbPhase::ClimbUp_Left:
-	case EClimbPhase::ClimbDown_Left:
-		OutMovingHand = ELimbList::HandL;
-		OutMovingFoot = ELimbList::FootR;
-		return true;
-	default:
-		return false;
-	}
+	return false;
 }
 
 bool UClimbComponent::StartRepeatedClimbStep(bool bUp)
 {
-	if (bIsClimbing)
+	if (!CanStartRepeatedClimb())
 	{
 		return false;
 	}
@@ -2108,14 +2040,19 @@ bool UClimbComponent::StartRepeatedClimbStep(bool bUp)
 		return false;
 	}
 
-	if (!GetClimbCurve(FClimbCurveKey{ SelectedPhase, ELimbList::Body }) ||
-		!GetClimbCurve(FClimbCurveKey{ SelectedPhase, MovingHand }) ||
-		!GetClimbCurve(FClimbCurveKey{ SelectedPhase, MovingFoot }))
+	const FLadderRepeatedStepDefinition* SelectedStep =
+		GetRepeatedStepDefinition(SelectedPhase);
+	if (!SelectedStep ||
+		!IsValid(SelectedStep->Animation.Get()) ||
+		SelectedStep->PlayRate <= 0.0f ||
+		!IsValid(SelectedStep->BodyCurve.Get()) ||
+		!IsValid(SelectedStep->HandCurve.Get()) ||
+		!IsValid(SelectedStep->FootCurve.Get()))
 	{
 		UE_LOG(
 			Log_Climb_Ladder,
 			Error,
-			TEXT("[ClimbComponent] Repeated step '%s' is missing its body, hand, or foot curve."),
+			TEXT("[ClimbComponent] Repeated step '%s' is missing its animation, play rate, or movement curves."),
 			*UEnum::GetValueAsString(SelectedPhase));
 		return false;
 	}
@@ -2163,40 +2100,75 @@ bool UClimbComponent::StartRepeatedClimbStep(bool bUp)
 		return false;
 	}
 
-	MovingHandData->PreviousGripIndex =
-		MovingHandData->LimbTargetGripIndex;
-	MovingHandData->LimbTargetGripIndex = NewHandIndex;
-	MovingFootData->PreviousGripIndex =
-		MovingFootData->LimbTargetGripIndex;
-	MovingFootData->LimbTargetGripIndex = NewFootIndex;
-
 	const FVector CurrentLocation = GetOwner()->GetActorLocation();
-	ClimbLocation = MakeTuple(
-		CurrentLocation,
-		CalculateBodyTargetLocation(CurrentLocation));
+	TMap<ELimbList, int32> TargetGripAssignment;
+	for (const TPair<ELimbList, FLimbData>& LimbPair : LimbToGripNode)
+	{
+		if (LimbPair.Key != ELimbList::Body)
+		{
+			TargetGripAssignment.Add(LimbPair.Key, LimbPair.Value.LimbTargetGripIndex);
+		}
+	}
+	TargetGripAssignment.FindOrAdd(MovingHand) = NewHandIndex;
+	TargetGripAssignment.FindOrAdd(MovingFoot) = NewFootIndex;
+	const FVector TargetBodyLocation = CalculateBodyTargetLocation(TargetGripAssignment, CurrentLocation);
+
+	FActiveRepeatedStep NewStep;
+	NewStep.Phase = SelectedPhase;
+	NewStep.MovingHand = MovingHand;
+	NewStep.MovingFoot = MovingFoot;
+	NewStep.HandStartGrip = MovingHandData->LimbTargetGripIndex;
+	NewStep.HandTargetGrip = NewHandIndex;
+	NewStep.FootStartGrip = MovingFootData->LimbTargetGripIndex;
+	NewStep.FootTargetGrip = NewFootIndex;
+	NewStep.BodyStart = CurrentLocation;
+	NewStep.BodyTarget = TargetBodyLocation;
+	NewStep.Duration = SelectedStep->Animation->GetPlayLength() / SelectedStep->PlayRate;
+	if (NewStep.Duration <= 0.0f)
+	{
+		return false;
+	}
+
+	RepeatedStepRuntime.ActiveStep = NewStep;
+	RepeatedStepRuntime.Animation = SelectedStep->Animation.Get();
+	ClimbLocation = MakeTuple(CurrentLocation, TargetBodyLocation);
 	LadderStance = SelectedPhase;
-	bIsClimbing = true;
+	LadderActionState = ELadderActionState::ClimbingStep;
+	RepeatedStepRuntime.Progress = 0.0f;
+	RepeatedStepRuntime.ExplicitTime = 0.0f;
 	SetComponentTickEnabled(true);
 	return true;
 }
 
+bool UClimbComponent::CanStartRepeatedClimb() const
+{
+	return IsValid(ClimbObject) &&
+		LadderActionState == ELadderActionState::Idle;
+}
+
 void UClimbComponent::ClimbUpLadder()
 {
+	RepeatedStepRuntime.InputDirection = 1;
 	StartRepeatedClimbStep(true);
 }
 
 void UClimbComponent::ClimbDownLadder()
 {
+	RepeatedStepRuntime.InputDirection = -1;
 	StartRepeatedClimbStep(false);
+}
+
+void UClimbComponent::ClearRepeatedClimbInput()
+{
+	RepeatedStepRuntime.InputDirection = 0;
 }
 
 void UClimbComponent::OnEnterClimbMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
 	const bool bWasBottomEntry =
-		LadderTransitionState == ELadderTransitionState::EnterBottom;
+		LadderStance == EClimbPhase::Enter_From_Bottom;
 	const bool bWasTopEntry =
-		LadderTransitionState == ELadderTransitionState::EnterTop;
-	bEnterMontageActive = false;
+		LadderStance == EClimbPhase::Enter_From_Top;
 	ClearTransitionWarpTargets();
 
 	if (bInterrupted)
@@ -2256,20 +2228,21 @@ void UClimbComponent::OnEnterClimbMontageEnded(UAnimMontage* Montage, bool bInte
 
 	GetOwner()->SetActorLocation(ClimbLocation.Value);
 	LadderStance = ResolveIdlePhaseFromGripState();
-	bIsClimbing = false;
-	AnimTime = 0.0f;
+	LadderActionState = ELadderActionState::Recovering;
+	RepeatedStepRuntime.Progress = 0.0f;
+	RepeatedStepRuntime.ExplicitTime = 0.0f;
+	RepeatedStepRuntime.RecoveryElapsed = 0.0f;
 	if (bWasBottomEntry)
 	{
 		DrawBottomEnterContactDebug();
 	}
-	CompleteLadderTransition();
+	SetComponentTickEnabled(true);
 }
 
 void UClimbComponent::OnExitClimbMontageEnded(
 	UAnimMontage* Montage,
 	bool bInterrupted)
 {
-	bExitMontageActive = false;
 	ClearTransitionWarpTargets();
 
 	if (bInterrupted)
@@ -2279,9 +2252,10 @@ void UClimbComponent::OnExitClimbMontageEnded(
 	}
 
 	const bool bWasTopExit =
-		LadderTransitionState == ELadderTransitionState::ExitTop;
+		LadderStance == EClimbPhase::Exit_From_Top_Left ||
+		LadderStance == EClimbPhase::Exit_From_Top_Right;
 	if (bWasTopExit &&
-		!ValidatePlannedGripRouteEnd(PlannedGripRouteEndAssignment))
+		!ValidatePlannedGripRouteEnd(TransitionRuntime.PlannedRouteEndAssignment))
 	{
 		UE_LOG(
 			Log_Climb_Ladder,
@@ -2327,7 +2301,7 @@ void UClimbComponent::OnExitClimbMontageEnded(
 				GetComponentRotation());
 	}
 
-	CompleteLadderTransition();
+	CompleteExitTransition();
 }
 
 void UClimbComponent::OnExitClimbMontageBlendingOut(
@@ -2335,15 +2309,14 @@ void UClimbComponent::OnExitClimbMontageBlendingOut(
 	bool bInterrupted)
 {
 	if (bInterrupted ||
-		bExitVisualStateReleased ||
-		(LadderTransitionState != ELadderTransitionState::ExitTop &&
-			LadderTransitionState != ELadderTransitionState::ExitBottom))
+		TransitionRuntime.bVisualStateReleased ||
+		LadderActionState != ELadderActionState::Exiting)
 	{
 		return;
 	}
 
 	ResetLadderIKState(true);
-	bExitVisualStateReleased = true;
+	TransitionRuntime.bVisualStateReleased = true;
 	OnLadderExit.Broadcast();
 }
 
@@ -2494,25 +2467,12 @@ void UClimbComponent::RegisterClimbObject(ALadderBase* Ladder)
 	if (!GripList1D.IsEmpty())
 	{
 		SetGrip1DRelation(MinGripInterval, MaxGripInterval);
-
-		const USceneComponent* InitBottomTarget = ClimbObject->GetInitEnterTarget(false);
-		if (IsValid(InitBottomTarget))
-		{
-			const float BottomLocalHeight = ClimbObject->GetActorTransform()
-				.InverseTransformPosition(InitBottomTarget->GetComponentLocation()).Z;
-			SetLowestGrip1D(MinFirstGripHeight, BottomLocalHeight);
-		}
 	}
 }
 
 void UClimbComponent::DeRegisterClimbObject()
 {
 	ForceDetachFromLadder(false);
-}
-
-void UClimbComponent::SetMinFirstGripHeight(float MinValue)
-{
-	MinFirstGripHeight = MinValue;
 }
 
 void UClimbComponent::SetMinGripInterval(float MinInterval)
@@ -2537,52 +2497,49 @@ FVector UClimbComponent::GetLimbIKTarget(ELimbList LimbName) const
 	return LimbData->LimbLocation;
 }
 
-void UClimbComponent::ResetClimbState()
+void UClimbComponent::FinishActiveRepeatedStep()
 {
-	const bool bWasRepeatedClimb =
-		LadderStance == EClimbPhase::ClimbUp_Right ||
-		LadderStance == EClimbPhase::ClimbUp_Left ||
-		LadderStance == EClimbPhase::ClimbDown_Right ||
-		LadderStance == EClimbPhase::ClimbDown_Left;
-	if (bWasRepeatedClimb)
+	if (!RepeatedStepRuntime.ActiveStep.IsSet() || LadderActionState != ELadderActionState::ClimbingStep)
 	{
-		const float CompletionError = FVector::Distance(
-			GetOwner()->GetActorLocation(),
-			ClimbLocation.Value);
-		const float CompletionTolerance = IsValid(LadderClimbProfile)
-			? FMath::Max(
-				LadderClimbProfile->RepeatedClimbCompletionTolerance,
-				0.0f)
-			: 0.0f;
-		if (CompletionError > CompletionTolerance)
-		{
-			UE_LOG(
-				Log_Climb_Ladder,
-				Error,
-				TEXT("[ClimbComponent] Repeated climb ended %.1fcm from its body target (Tolerance=%.1fcm)."),
-				CompletionError,
-				CompletionTolerance);
-			ForceDetachFromLadder(true);
-			return;
-		}
-
-		if (!MoveCharacterAlongClimbPath(ClimbLocation.Value))
-		{
-			ForceDetachFromLadder(true);
-			return;
-		}
+		return;
 	}
 
-	bIsClimbing = false;
-	AnimTime = 0.0f;
+	const FActiveRepeatedStep CompletedStep = RepeatedStepRuntime.ActiveStep.GetValue();
+	const float CompletionError = FVector::Distance(GetOwner()->GetActorLocation(), CompletedStep.BodyTarget);
+	const float CompletionTolerance = IsValid(LadderClimbProfile)
+		? FMath::Max(LadderClimbProfile->RepeatedClimbCompletionTolerance, 0.0f)
+		: 0.0f;
+	if (CompletionError > CompletionTolerance)
+	{
+		UE_LOG(Log_Climb_Ladder, Error,
+			TEXT("[ClimbComponent] Repeated climb ended %.1fcm from its body target (Tolerance=%.1fcm)."),
+			CompletionError, CompletionTolerance);
+		ForceDetachFromLadder(true);
+		return;
+	}
+
+	if (!MoveCharacterAlongClimbPath(CompletedStep.BodyTarget))
+	{
+		ForceDetachFromLadder(true);
+		return;
+	}
+
+	FLimbData* HandData = LimbToGripNode.Find(CompletedStep.MovingHand);
+	FLimbData* FootData = LimbToGripNode.Find(CompletedStep.MovingFoot);
+	if (!HandData || !FootData)
+	{
+		ForceDetachFromLadder(true);
+		return;
+	}
+
+	HandData->PreviousGripIndex = INDEX_NONE;
+	HandData->LimbTargetGripIndex = CompletedStep.HandTargetGrip;
+	FootData->PreviousGripIndex = INDEX_NONE;
+	FootData->LimbTargetGripIndex = CompletedStep.FootTargetGrip;
+	RepeatedStepRuntime.ActiveStep.Reset();
 	LadderStance = ResolveIdlePhaseFromGripState();
-	SetComponentTickEnabled(false);
-
-	if (LadderTransitionState == ELadderTransitionState::EnterBottom ||
-		LadderTransitionState == ELadderTransitionState::EnterTop)
-	{
-		CompleteLadderTransition();
-	}
+	LadderActionState = ELadderActionState::Recovering;
+	RepeatedStepRuntime.RecoveryElapsed = 0.0f;
 
 	LimbToGripNode[ELimbList::HandR].LimbLocation = SetBoneIKTargetLadder(LimbToGripNode[ELimbList::HandR].LimbTargetGripIndex, FVector(), -15.0f);
 	LimbToGripNode[ELimbList::FootL].LimbLocation = SetBoneIKTargetLadder(LimbToGripNode[ELimbList::FootL].LimbTargetGripIndex, FVector(), 15.0f);
@@ -2628,7 +2585,7 @@ FVector UClimbComponent::SetBoneIKTargetLadder(int32 TargetGripIndex, const FVec
 
 void UClimbComponent::SetGrip1DRelation(float MinInterval, float MaxInterval)
 {
-	if (!CheckGripListValid())
+	if (GripList1D.IsEmpty())
 		return;
 
 	for (int32 i = 0; i < GripList1D.Num(); i++) 
@@ -2678,42 +2635,3 @@ void UClimbComponent::SetGrip1DRelation(float MinInterval, float MaxInterval)
 	}
 }
 
-bool UClimbComponent::CheckGripListValid()
-{
-	return GripList1D.IsEmpty() ? false : true;
-}
-
-void UClimbComponent::SetLowestGrip1D(float MinHeight, float Comparison)
-{
-	for (FGripNode1D& GripNode : GripList1D)
-	{
-		if (GripNode.LocalPosition.Z - Comparison > MinHeight)
-		{
-			GripNode.Tag.Add(FName("LowestGrip"));
-			return;
-		}
-	}
-}
-
-int32 UClimbComponent::GetLowestGrip1DIndex() const
-{
-	if (GripList1D.IsEmpty())
-	{
-		return INDEX_NONE;
-	}
-
-	for (int32 GripIndex = 0; GripIndex < GripList1D.Num(); ++GripIndex)
-	{
-		if (GripList1D[GripIndex].Tag.Contains(FName("LowestGrip")))
-		{
-			return GripIndex;
-		}
-	}
-
-	return 0;
-}
-
-int32 UClimbComponent::GetHighestGrip1DIndex() const
-{
-	return GripList1D.IsEmpty() ? INDEX_NONE : GripList1D.Num() - 1;
-}

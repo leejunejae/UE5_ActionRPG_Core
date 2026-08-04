@@ -7,6 +7,10 @@
 #include "Interaction/Climb/Data/ClimbHeader.h"
 #include "LadderClimbDataAsset.generated.h"
 
+class UAnimMontage;
+class UAnimSequence;
+class UCurveVector;
+
 USTRUCT(BlueprintType)
 struct FLadderWarpCheckpoint
 {
@@ -48,6 +52,12 @@ struct FLadderRepeatedStepDefinition
 	ELadderSide MovingFoot = ELadderSide::Right;
 
 	UPROPERTY(EditAnywhere, Category = "Repeated Step")
+	TObjectPtr<UAnimSequence> Animation = nullptr;
+
+	UPROPERTY(EditAnywhere, Category = "Repeated Step", meta = (ClampMin = "0.01"))
+	float PlayRate = 1.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Repeated Step")
 	TObjectPtr<UCurveVector> BodyCurve = nullptr;
 
 	UPROPERTY(EditAnywhere, Category = "Repeated Step")
@@ -66,13 +76,19 @@ class UE5PROJECT_API ULadderClimbDataAsset : public UDataAsset
 	GENERATED_BODY()
 	
 public:
-	UPROPERTY(EditAnywhere, Category = "Curve")
-	TMap<FClimbCurveKey, UCurveVector*> Curves;
+	UPROPERTY(EditAnywhere, Category = "Idle")
+	TObjectPtr<UAnimSequence> IdleRightAnimation = nullptr;
 
-	// Data-driven definitions for repeated ladder steps. When a phase exists
-	// here, it takes precedence over the legacy Curves map above.
+	UPROPERTY(EditAnywhere, Category = "Idle")
+	TObjectPtr<UAnimSequence> IdleLeftAnimation = nullptr;
+
 	UPROPERTY(EditAnywhere, Category = "Repeated Step")
 	TMap<EClimbPhase, FLadderRepeatedStepDefinition> RepeatedSteps;
+
+	// Time reserved for the Step -> Idle blend before a held input may start
+	// the next discrete step. Keep this equal to the AnimBP transition duration.
+	UPROPERTY(EditAnywhere, Category = "Repeated Step", meta = (ClampMin = "0.0", Units = "s"))
+	float RepeatedStepRecoveryDuration = 0.15f;
 
 	UPROPERTY(EditAnywhere, Category = "Montage")
 	TMap<EClimbPhase, UAnimMontage*> Montages;

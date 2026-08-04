@@ -17,6 +17,11 @@ void UAnimMode_Ladder::Tick(float DeltaSeconds)
 	if (!IsValid(ClimbComponent)) return;
 
 	Anim->CurLadderStance = ClimbComponent->GetLadderStance();
+	Anim->LadderActionState = ClimbComponent->GetLadderActionState();
+	Anim->RepeatedStepProgress = ClimbComponent->GetRepeatedStepProgress();
+	Anim->RepeatedStepExplicitTime = ClimbComponent->GetRepeatedStepExplicitTime();
+	Anim->LadderIdleAnimation = ClimbComponent->GetLadderIdleAnimation();
+	Anim->ActiveRepeatedStepAnimation = ClimbComponent->GetActiveRepeatedStepAnimation();
 
 	FVector Hand_L_Location = Character->GetMesh()->GetSocketLocation(FName("Hand_L_Offset"));
 	FVector Palm_L_Location = Character->GetMesh()->GetSocketLocation(FName("Palm_L"));

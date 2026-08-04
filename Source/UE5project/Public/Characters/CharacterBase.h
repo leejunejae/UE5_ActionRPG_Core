@@ -118,8 +118,6 @@ protected:
 		float MinGripInterval = 15.0f;
 	UPROPERTY(EditAnywhere)
 		float MaxGripInterval = 60.0f;
-	UPROPERTY(EditAnywhere)
-		float MinFirstGripHeight = 0.0f;
 
 public:
 	FORCEINLINE UClimbComponent* GetClimbComponent() const { return ClimbComponent; }
