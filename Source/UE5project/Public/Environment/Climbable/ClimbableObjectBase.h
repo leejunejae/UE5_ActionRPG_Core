@@ -9,9 +9,6 @@
 // 인터페이스
 #include "Interaction/Interfaces/InteractInterface.h"
 
-// 태그
-#include "GameplayTagContainer.h"
-
 // 구조체, 자료형
 #include "Interaction/Climb/Data/ClimbHeader.h"
 
@@ -32,14 +29,8 @@ public:
 
 	virtual void PostInitializeComponents() override;
 
-	virtual USceneComponent* GetEnterInteractLocation_Implementation(AActor* Target);
-	virtual USceneComponent* GetNavigationInteractLocation_Implementation(AActor* Target);
-
-
-	void GetInteractionTags_Implementation(FGameplayTagContainer& OutTags) const;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Tags")
-	FGameplayTagContainer ClimbObjectTags;
+	virtual USceneComponent* GetEnterInteractLocation_Implementation(AActor* Target) override;
+	virtual USceneComponent* GetNavigationInteractLocation_Implementation(AActor* Target) override;
 
 	const TArray<FGripNode1D>& GetGripList1D() const { return GripList1D; }
 

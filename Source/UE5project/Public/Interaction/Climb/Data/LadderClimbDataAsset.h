@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Characters/Data/IKData.h"
 #include "Engine/DataAsset.h"
 #include "Interaction/Climb/Data/ClimbHeader.h"
 #include "LadderClimbDataAsset.generated.h"

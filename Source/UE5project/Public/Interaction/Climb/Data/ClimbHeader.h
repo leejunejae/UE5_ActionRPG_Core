@@ -3,8 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Characters/Data/IKData.h"
-#include "UObject/NoExportTypes.h"
 #include "ClimbHeader.generated.h"
 
 UENUM(BlueprintType)
@@ -48,28 +46,9 @@ enum class ELadderGripDirection : uint8
 	Down
 };
 
-USTRUCT(Atomic, BlueprintType)
-struct FNeighborInfo
-{
-	GENERATED_BODY()
-
-	int32 NeighborIndex = INDEX_NONE;
-};
-
-USTRUCT(Atomic,BlueprintType)
 struct FGripNode1D
 {
-	GENERATED_BODY()
-
-public:
 	FVector LocalPosition;
-	FNeighborInfo NeighborUp;
-	FNeighborInfo NeighborDown;
-};
-
-UCLASS()
-class UE5PROJECT_API UClimbHeader : public UObject
-{
-	GENERATED_BODY()
-
+	int32 NeighborUpIndex = INDEX_NONE;
+	int32 NeighborDownIndex = INDEX_NONE;
 };

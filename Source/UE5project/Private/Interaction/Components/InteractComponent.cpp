@@ -3,11 +3,12 @@
 
 #include "Interaction/Components/InteractComponent.h"
 #include "GameFramework/Character.h"
-#include "Kismet/GameplayStatics.h"
 #include "Components/CapsuleComponent.h"
 #include "Blueprint/AIBlueprintHelperLibrary.h"
+#include "Engine/LatentActionManager.h"
 #include "Interaction/Interfaces/InteractInterface.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Kismet/KismetSystemLibrary.h"
 
 // Sets default values for this component's properties
 UInteractComponent::UInteractComponent()
@@ -75,8 +76,12 @@ bool UInteractComponent::SetInteractActorByDegree(AActor* StartActor, float Sear
 bool UInteractComponent::MovetoInteractPos()
 {
 	ACharacter* Character = Cast<ACharacter>(GetOwner());
-	if (Character == nullptr || InteractActor == nullptr)
+	UWorld* World = GetWorld();
+	if (!IsValid(Character) || !IsValid(InteractActor) || !IsValid(World) ||
+		!InteractActor->Implements<UInteractInterface>())
+	{
 		return false;
+	}
 
 	USceneComponent* AlignmentTarget =
 		IInteractInterface::Execute_GetEnterInteractLocation(
@@ -103,7 +108,7 @@ bool UInteractComponent::MovetoInteractPos()
 			&UInteractComponent::InteractPosCheckTimer,
 			NavigationTarget,
 			AlignmentTarget);
-		GetOwner()->GetWorldTimerManager().SetTimer(InteractTimerHandle, InteractTimerDelegate, 0.1f, true);
+		World->GetTimerManager().SetTimer(InteractTimerHandle, InteractTimerDelegate, 0.1f, true);
 	}
 	else
 	{
@@ -111,6 +116,16 @@ bool UInteractComponent::MovetoInteractPos()
 	}
 
 	return true;
+}
+
+void UInteractComponent::CancelMoveToInteractPos()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(InteractTimerHandle);
+		World->GetLatentActionManager().RemoveActionsForObject(this);
+	}
+	InteractTimerDelegate.Unbind();
 }
 
 void UInteractComponent::InteractPosCheckTimer(
@@ -122,7 +137,8 @@ void UInteractComponent::InteractPosCheckTimer(
 		!IsValid(NavigationTarget) ||
 		!IsValid(AlignmentTarget))
 	{
-		GetOwner()->GetWorldTimerManager().ClearTimer(InteractTimerHandle);
+		CancelMoveToInteractPos();
+		OnInteractionMoveCancelled.ExecuteIfBound();
 		return;
 	}
 
@@ -155,7 +171,11 @@ void UInteractComponent::InteractPosCheckTimer(
 			LatentInfo
 		);
 
-		GetOwner()->GetWorldTimerManager().ClearTimer(InteractTimerHandle);
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(InteractTimerHandle);
+		}
+		InteractTimerDelegate.Unbind();
 	}
 }
 

@@ -4,6 +4,7 @@
 #include "Animation/Mode/AnimMode_Ladder.h"
 #include "Characters/CharacterBase.h"
 #include "Characters/CharacterBaseAnimInstance.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Interaction/Climb/Components/ClimbComponent.h"
 
 void UAnimMode_Ladder::Tick(float DeltaSeconds)
@@ -15,6 +16,8 @@ void UAnimMode_Ladder::Tick(float DeltaSeconds)
 	auto* Anim = AnimInst.Get();
 	UClimbComponent* ClimbComponent = Ch->GetClimbComponent();
 	if (!IsValid(ClimbComponent)) return;
+	USkeletalMeshComponent* Mesh = Ch->GetMesh();
+	if (!IsValid(Mesh)) return;
 
 	Anim->CurLadderStance = ClimbComponent->GetLadderStance();
 	Anim->LadderActionState = ClimbComponent->GetLadderActionState();
@@ -31,23 +34,24 @@ void UAnimMode_Ladder::Tick(float DeltaSeconds)
 	static const FName FootLOffsetSocket(TEXT("Foot_L_Offset"));
 	static const FName SoleLSocket(TEXT("Sole_L"));
 
-	const FVector Hand_L_Location = Character->GetMesh()->GetSocketLocation(HandLOffsetSocket);
-	const FVector Palm_L_Location = Character->GetMesh()->GetSocketLocation(PalmLSocket);
-	Anim->LeftHandLadderOffset = ClimbComponent->GetLimbIKTarget(ELimbList::HandL);
-	Anim->LeftHandLadderOffset -= Palm_L_Location - Hand_L_Location;
+	const auto UpdateLimbTarget =
+		[ClimbComponent, Mesh](
+			ELimbList Limb,
+			FName OffsetSocket,
+			FName ContactSocket,
+			FVector& OutTarget)
+		{
+			OutTarget = ClimbComponent->GetLimbIKTarget(Limb);
+			if (Mesh->DoesSocketExist(OffsetSocket) &&
+				Mesh->DoesSocketExist(ContactSocket))
+			{
+				OutTarget -= Mesh->GetSocketLocation(ContactSocket) -
+					Mesh->GetSocketLocation(OffsetSocket);
+			}
+		};
 
-	const FVector Foot_R_Location = Character->GetMesh()->GetSocketLocation(FootROffsetSocket);
-	const FVector Sole_R_Location = Character->GetMesh()->GetSocketLocation(SoleRSocket);
-	Anim->RightFootLadderOffset = ClimbComponent->GetLimbIKTarget(ELimbList::FootR);
-	Anim->RightFootLadderOffset -= Sole_R_Location - Foot_R_Location;
-
-	const FVector Hand_R_Location = Character->GetMesh()->GetSocketLocation(HandROffsetSocket);
-	const FVector Palm_R_Location = Character->GetMesh()->GetSocketLocation(PalmRSocket);
-	Anim->RightHandLadderOffset = ClimbComponent->GetLimbIKTarget(ELimbList::HandR);
-	Anim->RightHandLadderOffset -= Palm_R_Location - Hand_R_Location;
-
-	const FVector Foot_L_Location = Character->GetMesh()->GetSocketLocation(FootLOffsetSocket);
-	const FVector Sole_L_Location = Character->GetMesh()->GetSocketLocation(SoleLSocket);
-	Anim->LeftFootLadderOffset = ClimbComponent->GetLimbIKTarget(ELimbList::FootL);
-	Anim->LeftFootLadderOffset -= Sole_L_Location - Foot_L_Location;
+	UpdateLimbTarget(ELimbList::HandL, HandLOffsetSocket, PalmLSocket, Anim->LeftHandLadderOffset);
+	UpdateLimbTarget(ELimbList::FootR, FootROffsetSocket, SoleRSocket, Anim->RightFootLadderOffset);
+	UpdateLimbTarget(ELimbList::HandR, HandROffsetSocket, PalmRSocket, Anim->RightHandLadderOffset);
+	UpdateLimbTarget(ELimbList::FootL, FootLOffsetSocket, SoleLSocket, Anim->LeftFootLadderOffset);
 }

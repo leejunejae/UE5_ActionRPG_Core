@@ -13,11 +13,6 @@ AClimbableObjectBase::AClimbableObjectBase()
 {
 	PrimaryActorTick.bCanEverTick = false;
 
-	Tags.Add("Climbable");
-	
-	ClimbObjectTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Climbable")));
-	ClimbObjectTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Interactable.Climb")));
-
 	ClimbTopTrigger = CreateDefaultSubobject<UBoxComponent>(TEXT("ClimbTopTrigger"));
 	ClimbTopTrigger->SetupAttachment(ObjectRoot);
 
@@ -26,15 +21,12 @@ AClimbableObjectBase::AClimbableObjectBase()
 
 	ClimbTopLocation = CreateDefaultSubobject<USceneComponent>(TEXT("ClimbTopLocation"));
 	ClimbTopLocation->SetupAttachment(ObjectRoot);
-	ClimbTopLocation->ComponentTags.Add(FName("Top"));
 
 	ClimbTopApproachLocation = CreateDefaultSubobject<USceneComponent>(TEXT("ClimbTopApproachLocation"));
 	ClimbTopApproachLocation->SetupAttachment(ObjectRoot);
-	ClimbTopApproachLocation->ComponentTags.Add(FName("TopApproach"));
 
 	ClimbTopExitLocation = CreateDefaultSubobject<USceneComponent>(TEXT("ClimbTopExitLocation"));
 	ClimbTopExitLocation->SetupAttachment(ObjectRoot);
-	ClimbTopExitLocation->ComponentTags.Add(FName("TopExit"));
 
 	ClimbBottomLocation = CreateDefaultSubobject<USceneComponent>(TEXT("ClimbBottomLocation"));
 	ClimbBottomLocation->SetupAttachment(ObjectRoot);
@@ -45,10 +37,10 @@ void AClimbableObjectBase::PostInitializeComponents()
 {
 	Super::PostInitializeComponents();
 
-	ClimbTopTrigger->OnComponentBeginOverlap.AddDynamic(this, &AClimbableObjectBase::TriggerBegin);
-	ClimbTopTrigger->OnComponentEndOverlap.AddDynamic(this, &AClimbableObjectBase::TriggerEnd);
-	ClimbBottomTrigger->OnComponentBeginOverlap.AddDynamic(this, &AClimbableObjectBase::TriggerBegin);
-	ClimbBottomTrigger->OnComponentEndOverlap.AddDynamic(this, &AClimbableObjectBase::TriggerEnd);
+	ClimbTopTrigger->OnComponentBeginOverlap.AddUniqueDynamic(this, &AClimbableObjectBase::TriggerBegin);
+	ClimbTopTrigger->OnComponentEndOverlap.AddUniqueDynamic(this, &AClimbableObjectBase::TriggerEnd);
+	ClimbBottomTrigger->OnComponentBeginOverlap.AddUniqueDynamic(this, &AClimbableObjectBase::TriggerBegin);
+	ClimbBottomTrigger->OnComponentEndOverlap.AddUniqueDynamic(this, &AClimbableObjectBase::TriggerEnd);
 }
 
 USceneComponent* AClimbableObjectBase::GetEnterInteractLocation_Implementation(AActor* Target)
@@ -66,36 +58,29 @@ USceneComponent* AClimbableObjectBase::GetEnterInteractLocation_Implementation(A
 
 USceneComponent* AClimbableObjectBase::GetNavigationInteractLocation_Implementation(AActor* Target)
 {
-	USceneComponent* EntryLocation =
-		GetEnterInteractLocation_Implementation(Target);
+	USceneComponent* EntryLocation = IInteractInterface::Execute_GetEnterInteractLocation(this, Target);
 	return EntryLocation == ClimbTopLocation
 		? ClimbTopApproachLocation.Get()
 		: EntryLocation;
 }
 
-void AClimbableObjectBase::GetInteractionTags_Implementation(FGameplayTagContainer& OutTags) const
-{
-	OutTags = ClimbObjectTags;
-}
-
 void AClimbableObjectBase::TriggerBegin(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
 {
-	if (OtherActor->ActorHasTag("Player"))
+	if (IsValid(OtherActor) && OtherActor->Implements<UPlayerInterface>())
 	{
-		if (OtherActor->GetClass()->ImplementsInterface(UPlayerInterface::StaticClass()))
-		{
-			IPlayerInterface::Execute_RegisterInteractableActor(OtherActor, this);
-		}
+		IPlayerInterface::Execute_RegisterInteractableActor(OtherActor, this);
 	}
 }
 
 void AClimbableObjectBase::TriggerEnd(UPrimitiveComponent* OverlappedComp, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex)
 {
-	if (OtherActor->ActorHasTag("Player"))
+	if (IsValid(OtherActor) && OtherActor->Implements<UPlayerInterface>())
 	{
-		if (OtherActor->GetClass()->ImplementsInterface(UPlayerInterface::StaticClass()))
+		if (ClimbTopTrigger->IsOverlappingActor(OtherActor) || ClimbBottomTrigger->IsOverlappingActor(OtherActor))
 		{
-			IPlayerInterface::Execute_DeRegisterInteractableActor(OtherActor, this);
+			return;
 		}
+
+		IPlayerInterface::Execute_DeRegisterInteractableActor(OtherActor, this);
 	}
 }

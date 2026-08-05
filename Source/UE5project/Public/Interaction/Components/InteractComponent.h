@@ -6,7 +6,8 @@
 #include "Components/ActorComponent.h"
 #include "InteractComponent.generated.h"
 
-DECLARE_DELEGATE(FOnSingleDelegate);
+DECLARE_DELEGATE(FOnArrivedInteractionPointDelegate);
+DECLARE_DELEGATE(FOnInteractionMoveCancelledDelegate);
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class UE5PROJECT_API UInteractComponent : public UActorComponent
@@ -35,6 +36,7 @@ public:
 	void RemoveInteractObject(AActor* InteractObject);
 	bool SetInteractActorByDegree(AActor* StartActor, float SearchDegrees);
 	bool MovetoInteractPos();
+	void CancelMoveToInteractPos();
 
 private:
 	bool CheckInteractListValid() const;
@@ -46,5 +48,6 @@ private:
 	void OnMovetoInteractPosEnd();
 
 public:
-	FOnSingleDelegate OnArrivedInteractionPoint;
+	FOnArrivedInteractionPointDelegate OnArrivedInteractionPoint;
+	FOnInteractionMoveCancelledDelegate OnInteractionMoveCancelled;
 };

@@ -4,7 +4,6 @@
 
 #include "CoreMinimal.h"
 #include "Environment/Climbable/ClimbableObjectBase.h"
-#include "Interaction/Climb/Data/ClimbHeader.h"
 #include "LadderBase.generated.h"
 
 /**
@@ -18,9 +17,6 @@ class UE5PROJECT_API ALadderBase : public AClimbableObjectBase
 public:
 	ALadderBase();
 
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent, Category = "Ladder|Transition")
-	const USceneComponent* GetInitEnterTarget(bool bIsTop) const;
-	virtual const USceneComponent* GetInitEnterTarget_Implementation(bool bIsTop) const { return bIsTop ? ClimbTopLocation : ClimbBottomLocation; }
 	const USceneComponent* GetTopExitTarget() const { return ClimbTopExitLocation; }
 
 #pragma region Ladder Basic Composition

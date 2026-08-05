@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimNotifies/AnimNotifyState.h"
+#include "Characters/Data/IKData.h"
 #include "Interaction/Climb/Data/ClimbHeader.h"
 #include "ANS_LadderGripTransition.generated.h"
 

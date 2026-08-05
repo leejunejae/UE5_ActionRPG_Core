@@ -95,7 +95,7 @@ protected:
 	FVector InputVector;
 	FVector DodgeVector;
 
-	bool IsInteraction;
+	bool IsInteraction = false;
 
 	FVector InitSpringArmLocation;
 
@@ -290,8 +290,7 @@ public:
 
 	void OnActionFinished(bool bInterrupted);
 	void OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted);
-
-	void OnStateChanged(const FGameplayTag NewState);
+	void HandleLadderExit();
 #pragma endregion Status
 
 	/* ============================================================
@@ -300,6 +299,7 @@ public:
 #pragma region Interact
 protected:
 	void HandleArrivedInteractionPoint();
+	void HandleInteractionMoveCancelled();
 
 	UPROPERTY(VisibleAnywhere, Category = Interact)
 	TObjectPtr<UInteractComponent> InteractComponent;

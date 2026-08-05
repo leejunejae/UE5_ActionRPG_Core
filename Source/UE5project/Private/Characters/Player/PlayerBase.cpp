@@ -325,6 +325,7 @@ void APlayerBase::PostInitializeComponents()
 	Super::PostInitializeComponents();
 
 	InteractComponent->OnArrivedInteractionPoint.BindUObject(this, &APlayerBase::HandleArrivedInteractionPoint);
+	InteractComponent->OnInteractionMoveCancelled.BindUObject(this, &APlayerBase::HandleInteractionMoveCancelled);
 
 	if (GetCharacterStatusComponent())
 	{
@@ -332,7 +333,7 @@ void APlayerBase::PostInitializeComponents()
 		GetCharacterStatusComponent()->OnActionConsumed.BindUObject(this, &APlayerBase::HandleBufferedAction);
 
 		if(GetAttackComponent()) GetAttackComponent()->OnAttackFinished.AddUObject(this, &APlayerBase::OnActionFinished);
-		if(GetClimbComponent()) GetClimbComponent()->OnLadderExit.AddUObject(this, &APlayerBase::OnStateChanged, TAG_State_Ground.GetTag());
+		if(GetClimbComponent()) GetClimbComponent()->OnLadderExit.AddUObject(this, &APlayerBase::HandleLadderExit);
 	}
 
 	if(GetStatComponent()) GetStatComponent()->InitializeStats();
@@ -600,6 +601,12 @@ void APlayerBase::ExecuteInteract()
 {
 	if (IsInteraction)
 	{
+		if (GetCharacterStatusComponent()->GetCurrentState().MatchesTagExact(TAG_State_Ladder))
+		{
+			return;
+		}
+
+		InteractComponent->CancelMoveToInteractPos();
 		GetController()->SetIgnoreMoveInput(false);
 		GetController()->StopMovement();
 		GetCharacterMovement()->SetMovementMode(MOVE_Walking);
@@ -617,6 +624,11 @@ void APlayerBase::ExecuteInteract()
 		GetCharacterStatusComponent()->SwitchAction(TAG_Action_Interact);
 		GetController()->SetIgnoreMoveInput(true);
 		IsInteraction = InteractComponent->MovetoInteractPos();
+		if (!IsInteraction)
+		{
+			GetController()->SetIgnoreMoveInput(false);
+			GetCharacterStatusComponent()->ClearAction();
+		}
 	}
 }
 
@@ -638,9 +650,16 @@ void APlayerBase::OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 	OnActionFinished(bInterrupted);
 }
 
-void APlayerBase::OnStateChanged(const FGameplayTag NewState)
+void APlayerBase::HandleLadderExit()
 {
-	GetCharacterStatusComponent()->SetState(NewState);
+	IsInteraction = false;
+	ClimbComponent->ClearRepeatedClimbInput();
+
+	UPlayerStatusComponent* StatusComponent = GetCharacterStatusComponent();
+	if (!StatusComponent->IsDead())
+	{
+		StatusComponent->SetState(TAG_State_Ground);
+	}
 }
 
 /* ============================================================
@@ -751,8 +770,11 @@ void APlayerBase::EndInteraction_Implementation(AActor* Interactable)
 void APlayerBase::HandleArrivedInteractionPoint()
 {
 	AActor* InteractActor = InteractComponent->GetInteractActor();
-	if (!InteractActor)
+	if (!IsValid(InteractActor))
+	{
+		HandleInteractionMoveCancelled();
 		return;
+	}
 
 	GetController()->SetIgnoreMoveInput(false);
 
@@ -760,9 +782,12 @@ void APlayerBase::HandleArrivedInteractionPoint()
 
 	if (InteractActor->ActorHasTag("Ladder"))
 	{
-		
-		bool IsRequestSuccess = ClimbComponent->RequestEnterLadder(InteractActor);
-		if (!IsRequestSuccess) return;
+		const bool bRequestSucceeded = ClimbComponent->RequestEnterLadder(InteractActor);
+		if (!bRequestSucceeded)
+		{
+			IsInteraction = false;
+			return;
+		}
 
 		GetCharacterStatusComponent()->SetState(TAG_State_Ladder);
 	}
@@ -772,6 +797,21 @@ void APlayerBase::HandleArrivedInteractionPoint()
 	}
 
 	IsInteraction = true;
+}
+
+void APlayerBase::HandleInteractionMoveCancelled()
+{
+	IsInteraction = false;
+	if (AController* OwningController = GetController())
+	{
+		OwningController->SetIgnoreMoveInput(false);
+		OwningController->StopMovement();
+	}
+
+	if (!GetCharacterStatusComponent()->IsDead())
+	{
+		GetCharacterStatusComponent()->ClearAction();
+	}
 }
 
 /* ============================================================
@@ -860,6 +900,8 @@ void APlayerBase::HandleDeathStarted()
 	{
 		DisableInput(PC);
 	}
+	InteractComponent->CancelMoveToInteractPos();
+	IsInteraction = false;
 
 	// 이전 State별 뒷정리
 	const FGameplayTag PrevState = GetCharacterStatusComponent()->GetPreviousStateBeforeDeath();
@@ -872,12 +914,7 @@ void APlayerBase::HandleDeathStarted()
 			RideComponent->RequestDismount(GetVelocity());
 		}
 	}
-	else if (PrevState.MatchesTagExact(TAG_State_Ladder))
-	{
-		// 사다리에서 사망 → 사다리 디태치
-		// TODO: ClimbComponent의 실제 탈출 API로 연결 (RequestEnterLadder의 짝)
-		// 예: GetClimbComponent()->RequestExitLadder();
-	}
+	// Ladder cleanup is owned by ClimbComponent's OnDeathStarted subscription.
 	// State.Ground / 그 외: 별도 정리 없음
 }
 

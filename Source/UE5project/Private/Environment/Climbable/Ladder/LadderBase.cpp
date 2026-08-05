@@ -4,6 +4,7 @@
 #include "Environment/Climbable/Ladder/LadderBase.h"
 
 #include "Components/BoxComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Utils/CoreLog.h"
 
 ALadderBase::ALadderBase()
@@ -11,8 +12,6 @@ ALadderBase::ALadderBase()
 	Tags.Add("Ladder");
 	LadderScale = FVector(1.0f, 1.0f, 1.0f);
 	AdditionalHeight = 0.0f;
-
-	ClimbObjectTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Climbable.Ladder")));
 
 }
 void ALadderBase::OnConstruction(const FTransform& Transform)
@@ -46,6 +45,17 @@ void ALadderBase::RebuildLadder()
 		return;
 	}
 
+	const float ModuleHeight =
+		ClimbStaticMesh->GetBoundingBox().GetSize().Z *
+		FMath::Abs(LadderScale.Z);
+	if (ModuleHeight <= KINDA_SMALL_NUMBER)
+	{
+		UE_LOG(Log_Climb_Ladder, Error,
+			TEXT("[Ladder] Cannot build '%s': module height is zero."),
+			*GetName());
+		return;
+	}
+
 	float CumulativeHeight = 0.0f;
 
 	for (int32 i = 0; i < LadderLevel; i++)
@@ -58,7 +68,7 @@ void ALadderBase::RebuildLadder()
 		NewClimbMesh->SetRelativeLocation(FVector(0.0f, 0.0f, AdditionalHeight + CumulativeHeight));
 		NewClimbMesh->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
 		NewClimbMesh->RegisterComponent();
-		CumulativeHeight += NewClimbMesh->Bounds.BoxExtent.Z * 2.0f;
+		CumulativeHeight += ModuleHeight;
 		ClimbMeshes.Add(NewClimbMesh);
 	}
 
@@ -126,10 +136,12 @@ void ALadderBase::BuildRuntimeGripData()
 	SetInitTopPosition();
 	SetInitBottomPosition();
 
-	GripList1D.Sort([](const FGripNode1D& A, const FGripNode1D& B)
+	if (GripList1D.IsEmpty())
 	{
-		return A.LocalPosition.Z < B.LocalPosition.Z;
-	});
+		UE_LOG(Log_Climb_Ladder, Error,
+			TEXT("[Ladder] No Grip sockets were found on the generated meshes for '%s'."),
+			*GetName());
+	}
 }
 
 void ALadderBase::SetInitTopPosition()
@@ -140,7 +152,7 @@ void ALadderBase::SetInitTopPosition()
 
 	FHitResult HitResult;
 	FCollisionQueryParams CollisionParams;
-	CollisionParams.AddIgnoredActor(GetOwner());
+	CollisionParams.AddIgnoredActor(this);
 	bool bHit = GetWorld()->SweepSingleByChannel(
 		HitResult,
 		StartLoc,
@@ -178,7 +190,7 @@ void ALadderBase::SetInitBottomPosition()
 
 	FHitResult HitResult;
 	FCollisionQueryParams CollisionParams;
-	CollisionParams.AddIgnoredActor(GetOwner());
+	CollisionParams.AddIgnoredActor(this);
 	bool bHit = GetWorld()->SweepSingleByChannel(
 		HitResult,
 		StartLoc,

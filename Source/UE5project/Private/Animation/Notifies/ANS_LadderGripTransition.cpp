@@ -35,7 +35,7 @@ void UANS_LadderGripTransition::NotifyBegin(
 		return;
 	}
 
-	if (!ClimbComponent->BeginLimbGripTransition(Limb,Direction,TrajectoryCurve))
+	if (!ClimbComponent->BeginLimbGripTransition(Limb, Direction, TrajectoryCurve, this))
 	{
 		UE_LOG(Log_Climb_Ladder, Error, TEXT("[LadderGripTransition] Failed to begin %s transition."), *UEnum::GetValueAsString(Limb));
 	}
@@ -71,7 +71,7 @@ void UANS_LadderGripTransition::NotifyTick(USkeletalMeshComponent* MeshComp, UAn
 		NormalizedTime = UAnimNotifyLibrary::GetCurrentAnimationNotifyStateTimeRatio(EventReference);
 	}
 
-	ClimbComponent->UpdateLimbGripTransition(Limb, NormalizedTime);
+	ClimbComponent->UpdateLimbGripTransition(Limb, NormalizedTime, this);
 }
 
 void UANS_LadderGripTransition::NotifyEnd(USkeletalMeshComponent* MeshComp,UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference)
@@ -80,6 +80,6 @@ void UANS_LadderGripTransition::NotifyEnd(USkeletalMeshComponent* MeshComp,UAnim
 
 	if (UClimbComponent* ClimbComponent = GetClimbComponent(MeshComp))
 	{
-		ClimbComponent->CompleteLimbGripTransition(Limb);
+		ClimbComponent->CompleteLimbGripTransition(Limb, this);
 	}
 }

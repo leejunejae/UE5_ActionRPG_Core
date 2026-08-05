@@ -5,7 +5,6 @@
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
 
-#include "GameplayTagContainer.h"
 #include "InteractInterface.generated.h"
 
 // This class does not need to be modified.
@@ -25,9 +24,6 @@ class UE5PROJECT_API IInteractInterface
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
-		void RegisterInteractActor(ACharacter* InteractActor);
-
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 		void Interact(ACharacter* InteractActor);
 
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
@@ -41,5 +37,4 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 		USceneComponent* GetNavigationInteractLocation(AActor* Target = nullptr);
 
-	void GetInteractionTags(FGameplayTagContainer& OutTags) const;
 };
