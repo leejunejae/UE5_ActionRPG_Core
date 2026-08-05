@@ -22,19 +22,19 @@ struct FLimbData
 
 	FLimbData() = default;
 	FLimbData(int32 InLimbTargetGripIndex, FVector InLimbLocation)
-		: LimbTargetGripIndex(InLimbTargetGripIndex)
-		, LimbLocation(InLimbLocation)
-	{}
+	    : LimbTargetGripIndex(InLimbTargetGripIndex), LimbLocation(InLimbLocation)
+	{
+	}
 };
 
 DECLARE_MULTICAST_DELEGATE(FOnLadderExitDelegate);
 
-UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
+UCLASS(ClassGroup = (Custom), meta = (BlueprintSpawnableComponent))
 class UE5PROJECT_API UClimbComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
-public:	
+public:
 	// Sets default values for this component's properties
 	UClimbComponent();
 
@@ -50,10 +50,10 @@ protected:
 
 	/** Draws the resolved capsule and limb contact targets after bottom entry. */
 	UPROPERTY(EditAnywhere, Category = "Debug|Ladder Contact")
-		bool bDrawBottomEnterContactDebug = false;
+	bool bDrawBottomEnterContactDebug = false;
 
 	UPROPERTY(EditAnywhere, Category = "Debug|Ladder Contact", meta = (ClampMin = "0.0"))
-		float BottomEnterContactDebugDuration = 10.0f;
+	float BottomEnterContactDebugDuration = 10.0f;
 
 protected:
 	const FLadderRepeatedStepDefinition* GetRepeatedStepDefinition(EClimbPhase Phase) const;
@@ -62,7 +62,8 @@ protected:
 
 #pragma region Climbable Object
 public:
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+	                           FActorComponentTickFunction* ThisTickFunction) override;
 
 #pragma endregion Climbable Object
 
@@ -77,11 +78,8 @@ public:
 	bool RequestEnterLadder(AActor* TargetLadder);
 	bool RequestExitLadder(bool bExitTop);
 
-	bool BeginLimbGripTransition(
-		ELimbList Limb,
-		ELadderGripDirection Direction,
-		UCurveVector* TrajectoryCurve,
-		UObject* TransitionSource);
+	bool BeginLimbGripTransition(ELimbList Limb, ELadderGripDirection Direction, UCurveVector* TrajectoryCurve,
+	                             UObject* TransitionSource);
 	void UpdateLimbGripTransition(ELimbList Limb, float NormalizedTime, const UObject* TransitionSource);
 	void CompleteLimbGripTransition(ELimbList Limb, const UObject* TransitionSource);
 
@@ -105,9 +103,7 @@ private:
 	void ForceDetachFromLadder(bool bBroadcastExit = false);
 	bool BuildGripNeighborRelations();
 	void OnEnterClimbMontageEnded(UAnimMontage* Montage, bool bInterrupted);
-	void OnExitClimbMontageBlendingOut(
-		UAnimMontage* Montage,
-		bool bInterrupted);
+	void OnExitClimbMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted);
 	void OnExitClimbMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	FRotator CalculateLadderAlignmentRotation() const;
 	bool BeginLadderTransition(ELadderActionState NewState);
@@ -127,30 +123,19 @@ private:
 	bool UpdateExitWarpTarget(EClimbPhase ExitPhase);
 	void ClearTransitionWarpTargets();
 	void DrawBottomEnterContactDebug() const;
-	bool ResolveGripPattern(
-		const TMap<ELimbList, float>& HeightOffsets,
-		ELimbList ReferenceLimb,
-		bool bPreferTop,
-		TMap<ELimbList, int32>& OutAssignment) const;
-	bool BuildGripRoute(
-		UAnimMontage* Montage,
-		const TMap<ELimbList, int32>& StartAssignment,
-		const TMap<ELimbList, int32>& EndAssignment);
+	bool ResolveGripPattern(const TMap<ELimbList, float>& HeightOffsets, ELimbList ReferenceLimb, bool bPreferTop,
+	                        TMap<ELimbList, int32>& OutAssignment) const;
+	bool BuildGripRoute(UAnimMontage* Montage, const TMap<ELimbList, int32>& StartAssignment,
+	                    const TMap<ELimbList, int32>& EndAssignment);
 	bool BuildTopExitGripRoute(EClimbPhase ExitPhase);
-	bool ValidatePlannedGripRouteEnd(
-		const TMap<ELimbList, int32>& ExpectedAssignment) const;
+	bool ValidatePlannedGripRouteEnd(const TMap<ELimbList, int32>& ExpectedAssignment) const;
 	EClimbPhase ResolveIdlePhaseFromGripState() const;
 	const FGripNode1D* GetGripNode(int32 GripIndex) const;
 	int32 GetNeighborGripIndex(int32 GripIndex, bool bUp, int32 Count = 1) const;
 	FVector GetGripWorldPosition(int32 GripIndex) const;
-	bool TryCalculateBodyTargetLocation(
-		const TMap<ELimbList, int32>& GripAssignment,
-		FVector& OutTargetLocation) const;
+	bool TryCalculateBodyTargetLocation(const TMap<ELimbList, int32>& GripAssignment, FVector& OutTargetLocation) const;
 	bool MoveCharacterAlongClimbPath(const FVector& TargetLocation);
-	bool ResolveRepeatedStepLimbs(
-		EClimbPhase Phase,
-		ELimbList& OutMovingHand,
-		ELimbList& OutMovingFoot) const;
+	bool ResolveRepeatedStepLimbs(EClimbPhase Phase, ELimbList& OutMovingHand, ELimbList& OutMovingFoot) const;
 	bool CanStartRepeatedClimb() const;
 	bool StartRepeatedClimbStep(bool bUp);
 	void FinishActiveRepeatedStep();
@@ -160,7 +145,7 @@ private:
 #pragma endregion Setting Value
 
 #pragma region Ladder Climbing
-public:	
+public:
 	void ClimbUpLadder();
 	void ClimbDownLadder();
 	void ClearRepeatedClimbInput();
@@ -245,6 +230,7 @@ private:
 	FTransitionRuntime TransitionRuntime;
 	FRepeatedStepRuntime RepeatedStepRuntime;
 
-	FVector SetBoneIKTargetLadder(int32 TargetGripIndex, const FVector CurveValue, float LimbXDistance = 0.0f, int32 StartGripIndex = INDEX_NONE);
+	FVector SetBoneIKTargetLadder(int32 TargetGripIndex, const FVector CurveValue, float LimbXDistance = 0.0f,
+	                              int32 StartGripIndex = INDEX_NONE);
 #pragma endregion Ladder Climbing
 };
