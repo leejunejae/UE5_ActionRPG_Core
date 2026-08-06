@@ -49,6 +49,7 @@ enum class ELadderGripDirection : uint8
 struct FGripNode1D
 {
 	FVector LocalPosition;
+	float ClimbCoordinate = 0.0f;
 	int32 NeighborUpIndex = INDEX_NONE;
 	int32 NeighborDownIndex = INDEX_NONE;
 };

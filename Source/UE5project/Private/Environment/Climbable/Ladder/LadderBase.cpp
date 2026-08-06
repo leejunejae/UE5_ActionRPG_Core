@@ -4,15 +4,21 @@
 #include "Environment/Climbable/Ladder/LadderBase.h"
 
 #include "Components/BoxComponent.h"
+#include "Components/InstancedStaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshSocket.h"
 #include "Utils/CoreLog.h"
 
 ALadderBase::ALadderBase()
 {
 	Tags.Add("Ladder");
-	LadderScale = FVector(1.0f, 1.0f, 1.0f);
-	AdditionalHeight = 0.0f;
 
+	LadderGeometryRoot = CreateDefaultSubobject<USceneComponent>(TEXT("LadderGeometryRoot"));
+	LadderGeometryRoot->SetupAttachment(ObjectRoot);
+
+	GeneratedLadderMesh = CreateDefaultSubobject<UInstancedStaticMeshComponent>(TEXT("GeneratedLadderMesh"));
+	GeneratedLadderMesh->SetupAttachment(LadderGeometryRoot);
+	GeneratedLadderMesh->SetCanEverAffectNavigation(false);
 }
 void ALadderBase::OnConstruction(const FTransform& Transform)
 {
@@ -22,6 +28,12 @@ void ALadderBase::OnConstruction(const FTransform& Transform)
 
 void ALadderBase::ClearGeneratedLadder()
 {
+	if (IsValid(GeneratedLadderMesh))
+	{
+		GeneratedLadderMesh->ClearInstances();
+	}
+
+	// Remove modules serialized by the old per-component construction layout.
 	for (UStaticMeshComponent* ClimbMesh : ClimbMeshes)
 	{
 		if (IsValid(ClimbMesh))
@@ -38,12 +50,16 @@ void ALadderBase::RebuildLadder()
 {
 	ClearGeneratedLadder();
 
-	if (LadderLevel <= 0 || !IsValid(ClimbStaticMesh))
+	if (LadderLevel <= 0 || !IsValid(ClimbStaticMesh) || !IsValid(LadderGeometryRoot) ||
+		!IsValid(GeneratedLadderMesh))
 	{
 		UE_LOG(Log_Climb_Ladder, Error, TEXT("[Ladder] Invalid construction settings on '%s': LadderLevel=%d, ClimbStaticMesh=%s"),
 			*GetName(), LadderLevel, *GetNameSafe(ClimbStaticMesh));
 		return;
 	}
+
+	LadderGeometryRoot->SetRelativeRotation(FRotator(LadderTiltAngle, 0.0f, 0.0f));
+	GeneratedLadderMesh->SetStaticMesh(ClimbStaticMesh);
 
 	const float ModuleHeight =
 		ClimbStaticMesh->GetBoundingBox().GetSize().Z *
@@ -60,25 +76,20 @@ void ALadderBase::RebuildLadder()
 
 	for (int32 i = 0; i < LadderLevel; i++)
 	{
-		UStaticMeshComponent* NewClimbMesh = NewObject<UStaticMeshComponent>(this);
-		NewClimbMesh->SetStaticMesh(ClimbStaticMesh);
-		NewClimbMesh->SetupAttachment(RootComponent);
-		NewClimbMesh->SetCanEverAffectNavigation(false);
-		NewClimbMesh->SetRelativeScale3D(LadderScale);
-		NewClimbMesh->SetRelativeLocation(FVector(0.0f, 0.0f, AdditionalHeight + CumulativeHeight));
-		NewClimbMesh->SetRelativeRotation(FRotator(0.0f, -90.0f, 0.0f));
-		NewClimbMesh->RegisterComponent();
+		const FTransform InstanceTransform(FRotator(0.0f, -90.0f, 0.0f),
+			FVector(0.0f, 0.0f, AdditionalHeight + CumulativeHeight), LadderScale);
+		GeneratedLadderMesh->AddInstance(InstanceTransform);
 		CumulativeHeight += ModuleHeight;
-		ClimbMeshes.Add(NewClimbMesh);
 	}
 
-	ClimbTopTrigger->SetRelativeLocation(FVector(-80.0f, 0.0f, AdditionalHeight + CumulativeHeight + ClimbTopTrigger->Bounds.BoxExtent.Z));
-	ClimbTopApproachLocation->SetRelativeLocation(
-		FVector(-80.0f, 0.0f, AdditionalHeight + CumulativeHeight + 92.0f));
-	ClimbTopLocation->SetRelativeLocation(
-		FVector(-20.0f, 0.0f, AdditionalHeight + CumulativeHeight + 92.0f));
-	ClimbTopExitLocation->SetRelativeLocation(
-		FVector(-80.0f, 0.0f, AdditionalHeight + CumulativeHeight + 92.0f));
+	const FVector BottomEndpoint = GetGeometryPointInActorSpace(0.0f);
+	const FVector TopEndpoint = GetGeometryPointInActorSpace(AdditionalHeight + CumulativeHeight);
+	ClimbBottomTrigger->SetRelativeLocation(BottomEndpoint + BottomTriggerOffset);
+	ClimbBottomLocation->SetRelativeLocation(BottomEndpoint + BottomEntryOffset);
+	ClimbTopTrigger->SetRelativeLocation(TopEndpoint + FVector(-80.0f, 0.0f, ClimbTopTrigger->Bounds.BoxExtent.Z));
+	ClimbTopApproachLocation->SetRelativeLocation(TopEndpoint + FVector(-80.0f, 0.0f, 92.0f));
+	ClimbTopLocation->SetRelativeLocation(TopEndpoint + FVector(-20.0f, 0.0f, 92.0f));
+	ClimbTopExitLocation->SetRelativeLocation(TopEndpoint + FVector(-80.0f, 0.0f, 92.0f));
 	// The interaction move uses this component's rotation as the montage
 	// start rotation. Top entry must already face the ladder before root
 	// motion and motion warping begin.
@@ -89,19 +100,11 @@ void ALadderBase::RebuildLadder()
 
 bool ALadderBase::HasValidGeneratedMeshes() const
 {
-	if (LadderLevel <= 0 || !IsValid(ClimbStaticMesh) || ClimbMeshes.Num() != LadderLevel)
+	if (LadderLevel <= 0 || !IsValid(ClimbStaticMesh) || !IsValid(GeneratedLadderMesh) ||
+		GeneratedLadderMesh->GetStaticMesh() != ClimbStaticMesh || GeneratedLadderMesh->GetInstanceCount() != LadderLevel)
 	{
 		return false;
 	}
-
-	for (const UStaticMeshComponent* ClimbMesh : ClimbMeshes)
-	{
-		if (!IsValid(ClimbMesh) || ClimbMesh->GetStaticMesh() != ClimbStaticMesh)
-		{
-			return false;
-		}
-	}
-
 	return true;
 }
 
@@ -115,20 +118,34 @@ void ALadderBase::BuildRuntimeGripData()
 		return;
 	}
 
-	for (int32 MeshIndex = 0; MeshIndex < ClimbMeshes.Num(); ++MeshIndex)
+	const TArray<FName> SocketNames = GeneratedLadderMesh->GetAllSocketNames();
+	for (int32 InstanceIndex = 0; InstanceIndex < GeneratedLadderMesh->GetInstanceCount(); ++InstanceIndex)
 	{
-		UStaticMeshComponent* ClimbMesh = ClimbMeshes[MeshIndex];
-		for (const FName SocketName : ClimbMesh->GetAllSocketNames())
+		FTransform InstanceWorldTransform;
+		if (!GeneratedLadderMesh->GetInstanceTransform(InstanceIndex, InstanceWorldTransform, true))
+		{
+			continue;
+		}
+
+		for (const FName SocketName : SocketNames)
 		{
 			if (!SocketName.ToString().Contains(TEXT("Grip")))
 			{
 				continue;
 			}
 
-			const FVector LocalSocketLocation = GetActorTransform().InverseTransformPosition(
-				ClimbMesh->GetSocketLocation(SocketName));
+			const UStaticMeshSocket* Socket = ClimbStaticMesh->FindSocket(SocketName);
+			if (!IsValid(Socket))
+			{
+				continue;
+			}
+
+			const FVector SocketWorldLocation = InstanceWorldTransform.TransformPosition(Socket->RelativeLocation);
+			const FVector LocalSocketLocation = GetActorTransform().InverseTransformPosition(SocketWorldLocation);
 			FGripNode1D GripNode;
 			GripNode.LocalPosition = LocalSocketLocation;
+			GripNode.ClimbCoordinate = GeneratedLadderMesh->GetComponentTransform()
+				.InverseTransformPosition(SocketWorldLocation).Z;
 			GripList1D.Add(GripNode);
 		}
 	}
@@ -142,6 +159,40 @@ void ALadderBase::BuildRuntimeGripData()
 			TEXT("[Ladder] No Grip sockets were found on the generated meshes for '%s'."),
 			*GetName());
 	}
+}
+
+FVector ALadderBase::GetGeometryPointInActorSpace(float Height) const
+{
+	return IsValid(LadderGeometryRoot)
+		? LadderGeometryRoot->GetRelativeTransform().TransformPosition(FVector(0.0f, 0.0f, Height))
+		: FVector(0.0f, 0.0f, Height);
+}
+
+FVector ALadderBase::GetLadderForwardVector() const
+{
+	return IsValid(LadderGeometryRoot) ? LadderGeometryRoot->GetForwardVector() : GetActorForwardVector();
+}
+
+FVector ALadderBase::GetLadderRightVector() const
+{
+	return IsValid(LadderGeometryRoot) ? LadderGeometryRoot->GetRightVector() : GetActorRightVector();
+}
+
+FVector ALadderBase::GetLadderUpVector() const
+{
+	return IsValid(LadderGeometryRoot) ? LadderGeometryRoot->GetUpVector() : GetActorUpVector();
+}
+
+FVector ALadderBase::GetLadderTopEndpointWorld() const
+{
+	if (!IsValid(ClimbStaticMesh) || LadderLevel <= 0)
+	{
+		return GetActorLocation();
+	}
+
+	const float ModuleHeight = ClimbStaticMesh->GetBoundingBox().GetSize().Z * FMath::Abs(LadderScale.Z);
+	const FVector ActorLocalEndpoint = GetGeometryPointInActorSpace(AdditionalHeight + ModuleHeight * LadderLevel);
+	return GetActorTransform().TransformPosition(ActorLocalEndpoint);
 }
 
 void ALadderBase::SetInitTopPosition()
@@ -204,6 +255,9 @@ void ALadderBase::SetInitBottomPosition()
 	if (bHit)
 	{
 		ClimbBottomLocation->SetWorldLocation(HitResult.ImpactPoint);
+		FVector TriggerLocation = ClimbBottomTrigger->GetComponentLocation();
+		TriggerLocation.Z = HitResult.ImpactPoint.Z + BottomTriggerOffset.Z;
+		ClimbBottomTrigger->SetWorldLocation(TriggerLocation);
 	}
 	else
 	{

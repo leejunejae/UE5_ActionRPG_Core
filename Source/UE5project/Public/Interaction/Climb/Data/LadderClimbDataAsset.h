@@ -12,26 +12,40 @@ class UAnimMontage;
 class UAnimSequence;
 class UCurveVector;
 
+UENUM(BlueprintType)
+enum class ELadderWarpTargetAnchor : uint8
+{
+	TransitionTarget,
+	LadderTopEndpoint
+};
+
 USTRUCT(BlueprintType)
-struct FLadderWarpCheckpoint
+struct FLadderWarpTargetDefinition
 {
 	GENERATED_BODY()
 
-	// Transition montage that consumes this checkpoint.
-	UPROPERTY(EditAnywhere, Category = "Warp Checkpoint")
-	EClimbPhase Phase = EClimbPhase::Enter_From_Top;
-
-	// Must match the Motion Warping notify state's target name.
-	UPROPERTY(EditAnywhere, Category = "Warp Checkpoint")
+	// Must match the target name on the montage's Motion Warping notify state.
+	UPROPERTY(EditAnywhere, Category = "Warp Target")
 	FName TargetName = NAME_None;
 
-	// Animation-authored checkpoint transform relative to the final body
-	// target, expressed in ladder-local Forward/Right/Up axes.
-	UPROPERTY(EditAnywhere, Category = "Warp Checkpoint", meta = (Units = "cm"))
-	FVector OffsetFromFinalBody = FVector::ZeroVector;
+	UPROPERTY(EditAnywhere, Category = "Warp Target")
+	ELadderWarpTargetAnchor Anchor = ELadderWarpTargetAnchor::TransitionTarget;
 
-	UPROPERTY(EditAnywhere, Category = "Warp Checkpoint")
+	// Offset from the selected anchor in ladder-local Forward/Right/Up axes.
+	UPROPERTY(EditAnywhere, Category = "Warp Target", meta = (Units = "cm"))
+	FVector Offset = FVector::ZeroVector;
+
+	UPROPERTY(EditAnywhere, Category = "Warp Target")
 	FRotator RotationOffset = FRotator::ZeroRotator;
+};
+
+USTRUCT(BlueprintType)
+struct FLadderPhaseWarpTargets
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, Category = "Warp Target")
+	TArray<FLadderWarpTargetDefinition> Targets;
 };
 
 UENUM(BlueprintType)
@@ -95,18 +109,7 @@ public:
 	TMap<EClimbPhase, UAnimMontage*> Montages;
 
 	UPROPERTY(EditAnywhere, Category = "Montage")
-	FName EnterWarpTargetName = TEXT("LadderAttach");
-
-	// Optional animation-specific intermediate targets. An empty array keeps
-	// the entry montage on the single final LadderAttach target.
-	UPROPERTY(EditAnywhere, Category = "Montage")
-	TArray<FLadderWarpCheckpoint> EnterWarpCheckpoints;
-
-	UPROPERTY(EditAnywhere, Category = "Montage")
-	FName ExitWarpTargetName = TEXT("LadderExit");
-
-	UPROPERTY(EditAnywhere, Category = "Montage")
-	TArray<FLadderWarpCheckpoint> ExitWarpCheckpoints;
+	TMap<EClimbPhase, FLadderPhaseWarpTargets> WarpTargetsByPhase;
 
 	// A larger remaining error means motion warping did not reach the authored
 	// final attach transform and must not be hidden by an end-of-montage snap.

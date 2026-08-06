@@ -55,6 +55,13 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Debug|Ladder Contact", meta = (ClampMin = "0.0"))
 	float BottomEnterContactDebugDuration = 10.0f;
 
+	/** Draws warp anchors and the resolved targets when a transition starts. */
+	UPROPERTY(EditAnywhere, Category = "Debug|Ladder Warp")
+	bool bDrawTransitionWarpDebug = false;
+
+	UPROPERTY(EditAnywhere, Category = "Debug|Ladder Warp", meta = (ClampMin = "0.0", Units = "s"))
+	float TransitionWarpDebugDuration = 10.0f;
+
 protected:
 	const FLadderRepeatedStepDefinition* GetRepeatedStepDefinition(EClimbPhase Phase) const;
 	UAnimMontage* GetClimbMontage(EClimbPhase Phase) const;
@@ -119,8 +126,7 @@ private:
 	void HandleClimbObjectDestroyed(AActor* DestroyedActor);
 	bool PlayEnterMontage(EClimbPhase EnterPhase);
 	bool PlayExitMontage(EClimbPhase ExitPhase);
-	bool UpdateEnterWarpTarget(EClimbPhase EnterPhase);
-	bool UpdateExitWarpTarget(EClimbPhase ExitPhase);
+	bool UpdateTransitionWarpTargets(EClimbPhase Phase);
 	void ClearTransitionWarpTargets();
 	void DrawBottomEnterContactDebug() const;
 	bool ResolveGripPattern(const TMap<ELimbList, float>& HeightOffsets, ELimbList ReferenceLimb, bool bPreferTop,
