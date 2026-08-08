@@ -596,6 +596,7 @@ void UClimbComponent::ClearLadderSession()
 
 	ClearTransitionWarpTargets();
 	LimbToGripNode.Empty();
+	ActiveSurfaceHandContacts.Empty();
 	GripList1D.Empty();
 	ClimbObject = nullptr;
 	TransitionTargetLocation = FVector::ZeroVector;
@@ -781,6 +782,67 @@ void UClimbComponent::CompleteLimbGripTransition(ELimbList Limb, const UObject* 
 	const float LimbSideOffset = Limb == ELimbList::HandL || Limb == ELimbList::FootL ? 15.0f : -15.0f;
 	LimbData->LimbLocation = SetBoneIKTargetLadder(Transition->TargetGripIndex, FVector::ZeroVector, LimbSideOffset);
 	TransitionRuntime.ActiveGripTransitions.Remove(Limb);
+}
+
+bool UClimbComponent::BeginTopSurfaceHandContact(ELimbList Limb, float TraceUpDistance, float TraceDownDistance,
+	                                              float SurfaceOffset, ECollisionChannel TraceChannel,
+	                                              UObject* ContactSource, bool bDrawDebug)
+{
+	const bool bTopTransition = LadderStance == EClimbPhase::Enter_From_Top || IsLadderTopExitPhase(LadderStance);
+	if (!bTopTransition || (LadderActionState != ELadderActionState::Entering &&
+	                      LadderActionState != ELadderActionState::Exiting) ||
+	    (Limb != ELimbList::HandL && Limb != ELimbList::HandR) || !IsValid(ContactSource) || !GetWorld())
+	{
+		return false;
+	}
+
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	USkeletalMeshComponent* Mesh = Character ? Character->GetMesh() : nullptr;
+	const FName PalmSocket = Limb == ELimbList::HandL ? TEXT("Palm_L") : TEXT("Palm_R");
+	if (!IsValid(Mesh) || !Mesh->DoesSocketExist(PalmSocket))
+	{
+		return false;
+	}
+
+	const FVector PalmLocation = Mesh->GetSocketLocation(PalmSocket);
+	const FVector TraceStart = PalmLocation + FVector::UpVector * FMath::Max(TraceUpDistance, 0.0f);
+	const FVector TraceEnd = PalmLocation - FVector::UpVector * FMath::Max(TraceDownDistance, 0.0f);
+	FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(LadderSurfaceHandContact), false, GetOwner());
+	QueryParams.AddIgnoredActor(ClimbObject);
+
+	FHitResult Hit;
+	const bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, TraceStart, TraceEnd, TraceChannel, QueryParams);
+	if (bDrawDebug)
+	{
+		DrawDebugLine(GetWorld(), TraceStart, TraceEnd, bHit ? FColor::Green : FColor::Red, false, 5.0f, 0, 2.0f);
+		if (bHit)
+		{
+			DrawDebugSphere(GetWorld(), Hit.ImpactPoint, 7.0f, 12, FColor::Yellow, false, 5.0f, 0, 2.0f);
+			DrawDebugDirectionalArrow(GetWorld(), Hit.ImpactPoint, Hit.ImpactPoint + Hit.ImpactNormal * 25.0f,
+			                          8.0f, FColor::Cyan, false, 5.0f, 0, 2.0f);
+		}
+	}
+	if (!bHit)
+	{
+		UE_LOG(Log_Climb_Ladder, Warning, TEXT("[ClimbComponent] No platform surface was found for %s."),
+		       *UEnum::GetValueAsString(Limb));
+		return false;
+	}
+
+	FSurfaceHandContactState& Contact = ActiveSurfaceHandContacts.FindOrAdd(Limb);
+	Contact.Location = Hit.ImpactPoint + Hit.ImpactNormal * SurfaceOffset;
+	Contact.SurfaceNormal = Hit.ImpactNormal;
+	Contact.Source = ContactSource;
+	return true;
+}
+
+void UClimbComponent::EndTopSurfaceHandContact(ELimbList Limb, const UObject* ContactSource)
+{
+	const FSurfaceHandContactState* Contact = ActiveSurfaceHandContacts.Find(Limb);
+	if (Contact && Contact->Source.Get() == ContactSource)
+	{
+		ActiveSurfaceHandContacts.Remove(Limb);
+	}
 }
 
 void UClimbComponent::HandleOwnerDeathStarted()
@@ -1967,6 +2029,11 @@ void UClimbComponent::DeRegisterClimbObject()
 
 FVector UClimbComponent::GetLimbIKTarget(ELimbList LimbName) const
 {
+	if (const FSurfaceHandContactState* SurfaceContact = ActiveSurfaceHandContacts.Find(LimbName))
+	{
+		return SurfaceContact->Location;
+	}
+
 	const FLimbData* LimbData = LimbToGripNode.Find(LimbName);
 	if (!LimbData)
 	{

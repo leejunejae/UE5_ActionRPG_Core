@@ -89,6 +89,10 @@ public:
 	                             UObject* TransitionSource);
 	void UpdateLimbGripTransition(ELimbList Limb, float NormalizedTime, const UObject* TransitionSource);
 	void CompleteLimbGripTransition(ELimbList Limb, const UObject* TransitionSource);
+	bool BeginTopSurfaceHandContact(ELimbList Limb, float TraceUpDistance, float TraceDownDistance,
+	                                float SurfaceOffset, ECollisionChannel TraceChannel, UObject* ContactSource,
+	                                bool bDrawDebug);
+	void EndTopSurfaceHandContact(ELimbList Limb, const UObject* ContactSource);
 
 	FVector GetLimbIKTarget(ELimbList LimbName) const;
 	FORCEINLINE EClimbPhase GetLadderStance() const { return LadderStance; }
@@ -188,6 +192,13 @@ private:
 		TWeakObjectPtr<UObject> Source;
 	};
 
+	struct FSurfaceHandContactState
+	{
+		FVector Location = FVector::ZeroVector;
+		FVector SurfaceNormal = FVector::UpVector;
+		TWeakObjectPtr<UObject> Source;
+	};
+
 	struct FTransitionRuntime
 	{
 		TMap<ELimbList, FLimbGripTransitionState> ActiveGripTransitions;
@@ -239,6 +250,7 @@ private:
 
 	FTransitionRuntime TransitionRuntime;
 	FRepeatedStepRuntime RepeatedStepRuntime;
+	TMap<ELimbList, FSurfaceHandContactState> ActiveSurfaceHandContacts;
 
 	FVector SetBoneIKTargetLadder(int32 TargetGripIndex, const FVector CurveValue, float LimbXDistance = 0.0f,
 	                              int32 StartGripIndex = INDEX_NONE);
