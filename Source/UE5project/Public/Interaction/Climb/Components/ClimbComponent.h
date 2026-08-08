@@ -117,6 +117,8 @@ private:
 	void CompleteExitTransition();
 	void CaptureCharacterState();
 	void RestoreCharacterState();
+	bool BeginTopTransitionCollision();
+	void RestoreTopTransitionCollision();
 	void ClearLadderSession();
 	void ResetLadderIKState(bool bRestoreGroundPhase);
 	void StopActiveTransitionMontage();
@@ -175,6 +177,8 @@ private:
 	bool bHasCharacterStateSnapshot = false;
 	uint8 SavedMovementMode = 0;
 	uint8 SavedCustomMovementMode = 0;
+	bool bTopTransitionCollisionActive = false;
+	ECollisionEnabled::Type SavedCapsuleCollisionEnabled = ECollisionEnabled::QueryAndPhysics;
 
 	struct FLimbGripTransitionState
 	{

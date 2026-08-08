@@ -528,6 +528,8 @@ void UClimbComponent::CaptureCharacterState()
 
 void UClimbComponent::RestoreCharacterState()
 {
+	RestoreTopTransitionCollision();
+
 	if (!bHasCharacterStateSnapshot)
 	{
 		return;
@@ -544,8 +546,49 @@ void UClimbComponent::RestoreCharacterState()
 	bHasCharacterStateSnapshot = false;
 }
 
+bool UClimbComponent::BeginTopTransitionCollision()
+{
+	if (bTopTransitionCollisionActive)
+	{
+		return true;
+	}
+
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	UCapsuleComponent* Capsule = Character ? Character->GetCapsuleComponent() : nullptr;
+	if (!IsValid(Capsule))
+	{
+		return false;
+	}
+
+	SavedCapsuleCollisionEnabled = Capsule->GetCollisionEnabled();
+	Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	bTopTransitionCollisionActive = true;
+	return true;
+}
+
+void UClimbComponent::RestoreTopTransitionCollision()
+{
+	if (!bTopTransitionCollisionActive)
+	{
+		return;
+	}
+
+	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
+	{
+		if (UCapsuleComponent* Capsule = Character->GetCapsuleComponent())
+		{
+			Capsule->SetCollisionEnabled(SavedCapsuleCollisionEnabled);
+		}
+	}
+
+	bTopTransitionCollisionActive = false;
+	SavedCapsuleCollisionEnabled = ECollisionEnabled::QueryAndPhysics;
+}
+
 void UClimbComponent::ClearLadderSession()
 {
+	RestoreTopTransitionCollision();
+
 	if (ClimbObject)
 	{
 		ClimbObject->OnDestroyed.RemoveDynamic(this, &UClimbComponent::HandleClimbObjectDestroyed);
@@ -781,17 +824,23 @@ bool UClimbComponent::PlayEnterMontage(EClimbPhase EnterPhase)
 		return false;
 	}
 
+	if (EnterPhase == EClimbPhase::Enter_From_Top && !BeginTopTransitionCollision())
+	{
+		UE_LOG(Log_Climb_Ladder, Error, TEXT("[ClimbComponent] Failed to disable top-entry capsule collision."));
+		return false;
+	}
 	if (!UpdateTransitionWarpTargets(EnterPhase))
 	{
+		RestoreTopTransitionCollision();
 		UE_LOG(Log_Climb_Ladder, Error, TEXT("[ClimbComponent] %s-enter warp target could not be configured."),
 		       EntryLabel);
 		return false;
 	}
-
 	AnimInstance->SetRootMotionMode(ERootMotionMode::RootMotionFromMontagesOnly);
 	const float MontageDuration = AnimInstance->Montage_Play(Montage);
 	if (MontageDuration <= 0.0f)
 	{
+		RestoreTopTransitionCollision();
 		ClearTransitionWarpTargets();
 		UE_LOG(Log_Climb_Ladder, Error, TEXT("[ClimbComponent] Failed to play %s-enter montage '%s'."), EntryLabel,
 		       *GetNameSafe(Montage));
@@ -821,8 +870,14 @@ bool UClimbComponent::PlayExitMontage(EClimbPhase ExitPhase)
 		return false;
 	}
 
+	if (IsLadderTopExitPhase(ExitPhase) && !BeginTopTransitionCollision())
+	{
+		UE_LOG(Log_Climb_Ladder, Error, TEXT("[ClimbComponent] Failed to disable top-exit capsule collision."));
+		return false;
+	}
 	if (!UpdateTransitionWarpTargets(ExitPhase))
 	{
+		RestoreTopTransitionCollision();
 		return false;
 	}
 
@@ -830,6 +885,7 @@ bool UClimbComponent::PlayExitMontage(EClimbPhase ExitPhase)
 	const float MontageDuration = AnimInstance->Montage_Play(Montage);
 	if (MontageDuration <= 0.0f)
 	{
+		RestoreTopTransitionCollision();
 		ClearTransitionWarpTargets();
 		return false;
 	}
@@ -1719,6 +1775,10 @@ void UClimbComponent::OnEnterClimbMontageEnded(UAnimMontage* Montage, bool bInte
 
 	ClearTransitionWarpTargets();
 	GetOwner()->SetActorLocation(TransitionTargetLocation);
+	if (bWasTopEntry)
+	{
+		RestoreTopTransitionCollision();
+	}
 	LadderStance = ResolveIdlePhaseFromGripState();
 	LadderActionState = ELadderActionState::Recovering;
 	RepeatedStepRuntime.ExplicitTime = 0.0f;
@@ -1776,6 +1836,10 @@ void UClimbComponent::OnExitClimbMontageEnded(UAnimMontage* Montage, bool bInter
 	}
 
 	GetOwner()->SetActorLocation(TransitionTargetLocation);
+	if (bWasTopExit)
+	{
+		RestoreTopTransitionCollision();
+	}
 	if (bWasTopExit && IsValid(ClimbObject) && IsValid(ClimbObject->GetTopExitTarget()))
 	{
 		GetOwner()->SetActorRotation(ClimbObject->GetTopExitTarget()->GetComponentRotation());
