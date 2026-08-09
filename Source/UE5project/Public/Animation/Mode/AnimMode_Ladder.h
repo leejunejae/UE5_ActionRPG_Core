@@ -15,5 +15,6 @@ class UE5PROJECT_API UAnimMode_Ladder : public UAnimModeBase
 	GENERATED_BODY()
 	
 public:
+	virtual void OnModeExit() override;
 	virtual void Tick(float DeltaSeconds) override;
 };

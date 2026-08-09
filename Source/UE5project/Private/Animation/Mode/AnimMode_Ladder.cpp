@@ -7,17 +7,37 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Interaction/Climb/Components/ClimbComponent.h"
 
+void UAnimMode_Ladder::OnModeExit()
+{
+	if (!AnimInst.IsValid())
+	{
+		return;
+	}
+
+	UCharacterBaseAnimInstance* Anim = AnimInst.Get();
+	Anim->CurLadderStance = EClimbPhase::Idle_Right;
+	Anim->LadderActionState = ELadderActionState::Detached;
+	Anim->RepeatedStepExplicitTime = 0.0f;
+	Anim->LadderIdleAnimation = nullptr;
+	Anim->ActiveRepeatedStepAnimation = nullptr;
+}
+
 void UAnimMode_Ladder::Tick(float DeltaSeconds)
 {
 	(void)DeltaSeconds;
-	if (!Character.IsValid() || !AnimInst.IsValid()) return;
+	if (!Character.IsValid() || !AnimInst.IsValid())
+	{
+		return;
+	}
 
-	auto* Ch = Character.Get();
-	auto* Anim = AnimInst.Get();
+	ACharacterBase* Ch = Character.Get();
+	UCharacterBaseAnimInstance* Anim = AnimInst.Get();
 	UClimbComponent* ClimbComponent = Ch->GetClimbComponent();
-	if (!IsValid(ClimbComponent)) return;
 	USkeletalMeshComponent* Mesh = Ch->GetMesh();
-	if (!IsValid(Mesh)) return;
+	if (!IsValid(ClimbComponent) || !IsValid(Mesh))
+	{
+		return;
+	}
 
 	Anim->CurLadderStance = ClimbComponent->GetLadderStance();
 	Anim->LadderActionState = ClimbComponent->GetLadderActionState();
@@ -34,21 +54,15 @@ void UAnimMode_Ladder::Tick(float DeltaSeconds)
 	static const FName FootLOffsetSocket(TEXT("Foot_L_Offset"));
 	static const FName SoleLSocket(TEXT("Sole_L"));
 
-	const auto UpdateLimbTarget =
-		[ClimbComponent, Mesh](
-			ELimbList Limb,
-			FName OffsetSocket,
-			FName ContactSocket,
-			FVector& OutTarget)
+	const auto UpdateLimbTarget = [ClimbComponent, Mesh](ELimbList Limb, FName OffsetSocket, FName ContactSocket,
+	                                                   FVector& OutTarget)
+	{
+		OutTarget = ClimbComponent->GetLimbIKTarget(Limb);
+		if (Mesh->DoesSocketExist(OffsetSocket) && Mesh->DoesSocketExist(ContactSocket))
 		{
-			OutTarget = ClimbComponent->GetLimbIKTarget(Limb);
-			if (Mesh->DoesSocketExist(OffsetSocket) &&
-				Mesh->DoesSocketExist(ContactSocket))
-			{
-				OutTarget -= Mesh->GetSocketLocation(ContactSocket) -
-					Mesh->GetSocketLocation(OffsetSocket);
-			}
-		};
+			OutTarget -= Mesh->GetSocketLocation(ContactSocket) - Mesh->GetSocketLocation(OffsetSocket);
+		}
+	};
 
 	UpdateLimbTarget(ELimbList::HandL, HandLOffsetSocket, PalmLSocket, Anim->LeftHandLadderOffset);
 	UpdateLimbTarget(ELimbList::FootR, FootROffsetSocket, SoleRSocket, Anim->RightFootLadderOffset);

@@ -189,4 +189,12 @@ public:
 
 	UPROPERTY(EditAnywhere, Category = "Body Anchor", meta = (Units = "cm"))
 	float BodyAnchorUpOffset = 3.0f;
+
+	// Horizontal distance from the ladder center line to each hand and foot.
+	// Left limbs use the positive value and right limbs use the negative value.
+	UPROPERTY(EditAnywhere, Category = "IK", meta = (ClampMin = "0.0", Units = "cm"))
+	float LimbSideOffset = 15.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Exit")
+	TEnumAsByte<ECollisionChannel> BottomExitTraceChannel = ECC_GameTraceChannel8;
 };

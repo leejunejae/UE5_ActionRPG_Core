@@ -145,6 +145,7 @@ private:
 	const FGripNode1D* GetGripNode(int32 GripIndex) const;
 	int32 GetNeighborGripIndex(int32 GripIndex, bool bUp, int32 Count = 1) const;
 	FVector GetGripWorldPosition(int32 GripIndex) const;
+	float GetLimbSideOffset(ELimbList Limb) const;
 	bool TryCalculateBodyTargetLocation(const TMap<ELimbList, int32>& GripAssignment, FVector& OutTargetLocation) const;
 	bool MoveCharacterAlongClimbPath(const FVector& TargetLocation);
 	bool ResolveRepeatedStepLimbs(EClimbPhase Phase, ELimbList& OutMovingHand, ELimbList& OutMovingFoot) const;
@@ -195,7 +196,6 @@ private:
 	struct FSurfaceHandContactState
 	{
 		FVector Location = FVector::ZeroVector;
-		FVector SurfaceNormal = FVector::UpVector;
 		TWeakObjectPtr<UObject> Source;
 	};
 
@@ -204,6 +204,7 @@ private:
 		TMap<ELimbList, FLimbGripTransitionState> ActiveGripTransitions;
 		TMap<ELimbList, TArray<int32>> PlannedGripTargets;
 		TMap<ELimbList, int32> PlannedRouteEndAssignment;
+		TSet<FName> ActiveWarpTargetNames;
 		bool bVisualStateReleased = false;
 
 		void Reset()
@@ -211,6 +212,7 @@ private:
 			ActiveGripTransitions.Empty();
 			PlannedGripTargets.Empty();
 			PlannedRouteEndAssignment.Empty();
+			ActiveWarpTargetNames.Empty();
 			bVisualStateReleased = false;
 		}
 	};

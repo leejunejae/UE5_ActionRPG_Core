@@ -117,7 +117,7 @@ private:
 		FGameplayTag CurrentState;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
-		EClimbPhase CurLadderStance;
+		EClimbPhase CurLadderStance = EClimbPhase::Idle_Right;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
 		ELadderActionState LadderActionState = ELadderActionState::Detached;

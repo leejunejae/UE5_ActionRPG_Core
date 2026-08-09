@@ -2,7 +2,6 @@
 
 #include "Characters/CharacterBase.h"
 #include "Interaction/Climb/Components/ClimbComponent.h"
-#include "Utils/CoreLog.h"
 
 namespace
 {
@@ -24,12 +23,8 @@ void UANS_LadderSurfaceHandContact::NotifyBegin(USkeletalMeshComponent* MeshComp
 		return;
 	}
 
-	if (!ClimbComponent->BeginTopSurfaceHandContact(Hand, TraceUpDistance, TraceDownDistance, SurfaceOffset,
-	                                                TraceChannel, this, bDrawDebug))
-	{
-		UE_LOG(Log_Climb_Ladder, Warning, TEXT("[LadderSurfaceHandContact] Failed to resolve %s contact."),
-		       *UEnum::GetValueAsString(Hand));
-	}
+	ClimbComponent->BeginTopSurfaceHandContact(Hand, TraceUpDistance, TraceDownDistance, SurfaceOffset, TraceChannel,
+	                                           this, bDrawDebug);
 }
 
 void UANS_LadderSurfaceHandContact::NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation,
