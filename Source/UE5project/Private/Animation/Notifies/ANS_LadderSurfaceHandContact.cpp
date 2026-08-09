@@ -6,7 +6,7 @@
 
 namespace
 {
-UClimbComponent* GetClimbComponent(const USkeletalMeshComponent* MeshComp)
+UClimbComponent* GetSurfaceHandContactClimbComponent(const USkeletalMeshComponent* MeshComp)
 {
 	const ACharacterBase* Character = MeshComp ? Cast<ACharacterBase>(MeshComp->GetOwner()) : nullptr;
 	return Character ? Character->GetClimbComponent() : nullptr;
@@ -18,7 +18,7 @@ void UANS_LadderSurfaceHandContact::NotifyBegin(USkeletalMeshComponent* MeshComp
 	                                             const FAnimNotifyEventReference& EventReference)
 {
 	Super::NotifyBegin(MeshComp, Animation, TotalDuration, EventReference);
-	UClimbComponent* ClimbComponent = GetClimbComponent(MeshComp);
+	UClimbComponent* ClimbComponent = GetSurfaceHandContactClimbComponent(MeshComp);
 	if (!ClimbComponent)
 	{
 		return;
@@ -36,7 +36,7 @@ void UANS_LadderSurfaceHandContact::NotifyEnd(USkeletalMeshComponent* MeshComp, 
 	                                           const FAnimNotifyEventReference& EventReference)
 {
 	Super::NotifyEnd(MeshComp, Animation, EventReference);
-	if (UClimbComponent* ClimbComponent = GetClimbComponent(MeshComp))
+	if (UClimbComponent* ClimbComponent = GetSurfaceHandContactClimbComponent(MeshComp))
 	{
 		ClimbComponent->EndTopSurfaceHandContact(Hand, this);
 	}

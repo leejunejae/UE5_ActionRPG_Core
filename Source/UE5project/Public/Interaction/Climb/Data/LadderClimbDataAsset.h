@@ -168,8 +168,16 @@ public:
 	UPROPERTY(EditAnywhere, Category = "Grip|Top Enter|Initial")
 	ELimbList TopEnterInitialReferenceLimb = ELimbList::HandL;
 
+	// Error at or below this value is considered a natural fit. Candidates are
+	// still allowed up to MaximumGripPatternError so different rung intervals
+	// can resolve to different step counts without requiring another profile.
 	UPROPERTY(EditAnywhere, Category = "Grip", meta = (ClampMin = "0.0", Units = "cm"))
-	float GripMatchTolerance = 10.0f;
+	float PreferredGripPatternError = 10.0f;
+
+	// Absolute per-limb error limit used when fitting authored body-space
+	// offsets to the ladder's discrete grips.
+	UPROPERTY(EditAnywhere, Category = "Grip", meta = (ClampMin = "0.0", Units = "cm"))
+	float MaximumGripPatternError = 20.0f;
 
 	// Offsets from the centroid of all four final limb grips. These values are
 	// authored for the character body type and ladder animation set.

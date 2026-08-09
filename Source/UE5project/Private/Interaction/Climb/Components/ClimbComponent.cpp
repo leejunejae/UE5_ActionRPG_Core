@@ -1186,7 +1186,8 @@ bool UClimbComponent::ResolveGripPattern(const TMap<ELimbList, float>& HeightOff
 	}
 
 	const float ReferenceOffset = HeightOffsets[ReferenceLimb];
-	const float MatchTolerance = FMath::Max(LadderClimbProfile->GripMatchTolerance, 0.0f);
+	const float PreferredError = FMath::Max(LadderClimbProfile->PreferredGripPatternError, 0.0f);
+	const float MaximumError = FMath::Max(LadderClimbProfile->MaximumGripPatternError, PreferredError);
 	bool bFoundAssignment = false;
 	float BestScore = TNumericLimits<float>::Max();
 
@@ -1198,101 +1199,135 @@ bool UClimbComponent::ResolveGripPattern(const TMap<ELimbList, float>& HeightOff
 			continue;
 		}
 
-		TMap<ELimbList, int32> CandidateAssignment;
-		float CandidateScore = 0.0f;
-		bool bCandidateValid = true;
+		TMap<ELimbList, TArray<int32>> GripCandidatesByLimb;
 
 		for (const ELimbList Limb : RequiredLimbs)
 		{
 			const float DesiredRelativeHeight = HeightOffsets[Limb] - ReferenceOffset;
-			int32 BestGripIndex = INDEX_NONE;
-			float BestError = TNumericLimits<float>::Max();
-
-			for (int32 GripIndex = 0; GripIndex < GripList1D.Num(); ++GripIndex)
+			const float DesiredClimbCoordinate = ReferenceGrip->ClimbCoordinate + DesiredRelativeHeight;
+			TArray<int32>& GripCandidates = GripCandidatesByLimb.Add(Limb);
+			if (Limb == ReferenceLimb)
 			{
-				const FGripNode1D* Grip = GetGripNode(GripIndex);
-				if (!Grip)
+				GripCandidates.Add(ReferenceGripIndex);
+				continue;
+			}
+
+			int32 LowerBound = 0;
+			int32 UpperBound = GripList1D.Num();
+			while (LowerBound < UpperBound)
+			{
+				const int32 Middle = LowerBound + (UpperBound - LowerBound) / 2;
+				if (GripList1D[Middle].ClimbCoordinate < DesiredClimbCoordinate)
+				{
+					LowerBound = Middle + 1;
+				}
+				else
+				{
+					UpperBound = Middle;
+				}
+			}
+
+			const int32 NearestGripIndices[] = {LowerBound - 1, LowerBound};
+			for (const int32 GripIndex : NearestGripIndices)
+			{
+				if (!GripList1D.IsValidIndex(GripIndex) || GripCandidates.Contains(GripIndex))
 				{
 					continue;
 				}
 
-				const float ActualRelativeHeight = Grip->ClimbCoordinate - ReferenceGrip->ClimbCoordinate;
-				const float Error = FMath::Abs(ActualRelativeHeight - DesiredRelativeHeight);
-				if (Error < BestError)
+				const float Error = FMath::Abs(GripList1D[GripIndex].ClimbCoordinate - DesiredClimbCoordinate);
+				if (Error <= MaximumError || FMath::IsNearlyEqual(Error, MaximumError, KINDA_SMALL_NUMBER))
 				{
-					BestError = Error;
-					BestGripIndex = GripIndex;
+					GripCandidates.Add(GripIndex);
 				}
 			}
 
-			if (BestGripIndex == INDEX_NONE ||
-			    (BestError > MatchTolerance && !FMath::IsNearlyEqual(BestError, MatchTolerance, KINDA_SMALL_NUMBER)))
+			if (GripCandidates.IsEmpty())
 			{
-				bCandidateValid = false;
+				GripCandidatesByLimb.Empty();
 				break;
 			}
-
-			CandidateAssignment.Add(Limb, BestGripIndex);
-			CandidateScore += BestError * BestError;
 		}
 
-		if (!bCandidateValid)
+		if (GripCandidatesByLimb.Num() != UE_ARRAY_COUNT(RequiredLimbs))
 		{
 			continue;
 		}
 
-		for (int32 LeftIndex = 0; LeftIndex < UE_ARRAY_COUNT(RequiredLimbs) && bCandidateValid; ++LeftIndex)
+		TMap<ELimbList, int32> CandidateAssignment;
+		TFunction<void(int32, float)> EvaluateCombinations;
+		EvaluateCombinations = [&](int32 LimbArrayIndex, float CandidateScore)
 		{
-			for (int32 RightIndex = LeftIndex + 1; RightIndex < UE_ARRAY_COUNT(RequiredLimbs); ++RightIndex)
+			if (bFoundAssignment && CandidateScore >= BestScore)
 			{
-				const ELimbList LeftLimb = RequiredLimbs[LeftIndex];
-				const ELimbList RightLimb = RequiredLimbs[RightIndex];
-				const float DesiredDifference = HeightOffsets[LeftLimb] - HeightOffsets[RightLimb];
-				const int32 LeftGripIndex = CandidateAssignment[LeftLimb];
-				const int32 RightGripIndex = CandidateAssignment[RightLimb];
+				return;
+			}
 
-				if (LeftGripIndex == RightGripIndex && !FMath::IsNearlyZero(DesiredDifference))
+			if (LimbArrayIndex < UE_ARRAY_COUNT(RequiredLimbs))
+			{
+				const ELimbList Limb = RequiredLimbs[LimbArrayIndex];
+				const float DesiredRelativeHeight = HeightOffsets[Limb] - ReferenceOffset;
+				for (const int32 GripIndex : GripCandidatesByLimb[Limb])
 				{
-					bCandidateValid = false;
-					break;
+					const float ActualRelativeHeight = GripList1D[GripIndex].ClimbCoordinate -
+					                                   ReferenceGrip->ClimbCoordinate;
+					const float Error = FMath::Abs(ActualRelativeHeight - DesiredRelativeHeight);
+					const float ExcessError = FMath::Max(Error - PreferredError, 0.0f);
+					CandidateAssignment.Add(Limb, GripIndex);
+					EvaluateCombinations(LimbArrayIndex + 1,
+					                     CandidateScore + Error * Error + ExcessError * ExcessError);
 				}
+				CandidateAssignment.Remove(Limb);
+				return;
+			}
 
-				const float ActualDifference = GripList1D[LeftGripIndex].ClimbCoordinate -
-				                               GripList1D[RightGripIndex].ClimbCoordinate;
-				if (!FMath::IsNearlyZero(DesiredDifference) && ActualDifference * DesiredDifference <= 0.0f)
+			for (int32 LeftIndex = 0; LeftIndex < UE_ARRAY_COUNT(RequiredLimbs); ++LeftIndex)
+			{
+				for (int32 RightIndex = LeftIndex + 1; RightIndex < UE_ARRAY_COUNT(RequiredLimbs); ++RightIndex)
 				{
-					bCandidateValid = false;
-					break;
+					const ELimbList LeftLimb = RequiredLimbs[LeftIndex];
+					const ELimbList RightLimb = RequiredLimbs[RightIndex];
+					const float DesiredDifference = HeightOffsets[LeftLimb] - HeightOffsets[RightLimb];
+					const int32 LeftGripIndex = CandidateAssignment[LeftLimb];
+					const int32 RightGripIndex = CandidateAssignment[RightLimb];
+					if (LeftGripIndex == RightGripIndex && !FMath::IsNearlyZero(DesiredDifference))
+					{
+						return;
+					}
+
+					const float ActualDifference = GripList1D[LeftGripIndex].ClimbCoordinate -
+					                               GripList1D[RightGripIndex].ClimbCoordinate;
+					if (!FMath::IsNearlyZero(DesiredDifference) && ActualDifference * DesiredDifference <= 0.0f)
+					{
+						return;
+					}
 				}
 			}
-		}
 
-		if (!bCandidateValid)
-		{
-			continue;
-		}
+			float OccupiedBoundaryHeight = bPreferTop ? -TNumericLimits<float>::Max() : TNumericLimits<float>::Max();
+			for (const TPair<ELimbList, int32>& Assignment : CandidateAssignment)
+			{
+				const float GripHeight = GripList1D[Assignment.Value].ClimbCoordinate;
+				OccupiedBoundaryHeight = bPreferTop ? FMath::Max(OccupiedBoundaryHeight, GripHeight)
+				                                    : FMath::Min(OccupiedBoundaryHeight, GripHeight);
+			}
 
-		float OccupiedBoundaryHeight = bPreferTop ? -TNumericLimits<float>::Max() : TNumericLimits<float>::Max();
-		for (const TPair<ELimbList, int32>& Assignment : CandidateAssignment)
-		{
-			const float GripHeight = GripList1D[Assignment.Value].ClimbCoordinate;
-			OccupiedBoundaryHeight = bPreferTop ? FMath::Max(OccupiedBoundaryHeight, GripHeight)
-			                                    : FMath::Min(OccupiedBoundaryHeight, GripHeight);
-		}
+			const float RequiredBoundaryHeight = bPreferTop ? GripList1D.Last().ClimbCoordinate
+			                                                : GripList1D[0].ClimbCoordinate;
+			if (!FMath::IsNearlyEqual(OccupiedBoundaryHeight, RequiredBoundaryHeight))
+			{
+				return;
+			}
 
-		const float RequiredBoundaryHeight = bPreferTop ? GripList1D.Last().ClimbCoordinate
-		                                                : GripList1D[0].ClimbCoordinate;
-		if (!FMath::IsNearlyEqual(OccupiedBoundaryHeight, RequiredBoundaryHeight))
-		{
-			continue;
-		}
+			if (!bFoundAssignment || CandidateScore < BestScore)
+			{
+				OutAssignment = CandidateAssignment;
+				BestScore = CandidateScore;
+				bFoundAssignment = true;
+			}
+		};
 
-		if (!bFoundAssignment || CandidateScore < BestScore)
-		{
-			OutAssignment = MoveTemp(CandidateAssignment);
-			BestScore = CandidateScore;
-			bFoundAssignment = true;
-		}
+		EvaluateCombinations(0, 0.0f);
 	}
 
 	if (!bFoundAssignment)
@@ -1304,9 +1339,10 @@ bool UClimbComponent::ResolveGripPattern(const TMap<ELimbList, float>& HeightOff
 		}
 
 		UE_LOG(Log_Climb_Ladder, Error,
-		       TEXT("[ClimbComponent] No grip pattern matched within %.1fcm. Reference=%s Offsets=[HandL %.1f, HandR "
+		       TEXT("[ClimbComponent] No valid adaptive grip pattern found (PreferredError=%.1fcm, MaximumError=%.1fcm). "
+		            "Reference=%s Offsets=[HandL %.1f, HandR "
 		            "%.1f, FootL %.1f, FootR %.1f] GripZ=[%s]"),
-		       MatchTolerance, *UEnum::GetValueAsString(ReferenceLimb), HeightOffsets[ELimbList::HandL],
+		       PreferredError, MaximumError, *UEnum::GetValueAsString(ReferenceLimb), HeightOffsets[ELimbList::HandL],
 		       HeightOffsets[ELimbList::HandR], HeightOffsets[ELimbList::FootL], HeightOffsets[ELimbList::FootR],
 		       *GripHeights);
 	}
