@@ -66,10 +66,8 @@ private:
 	float TurnRate = 0.0f;
 	bool bBraking = false;
 	ERideGait CurrentGait = ERideGait::Idle;
-	bool MountRight = false;
 
 	ACharacter* Rider;
-	FRotator RiderRotator;
 
 protected:
 	// Called when the game starts or when spawned
@@ -88,9 +86,7 @@ protected:
 	float GetPivotTurnCurveAlpha(UAnimInstance* AnimInstance) const;
 	void FinishPivotTurn();
 	float GetRideSpeedForGait(ERideGait Gait) const;
-	ERideGait GetDesiredRideGait(const FVector2D& MoveInput) const;
-
-	bool FindMountPos();
+	ERideGait GetDesiredRideGait(const FVector2D& MoveInput, float ForwardAlignment) const;
 
 protected:
 	UPROPERTY(VisibleAnywhere, Category = Equipment)
@@ -124,8 +120,6 @@ protected:
 		UInputAction* SprintAction;
 
 
-	bool IsMovementInput;
-	FInputActionValue MovementInputValue;
 	FVector2D RideMoveInput = FVector2D::ZeroVector;
 	float CurrentThrottle = 0.0f;
 	bool bWantsWalk = false;
@@ -156,6 +150,8 @@ public:
 
 	float GetDirection() const;
 	float GetTurnRate() const { return TurnRate; }
+	float GetAnimationSpeedInterpRate() const { return AnimationSpeedInterpRate; }
+	float GetAnimationTurnRateInterpRate() const { return AnimationTurnRateInterpRate; }
 	bool IsBraking() const { return bBraking; }
 	ERideGait GetCurrentGait() const { return CurrentGait; }
 
@@ -163,8 +159,6 @@ public:
 public:
 	void DisMount();
 	void DisMountInputCompleted();
-	virtual bool TryDisMount();
-
 	virtual void Mount(ACharacter* RiderCharacter, FVector InitVelocity);
 	void ApplyRideProfile(const URideProfileDataAsset* Profile);
 	void AttachRider();
@@ -173,13 +167,11 @@ public:
 	virtual void FinishDismount();
 	float GetRideSpeed() const;
 	float GetRideDirection() const;
-	bool GetMountDir() const;
 	FTransform GetMountTransform() const;
 	FTransform GetDismountTransform() const;
 	void RefreshRideCameraComponents();
 
 protected:
-	bool CanDismount;
 	bool bDismount = false;
 	bool bMovingDismount = false;
 #pragma endregion
@@ -203,14 +195,21 @@ protected:
 	float MaxTurnRate = 180.0f;
 
 	float MinTurnRateAtMaxSpeed = 110.0f;
+	float TurnRateInterpSpeed = 8.0f;
+	float VelocityHeadingInterpSpeed = 5.0f;
+	float FullTurnAuthoritySpeed = 120.0f;
+	float MinMovingTurnAuthority = 0.0f;
 
 	float PivotTurnMinAngle = 160.0f;
 
 	float InputDeadZone = 0.05f;
 
-	float DirectionInterpRate = 240.0f;
-
 	float MaxAnimDirection = 90.0f;
+	float BlendSpaceDirectionLimit = 20.0f;
+	float AnimationDirectionInterpRate = 5.0f;
+	float SprintForwardAlignmentThreshold = 0.5f;
+	float AnimationSpeedInterpRate = 8.0f;
+	float AnimationTurnRateInterpRate = 10.0f;
 
 	float PivotTurnMaxStartSpeed = 180.0f;
 

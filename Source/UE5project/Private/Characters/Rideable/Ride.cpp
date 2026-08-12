@@ -308,50 +308,43 @@ void ARide::UpdateRideMovement(float DeltaTime)
 		RawInput.Normalize();
 	}
 
-	const bool bHasMoveInput = RawInput.SizeSquared() > FMath::Square(InputDeadZone);
+	const float InputMagnitude = FMath::Clamp(RawInput.Size(), 0.0f, 1.0f);
+	const bool bHasMoveInput = InputMagnitude > InputDeadZone;
 
 	float TargetThrottle = 0.0f;
 	float TargetDirection = 0.0f;
-	const float PreviousYaw = GetActorRotation().Yaw;
+	float DesiredTurnRate = 0.0f;
 
 	if (bHasMoveInput)
 	{
-		const ERideGait DesiredGait = GetDesiredRideGait(RawInput);
-		const float TargetSpeed = GetRideSpeedForGait(DesiredGait);
-		TargetThrottle = FMath::Clamp(TargetSpeed / FMath::Max(MaxRideSpeed, 1.0f), 0.0f, 1.0f);
-
 		const FRotator Rotation = GetControlRotation();
 		const FRotator YawRotation(0, Rotation.Yaw, 0);
 
 		FVector2D MovementScale = RawInput;
 		MovementScale.Normalize();
 
-		FVector MovementDirection = GetActorForwardVector();
-		MovementDirection.Z = 0.0f;
-		MovementDirection.Normalize();
-
 		FVector LastInputDirection = (UKismetMathLibrary::GetForwardVector(YawRotation) * MovementScale.Y) + (UKismetMathLibrary::GetRightVector(YawRotation) * MovementScale.X);
 		LastInputDirection.Z = 0.0f;
 		LastInputDirection.Normalize();
 
-		float DotProductDirection = FMath::Clamp(FVector::DotProduct(MovementDirection, LastInputDirection), -1.0f, 1.0f);
-		float DotProductRadian = FMath::Acos(DotProductDirection);
-		float DotProductDegree = FMath::RadiansToDegrees(DotProductRadian);
+		const float DesiredYaw = LastInputDirection.Rotation().Yaw;
+		const float SignedDirection = FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw, DesiredYaw);
+		const float DirectionMagnitude = FMath::Abs(SignedDirection);
+		const float ForwardAlignment = FVector::DotProduct(GetActorForwardVector(), LastInputDirection);
+		const ERideGait DesiredGait = GetDesiredRideGait(RawInput, ForwardAlignment);
+		const float TargetSpeed = GetRideSpeedForGait(DesiredGait);
+		TargetThrottle = FMath::Clamp(TargetSpeed / FMath::Max(MaxRideSpeed, 1.0f), 0.0f, 1.0f);
 
-		FVector RotationAxis = FVector::CrossProduct(MovementDirection, LastInputDirection);
-		if (!RotationAxis.Normalize())
+		// Convert the full steering angle into the much narrower blend-space
+		// domain. Feeding a -90..90 value into a -20..20 blend space causes even
+		// small steering changes to snap immediately to an edge sample.
+		TargetDirection = FMath::Clamp(
+			SignedDirection / FMath::Max(MaxAnimDirection, 1.0f), -1.0f, 1.0f) * BlendSpaceDirectionLimit;
+
+		if (DirectionMagnitude > PivotTurnMinAngle)
 		{
-			RotationAxis = RawInput.X >= 0.0f ? FVector::UpVector : -FVector::UpVector;
-		}
-
-		TargetDirection = RotationAxis.Z > 0.0f ? DotProductDegree : -1.0f * DotProductDegree;
-		TargetDirection = FMath::Clamp(TargetDirection, -MaxAnimDirection, MaxAnimDirection);
-
-		if (DotProductDegree > PivotTurnMinAngle)
-		{
-			if (CanStartPivotTurn(DotProductDegree))
+			if (CanStartPivotTurn(DirectionMagnitude))
 			{
-				const float DesiredYaw = LastInputDirection.Rotation().Yaw;
 				const float TargetDeltaYaw = FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw, DesiredYaw);
 				PivotTurn(TargetDeltaYaw);
 				return;
@@ -362,23 +355,55 @@ void ARide::UpdateRideMovement(float DeltaTime)
 
 		const float SpeedAlpha = FMath::Clamp(GetVelocity().Size2D() / FMath::Max(MaxRideSpeed, 1.0f), 0.0f, 1.0f);
 		const float TurnRateBySpeed = FMath::Lerp(MaxTurnRate, MinTurnRateAtMaxSpeed, SpeedAlpha);
-		const float Steering = FMath::Clamp(TargetDirection / 90.0f, -1.0f, 1.0f);
-		AddActorWorldRotation(FRotator(0.0f, Steering * TurnRateBySpeed * DeltaTime, 0.0f));
+		// Steering uses the unscaled world-space heading error. TargetDirection is
+		// intentionally compressed to the blend-space range and must not affect
+		// the horse's physical turning authority.
+		const float Steering = FMath::Clamp(
+			SignedDirection / FMath::Max(MaxAnimDirection, 1.0f), -1.0f, 1.0f);
+		DesiredTurnRate = Steering * TurnRateBySpeed;
+
+		// Preserve analog stick magnitude instead of converting every non-zero
+		// input into the full speed of the selected gait.
+		TargetThrottle *= InputMagnitude;
 	}
 
 	const float InterpSpeed = TargetThrottle > CurrentThrottle ? AccelerationInterpSpeed : DecelerationInterpSpeed;
 	CurrentThrottle = FMath::FInterpTo(CurrentThrottle, TargetThrottle, DeltaTime, InterpSpeed);
-	Direction = FMath::FInterpConstantTo(Direction, TargetDirection, DeltaTime, DirectionInterpRate);
+	Direction = FMath::FInterpTo(Direction, TargetDirection, DeltaTime, AnimationDirectionInterpRate);
+	const float TurnAuthority = bHasMoveInput
+		? FMath::Lerp(
+			MinMovingTurnAuthority,
+			1.0f,
+			FMath::Clamp(GetVelocity().Size2D() / FMath::Max(FullTurnAuthoritySpeed, 1.0f), 0.0f, 1.0f))
+		: 0.0f;
+	DesiredTurnRate *= TurnAuthority;
+	TurnRate = FMath::FInterpTo(TurnRate, DesiredTurnRate, DeltaTime, TurnRateInterpSpeed);
+	AddActorWorldRotation(FRotator(0.0f, TurnRate * DeltaTime, 0.0f));
+
+	// CharacterMovement keeps its previous planar velocity while the actor turns.
+	// Gradually redirect that velocity toward the horse's new heading to avoid a
+	// visible sideways slide without removing all of the horse's momentum.
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		const FVector CurrentVelocity = Movement->Velocity;
+		const float PlanarSpeed = CurrentVelocity.Size2D();
+		if (PlanarSpeed > KINDA_SMALL_NUMBER)
+		{
+			const FVector DesiredPlanarVelocity = GetActorForwardVector() * PlanarSpeed;
+			FVector RedirectedVelocity = FMath::VInterpTo(
+				FVector(CurrentVelocity.X, CurrentVelocity.Y, 0.0f),
+				FVector(DesiredPlanarVelocity.X, DesiredPlanarVelocity.Y, 0.0f),
+				DeltaTime,
+				VelocityHeadingInterpSpeed);
+			RedirectedVelocity.Z = CurrentVelocity.Z;
+			Movement->Velocity = RedirectedVelocity;
+		}
+	}
 
 	if (CurrentThrottle > KINDA_SMALL_NUMBER)
 	{
 		AddMovementInput(GetActorForwardVector(), CurrentThrottle);
 	}
-
-	const float CurrentYaw = GetActorRotation().Yaw;
-	TurnRate = DeltaTime > KINDA_SMALL_NUMBER
-		? FMath::FindDeltaAngleDegrees(PreviousYaw, CurrentYaw) / DeltaTime
-		: 0.0f;
 
 	const float Speed2D = GetVelocity().Size2D();
 	bBraking = !bHasMoveInput && Speed2D > WalkRideSpeed * 0.5f;
@@ -465,7 +490,7 @@ float ARide::GetRideSpeedForGait(ERideGait Gait) const
 	}
 }
 
-ERideGait ARide::GetDesiredRideGait(const FVector2D& MoveInput) const
+ERideGait ARide::GetDesiredRideGait(const FVector2D& MoveInput, float ForwardAlignment) const
 {
 	if (MoveInput.SizeSquared() <= FMath::Square(InputDeadZone))
 		return ERideGait::Idle;
@@ -473,7 +498,10 @@ ERideGait ARide::GetDesiredRideGait(const FVector2D& MoveInput) const
 	if (bWantsWalk || MoveInput.Size() < WalkInputThreshold)
 		return ERideGait::Walk;
 
-	if (bWantsSprint && MoveInput.Y > 0.0f)
+	// Sprint is based on the desired world-space travel direction, not the raw
+	// input Y axis. A camera rotated 90 degrees can make right input point exactly
+	// along the horse's forward direction.
+	if (bWantsSprint && ForwardAlignment >= SprintForwardAlignmentThreshold)
 		return ERideGait::Sprint;
 
 	return ERideGait::Run;
@@ -535,10 +563,8 @@ void ARide::Mount(ACharacter* RiderCharacter, FVector InitVelocity)
 		return;
 
 	Rider = RiderCharacter;
-	MountRight = FindMountPos();
 	GetCharacterMovement()->Velocity = InitVelocity;
 
-	CanDismount = false;
 	bDismount = false;
 	bMovingDismount = false;
 }
@@ -585,10 +611,18 @@ void ARide::ApplyRideProfile(const URideProfileDataAsset* Profile)
 	DecelerationInterpSpeed = Profile->DecelerationInterpSpeed;
 	MaxTurnRate = Profile->MaxTurnRate;
 	MinTurnRateAtMaxSpeed = Profile->MinTurnRateAtMaxSpeed;
+	TurnRateInterpSpeed = Profile->TurnRateInterpSpeed;
+	VelocityHeadingInterpSpeed = Profile->VelocityHeadingInterpSpeed;
+	FullTurnAuthoritySpeed = Profile->FullTurnAuthoritySpeed;
+	MinMovingTurnAuthority = Profile->MinMovingTurnAuthority;
 	PivotTurnMinAngle = Profile->PivotTurnMinAngle;
 	InputDeadZone = Profile->InputDeadZone;
-	DirectionInterpRate = Profile->DirectionInterpRate;
 	MaxAnimDirection = Profile->MaxAnimDirection;
+	BlendSpaceDirectionLimit = Profile->BlendSpaceDirectionLimit;
+	AnimationDirectionInterpRate = Profile->AnimationDirectionInterpRate;
+	SprintForwardAlignmentThreshold = Profile->SprintForwardAlignmentThreshold;
+	AnimationSpeedInterpRate = Profile->AnimationSpeedInterpRate;
+	AnimationTurnRateInterpRate = Profile->AnimationTurnRateInterpRate;
 	PivotTurnMaxStartSpeed = Profile->PivotTurnMaxStartSpeed;
 	PivotTurnMontage = Profile->PivotTurnMontage;
 	PivotTurnAlphaCurve = Profile->PivotTurnAlphaCurve;
@@ -611,23 +645,6 @@ void ARide::DisMountInputCompleted()
 			RideComponent->HandleRideInputCompleted();
 		}
 	}
-}
-
-bool ARide::TryDisMount()
-{
-	if (!Rider || !RiderGetDownLoc || !CanDismount)
-		return false;
-
-	if (URideComponent* RideComponent = Rider->FindComponentByClass<URideComponent>())
-	{
-		if (!RideComponent->RequestDismount(GetVelocity()))
-		{
-			return false;
-		}
-
-	}
-
-	return true;
 }
 
 void ARide::NotifyDismountStarted(bool bMoving)
@@ -672,14 +689,6 @@ void ARide::ReleaseRider(bool bContinueForward)
 void ARide::FinishDismount()
 {
 	Destroy();
-}
-
-bool ARide::FindMountPos()
-{
-	FVector DistRightLoc = Rider->GetActorLocation() - RiderMountLocRight->GetComponentLocation();
-	FVector DistLeftLoc = Rider->GetActorLocation() - RiderMountLocLeft->GetComponentLocation();
-
-	return DistRightLoc.Length() < DistLeftLoc.Length();
 }
 
 FTransform ARide::GetCameraTransform() const
@@ -745,11 +754,6 @@ float ARide::GetRideSpeed() const
 float ARide::GetRideDirection() const
 {
 	return GetDirection();
-}
-
-bool ARide::GetMountDir() const
-{
-	return MountRight;
 }
 
 FTransform ARide::GetMountTransform() const

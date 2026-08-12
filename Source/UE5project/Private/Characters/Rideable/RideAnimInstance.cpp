@@ -21,9 +21,17 @@ void URideAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	if (Character)
 	{
 
-		Speed = Character->GetVelocity().Length();//FMath::FInterpTo(Speed, VelocityLength, DeltaSeconds, 20.0f);
+		Speed = FMath::FInterpTo(
+			Speed,
+			Character->GetVelocity().Size2D(),
+			DeltaSeconds,
+			Character->GetAnimationSpeedInterpRate());
 		Direction = Character->GetDirection();
-		TurnRate = Character->GetTurnRate();
+		TurnRate = FMath::FInterpTo(
+			TurnRate,
+			Character->GetTurnRate(),
+			DeltaSeconds,
+			Character->GetAnimationTurnRateInterpRate());
 		bBraking = Character->IsBraking();
 		CurrentGait = Character->GetCurrentGait();
 	}

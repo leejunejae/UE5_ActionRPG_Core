@@ -33,12 +33,16 @@ void UAnimMode_Ride::Tick(float DeltaSeconds)
 		RideComponent && RideComponent->GetRideActionState() == ERideActionState::Riding &&
 		!RideComponent->IsRideTransitionAnimationActive())
 	{
-		Anim->Speed = RideComponent->GetRideSpeed();
+		const ARide* Ride = RideComponent->GetCurrentRide();
+		const float SpeedInterpRate = Ride ? Ride->GetAnimationSpeedInterpRate() : 0.0f;
+		const float TurnRateInterpRate = Ride ? Ride->GetAnimationTurnRateInterpRate() : 0.0f;
+		Anim->Speed = FMath::FInterpTo(Anim->Speed, RideComponent->GetRideSpeed(), DeltaSeconds, SpeedInterpRate);
 		Anim->Direction = RideComponent->GetRideDirection();
 
-		if (ARide* Ride = RideComponent->GetCurrentRide())
+		if (Ride)
 		{
-			Anim->RideTurnRate = Ride->GetTurnRate();
+			Anim->RideTurnRate = FMath::FInterpTo(
+				Anim->RideTurnRate, Ride->GetTurnRate(), DeltaSeconds, TurnRateInterpRate);
 			Anim->bRideBraking = Ride->IsBraking();
 			Anim->RideGait = Ride->GetCurrentGait();
 		}

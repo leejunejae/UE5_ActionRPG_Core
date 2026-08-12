@@ -82,14 +82,38 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (ClampMin = "0.0", Units = "deg/s"))
 	float MinTurnRateAtMaxSpeed = 110.0f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (ClampMin = "0.0"))
+	float TurnRateInterpSpeed = 8.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (ClampMin = "0.0"))
+	float VelocityHeadingInterpSpeed = 5.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (ClampMin = "0.0"))
+	float FullTurnAuthoritySpeed = 120.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float MinMovingTurnAuthority = 0.0f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float InputDeadZone = 0.05f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (ClampMin = "0.0", Units = "deg/s"))
-	float DirectionInterpRate = 240.0f;
-
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (ClampMin = "0.0", Units = "deg"))
 	float MaxAnimDirection = 90.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation|Locomotion", meta = (ClampMin = "0.0", Units = "deg"))
+	float BlendSpaceDirectionLimit = 20.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation|Locomotion", meta = (ClampMin = "0.0"))
+	float AnimationDirectionInterpRate = 5.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Movement", meta = (ClampMin = "-1.0", ClampMax = "1.0"))
+	float SprintForwardAlignmentThreshold = 0.5f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation|Locomotion", meta = (ClampMin = "0.0"))
+	float AnimationSpeedInterpRate = 8.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation|Locomotion", meta = (ClampMin = "0.0"))
+	float AnimationTurnRateInterpRate = 10.0f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Pivot Turn", meta = (ClampMin = "0.0"))
 	float PivotTurnMaxStartSpeed = 180.0f;
