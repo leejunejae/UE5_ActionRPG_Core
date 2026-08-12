@@ -73,9 +73,14 @@ private:
 	bool PlayRideTransitionAnimation(bool bMounting);
 	void StopRideTransitionAnimation();
 	void OnMountMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+	void OnDismountMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted);
 	void OnDismountMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	void CompleteRideSession(ARide* Ride, bool bDestroyRide, bool bRestoreGroundState,
 		ERideActionState FinalState = ERideActionState::Detached);
+	void AttemptForcedDetach();
+	void FinishForcedDetach();
+	void HandleForcedDetachFailure();
+	void AbortForcedDetachForEndPlay();
 	void CapturePlayerState();
 	void RestorePlayerState(bool bRestoreGroundState);
 	void RegisterRide(ARide* NewRide);
@@ -84,7 +89,7 @@ private:
 		FTransform& OutTransform) const;
 	bool IsSafeDismountTransform(const FTransform& Candidate, const ARide* Ride) const;
 	bool TransferControlToRide(ARide* Ride, const FVector& InitialVelocity);
-	bool TransferControlToPlayer(ARide* Ride);
+	bool TransferControlToPlayer(ARide* Ride, bool bRestoreRideOnFailure = true);
 	bool LockCurrentCamera(APlayerController* Controller);
 	void BlendFromLockedCamera(APlayerController* Controller, AActor* NewViewTarget);
 	void UpdateTransitionCamera();
@@ -122,6 +127,7 @@ private:
 	FTimerHandle NormalDismountTimerHandle;
 	FTimerHandle TransitionWatchdogHandle;
 	FTimerHandle TransitionCameraTimerHandle;
+	FTimerHandle ForcedDetachRetryTimerHandle;
 	FVector TransitionStartTargetOffset = FVector::ZeroVector;
 	FVector TransitionTargetOffset = FVector::ZeroVector;
 	float TransitionStartArmLength = 0.0f;
@@ -149,6 +155,13 @@ private:
 	TEnumAsByte<ERootMotionMode::Type> SavedRootMotionMode = ERootMotionMode::RootMotionFromMontagesOnly;
 	bool bRideInputPressed = false;
 	bool bRecoveryLandingSatisfied = true;
+	bool bDismountVisualStateReleased = false;
+	bool bForcedDetachDestroyRide = false;
+	bool bForcedDetachRestoreGroundState = true;
+	bool bForcedDetachCompletionStarted = false;
+	int32 ForcedDetachAttemptCount = 0;
+	static constexpr int32 MaxForcedDetachAttempts = 4;
+	static constexpr float ForcedDetachRetryInterval = 0.05f;
 
 	UPROPERTY(Transient)
 	TObjectPtr<APlayerController> SessionController = nullptr;

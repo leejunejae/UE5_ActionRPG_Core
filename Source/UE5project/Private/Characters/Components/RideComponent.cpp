@@ -37,7 +37,14 @@ void URideComponent::BeginPlay()
 
 void URideComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
-	ForceDetachFromRide(true);
+	if (RideActionState != ERideActionState::Detached || IsValid(CurrentRide))
+	{
+		ForceDetachFromRide(true);
+		if (RideActionState == ERideActionState::ForceDetaching)
+		{
+			AbortForcedDetachForEndPlay();
+		}
+	}
 	ReleaseTransitionCamera();
 	Player = nullptr;
 	Super::EndPlay(EndPlayReason);
@@ -277,6 +284,7 @@ bool URideComponent::RequestDismount(FVector InitVelocity)
 	NormalDismountStartTransform = Player->GetActorTransform();
 	DismountHorizontalAlpha = 0.0f;
 	DismountVerticalAlpha = 0.0f;
+	bDismountVisualStateReleased = false;
 	GetWorld()->GetTimerManager().SetTimer(
 		NormalDismountTimerHandle, this, &URideComponent::NormalDismountTimer, 0.01f, true);
 	if (!PlayRideTransitionAnimation(false))
@@ -355,6 +363,9 @@ bool URideComponent::PlayRideTransitionAnimation(bool bMounting)
 	else
 	{
 		EndDelegate.BindUObject(this, &URideComponent::OnDismountMontageEnded);
+		FOnMontageBlendingOutStarted BlendingOutDelegate;
+		BlendingOutDelegate.BindUObject(this, &URideComponent::OnDismountMontageBlendingOut);
+		AnimInstance->Montage_SetBlendingOutDelegate(BlendingOutDelegate, ActiveRideTransitionMontage);
 	}
 	AnimInstance->Montage_SetEndDelegate(EndDelegate, ActiveRideTransitionMontage);
 	return true;
@@ -371,7 +382,9 @@ void URideComponent::StopRideTransitionAnimation()
 	if (UAnimInstance* AnimInstance = Player->GetMesh()->GetAnimInstance())
 	{
 		FOnMontageEnded EmptyDelegate;
+		FOnMontageBlendingOutStarted EmptyBlendingOutDelegate;
 		AnimInstance->Montage_SetEndDelegate(EmptyDelegate, ActiveRideTransitionMontage);
+		AnimInstance->Montage_SetBlendingOutDelegate(EmptyBlendingOutDelegate, ActiveRideTransitionMontage);
 		if (AnimInstance->Montage_IsPlaying(ActiveRideTransitionMontage))
 		{
 			AnimInstance->Montage_Stop(0.1f, ActiveRideTransitionMontage);
@@ -397,6 +410,23 @@ void URideComponent::OnMountMontageEnded(UAnimMontage* Montage, bool bInterrupte
 		return;
 	}
 	HandleMountEnd();
+}
+
+void URideComponent::OnDismountMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted)
+{
+	if (bInterrupted || bDismountVisualStateReleased || Montage != ActiveRideTransitionMontage ||
+		RideActionState != ERideActionState::DismountingNormal || !IsValid(Player))
+	{
+		return;
+	}
+
+	if (UPlayerStatusComponent* Status = Player->GetCharacterStatusComponent();
+		IsValid(Status) && !Status->IsDead())
+	{
+		ResetRideIKState(true);
+		Status->SetState(TAG_State_Ground);
+		bDismountVisualStateReleased = true;
+	}
 }
 
 void URideComponent::OnDismountMontageEnded(UAnimMontage* Montage, bool bInterrupted)
@@ -449,17 +479,117 @@ void URideComponent::ForceDetachFromRide(bool bDestroyRide)
 		return;
 	}
 
-	RideActionState = ERideActionState::ForceDetaching;
-	ARide* Ride = CurrentRide;
-	const bool bPlayerDead = IsValid(Player) && Player->GetCharacterStatusComponent() &&
-		Player->GetCharacterStatusComponent()->IsDead();
+	if (RideActionState == ERideActionState::ForceDetaching)
+	{
+		bForcedDetachDestroyRide |= bDestroyRide;
+		return;
+	}
 
-	TransferControlToPlayer(Ride);
+	RideActionState = ERideActionState::ForceDetaching;
+	bForcedDetachDestroyRide = bDestroyRide;
+	bForcedDetachRestoreGroundState = !(IsValid(Player) && Player->GetCharacterStatusComponent() &&
+		Player->GetCharacterStatusComponent()->IsDead());
+	bForcedDetachCompletionStarted = false;
+	ForcedDetachAttemptCount = 0;
+	ClearTransitionTimers();
+	StopRideTransitionAnimation();
+	AttemptForcedDetach();
+}
+
+void URideComponent::AttemptForcedDetach()
+{
+	if (RideActionState != ERideActionState::ForceDetaching || bForcedDetachCompletionStarted)
+	{
+		return;
+	}
+
+	++ForcedDetachAttemptCount;
+	if (TransferControlToPlayer(CurrentRide, false))
+	{
+		FinishForcedDetach();
+		return;
+	}
+
+	if (ForcedDetachAttemptCount >= MaxForcedDetachAttempts || !GetWorld())
+	{
+		HandleForcedDetachFailure();
+		return;
+	}
+
+	GetWorld()->GetTimerManager().SetTimer(
+		ForcedDetachRetryTimerHandle,
+		this,
+		&URideComponent::AttemptForcedDetach,
+		ForcedDetachRetryInterval,
+		false);
+}
+
+void URideComponent::FinishForcedDetach()
+{
+	if (RideActionState != ERideActionState::ForceDetaching || bForcedDetachCompletionStarted)
+	{
+		return;
+	}
+	bForcedDetachCompletionStarted = true;
+	ARide* Ride = CurrentRide;
 	if (IsValid(Player))
 	{
 		Player->DetachFromActor(FDetachmentTransformRules(EDetachmentRule::KeepWorld, false));
 	}
-	CompleteRideSession(Ride, bDestroyRide, !bPlayerDead);
+	CompleteRideSession(Ride, bForcedDetachDestroyRide, bForcedDetachRestoreGroundState);
+}
+
+void URideComponent::HandleForcedDetachFailure()
+{
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(ForcedDetachRetryTimerHandle);
+	}
+	APlayerController* Controller = SessionController;
+	if (!IsValid(Controller) && IsValid(CurrentRide))
+	{
+		Controller = Cast<APlayerController>(CurrentRide->GetController());
+	}
+	if (IsValid(Controller))
+	{
+		if (Controller->GetPawn() == CurrentRide)
+		{
+			Controller->UnPossess();
+		}
+		if (IsValid(Player))
+		{
+			Controller->SetViewTarget(Player);
+		}
+	}
+	ReleaseTransitionCamera();
+	UE_LOG(Log_RideSpawn, Error,
+		TEXT("[RideComponent] Forced detach could not return possession to '%s' after %d attempts; ride session is preserved and the ride will not be destroyed."),
+		*GetNameSafe(Player), ForcedDetachAttemptCount);
+}
+
+void URideComponent::AbortForcedDetachForEndPlay()
+{
+	if (GetWorld())
+	{
+		GetWorld()->GetTimerManager().ClearTimer(ForcedDetachRetryTimerHandle);
+	}
+	APlayerController* Controller = SessionController;
+	if (IsValid(Controller) && Controller->GetPawn() == CurrentRide)
+	{
+		Controller->UnPossess();
+		if (IsValid(Player))
+		{
+			Controller->SetViewTarget(Player);
+		}
+	}
+	ARide* Ride = CurrentRide;
+	if (IsValid(Player))
+	{
+		Player->DetachFromActor(FDetachmentTransformRules(EDetachmentRule::KeepWorld, false));
+	}
+	// Component teardown cannot own an asynchronous retry. Restore all local
+	// state, but deliberately leave the ride alive when possession was not proven.
+	CompleteRideSession(Ride, false, bForcedDetachRestoreGroundState);
 }
 
 void URideComponent::CompleteRideSession(ARide* Ride, bool bDestroyRide, bool bRestoreGroundState,
@@ -486,6 +616,9 @@ void URideComponent::CompleteRideSession(ARide* Ride, bool bDestroyRide, bool bR
 	RestorePlayerState(bRestoreGroundState);
 	CurRideAnimPhase = ERideAnimPhase::Riding;
 	RideActionState = FinalState;
+	bDismountVisualStateReleased = false;
+	bForcedDetachCompletionStarted = false;
+	ForcedDetachAttemptCount = 0;
 
 	if (bDestroyRide && IsValid(Ride))
 	{
@@ -704,7 +837,7 @@ bool URideComponent::TransferControlToRide(ARide* Ride, const FVector& InitialVe
 	return true;
 }
 
-bool URideComponent::TransferControlToPlayer(ARide* Ride)
+bool URideComponent::TransferControlToPlayer(ARide* Ride, bool bRestoreRideOnFailure)
 {
 	if (!IsValid(Player))
 	{
@@ -728,10 +861,15 @@ bool URideComponent::TransferControlToPlayer(ARide* Ride)
 	if (Controller->GetPawn() != Player)
 	{
 		UE_LOG(Log_RideSpawn, Error, TEXT("[RideComponent] Failed to return possession to '%s'."), *GetNameSafe(Player));
-		if (IsValid(Ride))
+		if (bRestoreRideOnFailure && IsValid(Ride))
 		{
 			Controller->Possess(Ride);
 			Controller->SetViewTarget(Ride);
+		}
+		else
+		{
+			Controller->UnPossess();
+			Controller->SetViewTarget(Player);
 		}
 		ReleaseTransitionCamera();
 		return false;
@@ -930,6 +1068,7 @@ void URideComponent::ClearTransitionTimers()
 	Timers.ClearTimer(MountTimerHandle);
 	Timers.ClearTimer(NormalDismountTimerHandle);
 	Timers.ClearTimer(TransitionWatchdogHandle);
+	Timers.ClearTimer(ForcedDetachRetryTimerHandle);
 }
 
 void URideComponent::StartTransitionWatchdog()
