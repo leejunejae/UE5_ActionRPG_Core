@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Animation/AnimTypes.h"
 #include "Components/ActorComponent.h"
 #include "Characters/Data/BaseCharacterHeader.h"
 #include "Characters/Data/StatusData.h"
@@ -64,8 +65,6 @@ public:
 	float GetRideSpeed() const;
 	float GetRideDirection() const;
 	FTransform GetMountTransform() const;
-	FTransform GetDisMountTransform() const;
-	TOptional<FVector> GetRideIKTargetLoc(EBodyType BoneType) const;
 
 private:
 	bool BeginRideSession(ARide* NewRide, const FVector& InitialVelocity);
@@ -147,6 +146,7 @@ private:
 	TEnumAsByte<ECollisionEnabled::Type> SavedCollisionEnabled = ECollisionEnabled::QueryAndPhysics;
 	bool bSavedSkipJumpStart = false;
 	bool bSavedAutoManageCameraTarget = true;
+	TEnumAsByte<ERootMotionMode::Type> SavedRootMotionMode = ERootMotionMode::RootMotionFromMontagesOnly;
 	bool bRideInputPressed = false;
 	bool bRecoveryLandingSatisfied = true;
 

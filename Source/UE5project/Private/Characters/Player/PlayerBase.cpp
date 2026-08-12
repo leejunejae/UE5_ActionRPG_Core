@@ -639,14 +639,6 @@ void APlayerBase::ExecuteInteract()
 	}
 }
 
-void APlayerBase::ExecuteSpawnRide()
-{
-	if (RideComponent)
-	{
-		RideComponent->RequestSpawnRide();
-	}
-}
-
 void APlayerBase::OnActionFinished(bool bInterrupted)
 {
 	if(!bInterrupted) GetCharacterStatusComponent()->ClearAction();
@@ -745,11 +737,6 @@ UStaticMeshComponent* APlayerBase::GetMainWeaponMesh() const
 ERideAnimPhase APlayerBase::GetCurRideAnimPhase()
 {
 	return RideComponent ? RideComponent->GetCurRideAnimPhase() : ERideAnimPhase::Riding;
-}
-
-TOptional<FVector> APlayerBase::GetRideIKTargetLoc(EBodyType BoneType)
-{
-	return RideComponent ? RideComponent->GetRideIKTargetLoc(BoneType) : TOptional<FVector>();
 }
 
 /* ============================================================
@@ -963,9 +950,6 @@ void APlayerBase::HandleRespawnFinalized()
  *  Ride
  * ============================================================ */
 
-void APlayerBase::JumpDismountTimer()
-{
-}
 
 /* ============================================================
  *  View Data Interface

@@ -36,7 +36,6 @@ private:
 		UCurveFloat* MountCurve;
 
 	FTimeline MountTimeline;
-	float MountTimelineLength;
 
 	UFUNCTION()
 		void MountUpdate(float Value);

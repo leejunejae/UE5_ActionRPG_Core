@@ -10,6 +10,7 @@
 // 파티클
 #include "NiagaraSystem.h"
 #include "NiagaraComponent.h"
+#include "Utils/CoreLog.h"
 
 APlayerRide::APlayerRide()
 {
@@ -60,12 +61,12 @@ void APlayerRide::BeginPlay()
 	if (MountCurve)
 	{
 		FOnTimelineFloat MountCallback;
-		MountCallback.BindUFunction(this, FName("MountUpdate"));//&APlayerRide::MountUpdate);
+		MountCallback.BindUFunction(this, FName("MountUpdate"));
 		MountTimeline.AddInterpFloat(MountCurve, MountCallback);
 	}
 	else
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[PlayerRide] MountCurve is missing on '%s'; dissolve transition will be skipped."),
+		UE_LOG(Log_RideSpawn, Warning, TEXT("[PlayerRide] MountCurve is missing on '%s'; dissolve transition will be skipped."),
 		       *GetName());
 	}
 }
@@ -87,7 +88,6 @@ void APlayerRide::DespawnFin()
 void APlayerRide::SpawnFin()
 {
 	MountTimeline.SetTimelineFinishedFunc(FOnTimelineEvent());
-	CanDismount = true;
 }
 
 void APlayerRide::StartDespawn()

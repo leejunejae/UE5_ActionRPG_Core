@@ -20,6 +20,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "TimerManager.h"
+#include "UObject/UnrealType.h"
 #include "Utils/CoreLog.h"
 #include "Utils/GameplayTagsBase.h"
 
@@ -468,6 +469,7 @@ void URideComponent::CompleteRideSession(ARide* Ride, bool bDestroyRide, bool bR
 	StopRideTransitionAnimation();
 	RestoreTransitionRootMotionMode();
 	ClearMountAction();
+	bRideInputPressed = false;
 	if (FinalState == ERideActionState::Recovering)
 	{
 		bRecoveryLandingSatisfied = RideActionState != ERideActionState::DismountingMoving;
@@ -504,6 +506,17 @@ void URideComponent::CapturePlayerState()
 	SavedCollisionProfile = Player->GetCapsuleComponent()->GetCollisionProfileName();
 	SavedCollisionEnabled = Player->GetCapsuleComponent()->GetCollisionEnabled();
 	bSavedSkipJumpStart = Player->ShouldSkipJumpStart();
+	if (const UAnimInstance* AnimInstance = Player->GetMesh() ? Player->GetMesh()->GetAnimInstance() : nullptr)
+	{
+		// UE 5.4 exposes a setter but no public getter for RootMotionMode. Read the
+		// reflected property so the transition can restore the actual pre-ride mode.
+		if (const FByteProperty* RootMotionModeProperty =
+			FindFProperty<FByteProperty>(AnimInstance->GetClass(), TEXT("RootMotionMode")))
+		{
+			SavedRootMotionMode = static_cast<ERootMotionMode::Type>(
+				RootMotionModeProperty->GetPropertyValue_InContainer(AnimInstance));
+		}
+	}
 	SessionController = Cast<APlayerController>(Player->GetController());
 	if (IsValid(SessionController))
 	{
@@ -1071,7 +1084,7 @@ void URideComponent::RestoreTransitionRootMotionMode()
 	{
 		if (UAnimInstance* AnimInstance = Player->GetMesh()->GetAnimInstance())
 		{
-			AnimInstance->SetRootMotionMode(ERootMotionMode::RootMotionFromMontagesOnly);
+			AnimInstance->SetRootMotionMode(SavedRootMotionMode);
 		}
 	}
 }
@@ -1103,33 +1116,4 @@ float URideComponent::GetRideDirection() const
 FTransform URideComponent::GetMountTransform() const
 {
 	return IsValid(CurrentRide) ? CurrentRide->GetMountTransform() : FTransform::Identity;
-}
-
-FTransform URideComponent::GetDisMountTransform() const
-{
-	return IsValid(CurrentRide) ? CurrentRide->GetDismountTransform() : FTransform::Identity;
-}
-
-TOptional<FVector> URideComponent::GetRideIKTargetLoc(EBodyType BoneType) const
-{
-	const URideProfileDataAsset* Profile = GetRideProfile();
-	if (!IsValid(Profile) || !IsValid(CurrentRide) || !IsValid(CurrentRide->GetMesh()))
-	{
-		return TOptional<FVector>();
-	}
-
-	FName SocketName;
-	switch (BoneType)
-	{
-	case EBodyType::Hand_L: SocketName = Profile->TransitionHandLeftSocket; break;
-	case EBodyType::Hand_R: SocketName = Profile->TransitionHandRightSocket; break;
-	case EBodyType::Foot_L: SocketName = Profile->TransitionFootLeftSocket; break;
-	case EBodyType::Foot_R: SocketName = Profile->TransitionFootRightSocket; break;
-	default: return TOptional<FVector>();
-	}
-
-	USkeletalMeshComponent* RideMesh = CurrentRide->GetMesh();
-	return RideMesh->DoesSocketExist(SocketName)
-		? TOptional<FVector>(RideMesh->GetSocketLocation(SocketName))
-		: TOptional<FVector>();
 }

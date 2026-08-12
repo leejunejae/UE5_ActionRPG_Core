@@ -239,7 +239,6 @@ private:
 	 * ============================================================ */
 #pragma region Character Bone
 public:
-	TOptional<FVector> GetRideIKTargetLoc(EBodyType BoneType);
 #pragma endregion
 
 	/* ============================================================
@@ -250,16 +249,11 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = Ride)
 	TObjectPtr<URideComponent> RideComponent;
 
-	void JumpDismountTimer();
-	FTimerHandle JumpDismountTimerHandle;
-
 	// ---- 입력 → 판단 ----
 	void SpawnRideInput();
 	void SpawnRideInputCompleted();
 
 	// ---- 실행 ----
-	void ExecuteSpawnRide();
-
 	UPROPERTY(EditDefaultsOnly, Category = "Ride")
 	TSubclassOf<APlayerRide> RideClass;
 
