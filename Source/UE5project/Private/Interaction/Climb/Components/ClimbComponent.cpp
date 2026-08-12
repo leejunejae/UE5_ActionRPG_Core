@@ -1176,8 +1176,7 @@ bool UClimbComponent::ResolveGripPattern(const TMap<ELimbList, float>& HeightOff
 {
 	OutAssignment.Empty();
 
-	static constexpr ELimbList RequiredLimbs[] = {ELimbList::HandL, ELimbList::HandR, ELimbList::FootL,
-	                                              ELimbList::FootR};
+	static constexpr ELimbList RequiredLimbs[] = {ELimbList::HandL, ELimbList::HandR, ELimbList::FootL, ELimbList::FootR};
 
 	if (!IsValid(LadderClimbProfile) || ReferenceLimb == ELimbList::Body || !HeightOffsets.Contains(ReferenceLimb))
 	{

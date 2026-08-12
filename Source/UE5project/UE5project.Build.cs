@@ -8,13 +8,9 @@ public class UE5project : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "NavigationSystem", "AIModule", "GameplayTasks", "AnimGraphRuntime", "Niagara", "NiagaraAnimNotifies", "UMG", "Slate", "SlateCore", "MotionWarping", "PhysicsCore", "GameplayTags", "Blutility", "CurveEditor" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "NavigationSystem", "AIModule", "GameplayTasks", "AnimGraphRuntime", "Niagara", "NiagaraAnimNotifies", "UMG", "Slate", "SlateCore", "MotionWarping", "PhysicsCore", "GameplayTags" });
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
-
-		PrivateIncludePaths.AddRange(new string[] {
-			System.IO.Path.GetFullPath(Target.RelativeEnginePath) + "/Source/Editor/Blutility/Private"
-		});
 
 		PublicIncludePaths.AddRange(new string[] {
 			"UE5project",

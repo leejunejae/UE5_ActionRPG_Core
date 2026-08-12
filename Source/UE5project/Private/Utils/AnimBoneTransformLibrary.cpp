@@ -210,3 +210,12 @@ void UAnimBoneTransformLibrary::BuildHitDataFromNotifyWindows(
 }
 
 #endif // WITH_EDITOR
+
+#if !WITH_EDITOR
+void UAnimBoneTransformLibrary::BuildHitDataFromNotifyWindows(
+    UAnimSequence* AnimSequence,
+    float SampleInterval,
+    UAttackBoneDataRegistry* Registry)
+{
+}
+#endif

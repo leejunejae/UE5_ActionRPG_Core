@@ -12,6 +12,11 @@
 				"Engine",
 				"CoreUObject"
 			]
+		},
+		{
+			"Name": "UE5projectEditor",
+			"Type": "Editor",
+			"LoadingPhase": "Default"
 		}
 	],
 	"Plugins": [

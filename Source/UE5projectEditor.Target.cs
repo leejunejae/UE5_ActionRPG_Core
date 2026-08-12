@@ -10,6 +10,6 @@ public class UE5projectEditorTarget : TargetRules
 		Type = TargetType.Editor;
 		DefaultBuildSettings = BuildSettingsVersion.V5;
 		IncludeOrderVersion = EngineIncludeOrderVersion.Latest;
-		ExtraModuleNames.Add("UE5project");
+		ExtraModuleNames.AddRange(new string[] { "UE5project", "UE5projectEditor" });
 	}
 }
