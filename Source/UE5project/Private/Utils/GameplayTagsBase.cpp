@@ -23,6 +23,7 @@ UE_DEFINE_GAMEPLAY_TAG(TAG_Action_Interact, "Action.Interact")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Action_Jump, "Action.Jump")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Action_Dodge, "Action.Dodge")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Action_Parry, "Action.Parry")
+UE_DEFINE_GAMEPLAY_TAG(TAG_Action_Mount, "Action.Mount")
 
 UE_DEFINE_GAMEPLAY_TAG(TAG_Window, "Window")
 
@@ -33,6 +34,7 @@ UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Interact, "Window.Interact")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Jump, "Window.Jump")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Dodge, "Window.Dodge")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Parry, "Window.Parry")
+UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Mount, "Window.Mount")
 
 // =====================
 // State & Action

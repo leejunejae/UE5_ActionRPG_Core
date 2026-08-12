@@ -112,16 +112,4 @@ protected:
 	void HandleRespawnStarted();
 #pragma region Spawn
 
-#pragma region Ride
-public:
-	FOnAnimInstanceMulDel OnMountEnd;
-	FOnAnimInstanceMulDel OnDisMountEnd;
-
-private:
-	UFUNCTION()
-		void AnimNotify_NOT_MountEnd();
-
-	UFUNCTION()
-		void AnimNotify_NOT_DisMountEnd();
-#pragma endregion Ride
 };

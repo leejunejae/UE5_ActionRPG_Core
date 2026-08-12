@@ -51,7 +51,6 @@ private:
 public:
 #pragma region Mount And DisMount
 	virtual void Mount(ACharacter* RiderCharacter, FVector InitVelocity) override;
-	virtual bool TryDisMount() override;
 	virtual void FinishDismount() override;
 #pragma endregion
 };

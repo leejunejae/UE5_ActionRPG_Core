@@ -253,18 +253,12 @@ private:
 	void JumpDismountTimer();
 	FTimerHandle JumpDismountTimerHandle;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Dismount")
-	float MovingDismountSpeedThreshold = 150.0f;
-
 	// ---- 입력 → 판단 ----
 	void SpawnRideInput();
+	void SpawnRideInputCompleted();
 
 	// ---- 실행 ----
 	void ExecuteSpawnRide();
-
-protected:
-	void MountEnd();
-	void DisMountEnd();
 
 	UPROPERTY(EditDefaultsOnly, Category = "Ride")
 	TSubclassOf<APlayerRide> RideClass;
@@ -272,11 +266,11 @@ protected:
 public:
 	FORCEINLINE URideComponent* GetRideComponent() const { return RideComponent; }
 	FORCEINLINE TSubclassOf<APlayerRide> GetRideClass() const { return RideClass; }
-	FORCEINLINE float GetMovingDismountSpeedThreshold() const { return MovingDismountSpeedThreshold; }
 	void RefreshPlayerCameraComponents();
 	FTransform GetCameraTransform() const;
 	FTransform GetSpringArmTransform() const;
 	float GetTargetArmLength() const;
+	USpringArmComponent* GetRideSpringArmComponent() const { return SpringArm; }
 	FRotator GetControllerRotation() const;
 
 #pragma endregion Ride
@@ -286,7 +280,7 @@ public:
 	 * ============================================================ */
 #pragma region Status
 public:
-	FORCEINLINE UPlayerStatusComponent* GetCharacterStatusComponent() const;
+	UPlayerStatusComponent* GetCharacterStatusComponent() const;
 
 	void OnActionFinished(bool bInterrupted);
 	void OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted);

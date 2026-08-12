@@ -13,6 +13,7 @@
 // 컴포넌트
 #include "Characters/Components/EquipmentComponent.h"
 #include "Characters/Player/Components/PlayerStatusComponent.h"
+#include "Characters/Components/RideComponent.h"
 
 void UPlayerBaseAnimInstance::NativeInitializeAnimation()
 {
@@ -44,6 +45,15 @@ void UPlayerBaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	if (Player)
 	{
 		IsMovementInput = Player->GetIsMovementInput();
+
+		if (const UPlayerStatusComponent* Status = Player->GetCharacterStatusComponent();
+			IsValid(Status) && Status->GetCurrentState().MatchesTagExact(TAG_State_Ground))
+		{
+			if (URideComponent* RideComponent = Player->GetRideComponent())
+			{
+				RideComponent->HandlePlayerGroundAnimationReady();
+			}
+		}
 	}
 }
 
@@ -129,14 +139,4 @@ void UPlayerBaseAnimInstance::HandleRespawnStarted()
 		// 부활 몽타주 없으면 즉시 FinalizeRespawn
 		Status->FinalizeRespawn();
 	}
-}
-
-void UPlayerBaseAnimInstance::AnimNotify_NOT_MountEnd()
-{
-	OnMountEnd.Broadcast();
-}
-
-void UPlayerBaseAnimInstance::AnimNotify_NOT_DisMountEnd()
-{
-	OnDisMountEnd.Broadcast();
 }

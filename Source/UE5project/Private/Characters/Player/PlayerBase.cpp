@@ -133,8 +133,6 @@ void APlayerBase::BeginPlay()
 
 	if (CharacterBaseAnim)
 	{
-		CharacterBaseAnim->OnMountEnd.AddUObject(this, &APlayerBase::MountEnd);
-		CharacterBaseAnim->OnDisMountEnd.AddUObject(this, &APlayerBase::DisMountEnd);
 	}
 
 	APlayerController* PlayerController = Cast<APlayerController>(GetController());
@@ -303,7 +301,8 @@ void APlayerBase::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 		EnhancedInputComponent->BindAction(InputConfig->Walk, ETriggerEvent::Started, this, &APlayerBase::Walk);
 		EnhancedInputComponent->BindAction(InputConfig->Walk, ETriggerEvent::Triggered, this, &APlayerBase::Jog);
 
-		EnhancedInputComponent->BindAction(InputConfig->SpawnRide, ETriggerEvent::Triggered, this, &APlayerBase::SpawnRideInput);
+		EnhancedInputComponent->BindAction(InputConfig->SpawnRide, ETriggerEvent::Started, this, &APlayerBase::SpawnRideInput);
+		EnhancedInputComponent->BindAction(InputConfig->SpawnRide, ETriggerEvent::Completed, this, &APlayerBase::SpawnRideInputCompleted);
 
 		EnhancedInputComponent->BindAction(InputConfig->Attack, ETriggerEvent::Started, this, &APlayerBase::AttackInput);
 		EnhancedInputComponent->BindAction(InputConfig->Attack, ETriggerEvent::Triggered, this, &APlayerBase::AttackInputEnd);
@@ -485,7 +484,15 @@ void APlayerBase::SpawnRideInput()
 {
 	if (RideComponent)
 	{
-		RideComponent->RequestSpawnRide();
+		RideComponent->HandleRideInputStarted();
+	}
+}
+
+void APlayerBase::SpawnRideInputCompleted()
+{
+	if (RideComponent)
+	{
+		RideComponent->HandleRideInputCompleted();
 	}
 }
 
@@ -668,6 +675,10 @@ void APlayerBase::HandleLadderExit()
 void APlayerBase::Landed(const FHitResult& Hit)
 {
 	Super::Landed(Hit);
+	if (RideComponent)
+	{
+		RideComponent->HandlePlayerLanded();
+	}
 	SetSkipJumpStart(false);
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	OnActionFinished(false);
@@ -908,10 +919,10 @@ void APlayerBase::HandleDeathStarted()
 
 	if (PrevState.MatchesTagExact(TAG_State_Ride))
 	{
-		// 탈것 위에서 사망 → 낙마(탈것 디스폰 + 컨트롤/콜리전 복구)
+		// 사망 중에는 일반 하차 애니메이션을 거치지 않고 세션 상태를 강제로 정리한다.
 		if (RideComponent)
 		{
-			RideComponent->RequestDismount(GetVelocity());
+			RideComponent->ForceDetachFromRide(true);
 		}
 	}
 	// Ladder cleanup is owned by ClimbComponent's OnDeathStarted subscription.
@@ -951,13 +962,6 @@ void APlayerBase::HandleRespawnFinalized()
 /* ============================================================
  *  Ride
  * ============================================================ */
-void APlayerBase::MountEnd()
-{
-	if (RideComponent)
-	{
-		RideComponent->HandleMountEnd();
-	}
-}
 
 void APlayerBase::JumpDismountTimer()
 {
@@ -997,13 +1001,6 @@ TOptional<FVector> APlayerBase::GetCharBoneLocation(FName BoneName)
 	return GetMesh()->DoesSocketExist(BoneName) ? TOptional<FVector>(GetMesh()->GetSocketLocation(BoneName)) : TOptional<FVector>();
 }
 
-void APlayerBase::DisMountEnd()
-{
-	if (RideComponent)
-	{
-		RideComponent->HandleDismountEnd();
-	}
-}
 
 /* ============================================================
  *  Component Getters

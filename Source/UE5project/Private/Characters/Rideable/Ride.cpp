@@ -33,6 +33,7 @@
 
 // 컴포넌트
 #include "Characters/Components/RideComponent.h"
+#include "Characters/Rideable/RideProfileDataAsset.h"
 
 // Sets default values
 ARide::ARide()
@@ -182,7 +183,7 @@ void ARide::BeginPlay()
 	GetCharacterMovement()->MaxWalkSpeed = MaxRideSpeed;
 	
 	APlayerController* PlayerController = Cast<APlayerController>(GetController());
-	if (PlayerController)
+	if (PlayerController && DefaultContext)
 	{
 		if (UEnhancedInputLocalPlayerSubsystem* SubSystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
 		{
@@ -209,11 +210,7 @@ void ARide::Tick(float DeltaTime)
 
 	FRotator SocketRot = GetMesh()->GetSocketRotation(FName("MountPoint"));
 	FRotator CurrentRot = RiderLocation->GetComponentRotation();
-
-	// 느린 보간 → 큰 회전만 부드럽게 따라감, 미세 흔들림은 무시됨
-	float InterpSpeed = 5.0f; // 낮을수록 더 부드럽게, 높을수록 빠르게 추종
-	FRotator SmoothedRot = FMath::RInterpTo(CurrentRot, SocketRot, DeltaTime, InterpSpeed);
-
+	const FRotator SmoothedRot = FMath::RInterpTo(CurrentRot, SocketRot, DeltaTime, 5.0f);
 	RiderLocation->SetWorldRotation(SmoothedRot);
 	RiderLocation->SetWorldLocation(GetMesh()->GetSocketLocation(FName("MountPoint")));
 }
@@ -223,13 +220,23 @@ void ARide::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 
-	if (UEnhancedInputComponent* EnhancedInputComponent = CastChecked<UEnhancedInputComponent>(PlayerInputComponent))
+	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ARide::Move);
-		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Completed, this, &ARide::StopMove);
-		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Canceled, this, &ARide::StopMove);
-		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ARide::Look);
-		EnhancedInputComponent->BindAction(DisMountAction, ETriggerEvent::Triggered, this, &ARide::DisMount);
+		if (MoveAction)
+		{
+			EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ARide::Move);
+			EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Completed, this, &ARide::StopMove);
+			EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Canceled, this, &ARide::StopMove);
+		}
+		if (LookAction)
+		{
+			EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ARide::Look);
+		}
+		if (DisMountAction)
+		{
+			EnhancedInputComponent->BindAction(DisMountAction, ETriggerEvent::Started, this, &ARide::DisMount);
+			EnhancedInputComponent->BindAction(DisMountAction, ETriggerEvent::Completed, this, &ARide::DisMountInputCompleted);
+		}
 
 		if (WalkAction)
 		{
@@ -528,6 +535,7 @@ void ARide::Mount(ACharacter* RiderCharacter, FVector InitVelocity)
 		return;
 
 	Rider = RiderCharacter;
+	MountRight = FindMountPos();
 	GetCharacterMovement()->Velocity = InitVelocity;
 
 	CanDismount = false;
@@ -552,7 +560,57 @@ void ARide::AttachRider()
 
 void ARide::DisMount()
 {
-	TryDisMount();
+	if (Rider)
+	{
+		if (URideComponent* RideComponent = Rider->FindComponentByClass<URideComponent>())
+		{
+			RideComponent->HandleRideInputStarted();
+		}
+	}
+}
+
+void ARide::ApplyRideProfile(const URideProfileDataAsset* Profile)
+{
+	if (!IsValid(Profile))
+	{
+		return;
+	}
+
+	WalkRideSpeed = Profile->WalkSpeed;
+	RunRideSpeed = Profile->RunSpeed;
+	SprintRideSpeed = Profile->SprintSpeed;
+	MaxRideSpeed = FMath::Max(WalkRideSpeed, FMath::Max(RunRideSpeed, SprintRideSpeed));
+	WalkInputThreshold = Profile->WalkInputThreshold;
+	AccelerationInterpSpeed = Profile->AccelerationInterpSpeed;
+	DecelerationInterpSpeed = Profile->DecelerationInterpSpeed;
+	MaxTurnRate = Profile->MaxTurnRate;
+	MinTurnRateAtMaxSpeed = Profile->MinTurnRateAtMaxSpeed;
+	PivotTurnMinAngle = Profile->PivotTurnMinAngle;
+	InputDeadZone = Profile->InputDeadZone;
+	DirectionInterpRate = Profile->DirectionInterpRate;
+	MaxAnimDirection = Profile->MaxAnimDirection;
+	PivotTurnMaxStartSpeed = Profile->PivotTurnMaxStartSpeed;
+	PivotTurnMontage = Profile->PivotTurnMontage;
+	PivotTurnAlphaCurve = Profile->PivotTurnAlphaCurve;
+	bUseNormalizedPivotTurnCurveTime = Profile->bUseNormalizedPivotTurnCurveTime;
+	PivotTurnLeftSection = Profile->PivotTurnLeftSection;
+	PivotTurnRightSection = Profile->PivotTurnRightSection;
+
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->MaxWalkSpeed = MaxRideSpeed;
+	}
+}
+
+void ARide::DisMountInputCompleted()
+{
+	if (Rider)
+	{
+		if (URideComponent* RideComponent = Rider->FindComponentByClass<URideComponent>())
+		{
+			RideComponent->HandleRideInputCompleted();
+		}
+	}
 }
 
 bool ARide::TryDisMount()
@@ -562,29 +620,58 @@ bool ARide::TryDisMount()
 
 	if (URideComponent* RideComponent = Rider->FindComponentByClass<URideComponent>())
 	{
-		LastSpeed = GetVelocity();
-		bMovingDismount = LastSpeed.SizeSquared2D() > FMath::Square(MovingDismountSpeedThreshold);
-
 		if (!RideComponent->RequestDismount(GetVelocity()))
 		{
 			return false;
 		}
 
-		bDismount = bMovingDismount;
-		Rider = nullptr;
 	}
 
 	return true;
 }
 
+void ARide::NotifyDismountStarted(bool bMoving)
+{
+	bMovingDismount = bMoving;
+	bDismount = bMoving;
+	Rider = nullptr;
+	RideMoveInput = FVector2D::ZeroVector;
+	bWantsWalk = false;
+	bWantsSprint = false;
+}
+
+void ARide::ReleaseRider(bool bContinueForward)
+{
+	Rider = nullptr;
+	bDismount = bContinueForward;
+	bMovingDismount = bContinueForward;
+	RideMoveInput = FVector2D::ZeroVector;
+	if (!bContinueForward)
+	{
+		CurrentThrottle = 0.0f;
+	}
+	bWantsWalk = false;
+	bWantsSprint = false;
+	if (bPivotTurning)
+	{
+		if (UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr)
+		{
+			if (PivotTurnMontage && AnimInstance->Montage_IsPlaying(PivotTurnMontage))
+			{
+				AnimInstance->Montage_Stop(0.1f, PivotTurnMontage);
+			}
+		}
+		bPivotTurning = false;
+		PivotTurnDirection = 0.0f;
+		PivotTurnTargetDeltaYaw = 0.0f;
+		Direction = 0.0f;
+		TurnRate = 0.0f;
+	}
+}
+
 void ARide::FinishDismount()
 {
 	Destroy();
-}
-
-bool ARide::IsMovingDismount() const
-{
-	return bMovingDismount;
 }
 
 bool ARide::FindMountPos()
@@ -618,7 +705,7 @@ float ARide::GetTargetArmLength() const
 
 FRotator ARide::GetControllerRotation() const
 {
-	return GetController()->GetControlRotation();
+	return GetController() ? GetController()->GetControlRotation() : GetActorRotation();
 }
 
 void ARide::PivotTurn(float TargetDeltaYaw)
@@ -667,7 +754,7 @@ bool ARide::GetMountDir() const
 
 FTransform ARide::GetMountTransform() const
 {
-	return RiderLocation->GetComponentTransform();
+	return RiderLocation ? RiderLocation->GetComponentTransform() : GetActorTransform();
 }
 
 FTransform ARide::GetDismountTransform() const

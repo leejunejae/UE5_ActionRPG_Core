@@ -23,6 +23,7 @@ class UInputMappingContext;
 class UInputAction;
 class USpringArmComponent;
 class UCameraComponent;
+class URideProfileDataAsset;
 class URideComponent;
 class UCurveFloat;
 class UAnimMontage;
@@ -161,87 +162,68 @@ public:
 #pragma region Mount And DisMount
 public:
 	void DisMount();
+	void DisMountInputCompleted();
 	virtual bool TryDisMount();
 
 	virtual void Mount(ACharacter* RiderCharacter, FVector InitVelocity);
+	void ApplyRideProfile(const URideProfileDataAsset* Profile);
 	void AttachRider();
+	void NotifyDismountStarted(bool bMoving);
+	void ReleaseRider(bool bContinueForward = false);
 	virtual void FinishDismount();
 	float GetRideSpeed() const;
 	float GetRideDirection() const;
 	bool GetMountDir() const;
 	FTransform GetMountTransform() const;
 	FTransform GetDismountTransform() const;
-	bool IsMovingDismount() const;
 	void RefreshRideCameraComponents();
 
 protected:
 	bool CanDismount;
 	bool bDismount = false;
 	bool bMovingDismount = false;
-	FVector LastSpeed;
-
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Dismount")
-	float MovingDismountSpeedThreshold = 150.0f;
-
 #pragma endregion
 
 #pragma region Ride Movement
 protected:
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float MaxRideSpeed = 800.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float WalkRideSpeed = 250.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float RunRideSpeed = 550.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float SprintRideSpeed = 800.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float WalkInputThreshold = 0.55f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float AccelerationInterpSpeed = 2.5f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float DecelerationInterpSpeed = 3.5f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float MaxTurnRate = 180.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float MinTurnRateAtMaxSpeed = 110.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float PivotTurnMinAngle = 160.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float InputDeadZone = 0.05f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float DirectionInterpRate = 240.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|Movement")
 	float MaxAnimDirection = 90.0f;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|PivotTurn")
 	float PivotTurnMaxStartSpeed = 180.0f;
 
-	UPROPERTY(EditAnywhere, Category = "Ride|PivotTurn")
+	UPROPERTY(Transient)
 	TObjectPtr<UAnimMontage> PivotTurnMontage;
 
-	UPROPERTY(EditAnywhere, Category = "Ride|PivotTurn")
+	UPROPERTY(Transient)
 	TObjectPtr<UCurveFloat> PivotTurnAlphaCurve;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|PivotTurn")
 	bool bUseNormalizedPivotTurnCurveTime = true;
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|PivotTurn")
 	FName PivotTurnLeftSection = TEXT("TurnLeft");
 
-	UPROPERTY(EditDefaultsOnly, Category = "Ride|PivotTurn")
 	FName PivotTurnRightSection = TEXT("TurnRight");
 
 	bool bPivotTurning = false;
@@ -256,6 +238,7 @@ public:
 	FTransform GetCameraTransform() const;
 	FTransform GetSpringArmTransform() const;
 	float GetTargetArmLength() const;
+	USpringArmComponent* GetRideSpringArmComponent() const { return SpringArm; }
 	FRotator GetControllerRotation() const;
 
 #pragma endregion

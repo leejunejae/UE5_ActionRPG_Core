@@ -63,6 +63,11 @@ void APlayerRide::BeginPlay()
 		MountCallback.BindUFunction(this, FName("MountUpdate"));//&APlayerRide::MountUpdate);
 		MountTimeline.AddInterpFloat(MountCurve, MountCallback);
 	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[PlayerRide] MountCurve is missing on '%s'; dissolve transition will be skipped."),
+		       *GetName());
+	}
 }
 
 void APlayerRide::MountUpdate(float Value)
@@ -87,6 +92,11 @@ void APlayerRide::SpawnFin()
 
 void APlayerRide::StartDespawn()
 {
+	if (!MountCurve)
+	{
+		Destroy();
+		return;
+	}
 	FOnTimelineEventStatic MountCallbackFin;
 	MountCallbackFin.BindUObject(this, &APlayerRide::DespawnFin);
 	MountTimeline.SetTimelineFinishedFunc(MountCallbackFin);
@@ -96,23 +106,15 @@ void APlayerRide::StartDespawn()
 void APlayerRide::Mount(ACharacter* RiderCharacter, FVector InitVelocity)
 {
 	Super::Mount(RiderCharacter, InitVelocity);
+	if (!MountCurve)
+	{
+		SpawnFin();
+		return;
+	}
 	FOnTimelineEventStatic MountCallbackFin;
 	MountCallbackFin.BindUObject(this, &APlayerRide::SpawnFin);
 	MountTimeline.SetTimelineFinishedFunc(MountCallbackFin);
 	MountTimeline.PlayFromStart();
-}
-
-bool APlayerRide::TryDisMount()
-{
-	if (!Super::TryDisMount())
-		return false;
-
-	if (IsMovingDismount())
-	{
-		StartDespawn();
-	}
-
-	return true;
 }
 
 void APlayerRide::FinishDismount()
