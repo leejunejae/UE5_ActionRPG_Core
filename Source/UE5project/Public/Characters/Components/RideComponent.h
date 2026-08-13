@@ -5,18 +5,14 @@
 #include "CoreMinimal.h"
 #include "Animation/AnimTypes.h"
 #include "Components/ActorComponent.h"
-#include "Characters/Data/BaseCharacterHeader.h"
-#include "Characters/Data/StatusData.h"
 #include "RideComponent.generated.h"
 
 class ARide;
 class APlayerBase;
-class APlayerRide;
 class APlayerController;
 class ACameraActor;
 class USpringArmComponent;
 class UAnimMontage;
-class UAnimSequenceBase;
 class UCurveFloat;
 class URideProfileDataAsset;
 
@@ -43,12 +39,12 @@ public:
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType,
+		FActorComponentTickFunction* ThisTickFunction) override;
 
 public:	
 	ARide* GetCurrentRide() const { return CurrentRide; }
-	ERideAnimPhase GetCurRideAnimPhase() const { return CurRideAnimPhase; }
 	ERideActionState GetRideActionState() const { return RideActionState; }
-	bool IsRideActive() const { return RideActionState != ERideActionState::Detached; }
 	bool IsRideTransitionAnimationActive() const { return IsValid(ActiveRideTransitionMontage); }
 	const URideProfileDataAsset* GetRideProfile() const { return RideProfile; }
 
@@ -58,13 +54,10 @@ public:
 	void HandleRideInputCompleted();
 	void HandlePlayerLanded();
 	void HandlePlayerGroundAnimationReady();
-	void HandleMountEnd();
-	void HandleDismountEnd();
 	void ForceDetachFromRide(bool bDestroyRide = true);
 
 	float GetRideSpeed() const;
 	float GetRideDirection() const;
-	FTransform GetMountTransform() const;
 
 private:
 	bool BeginRideSession(ARide* NewRide, const FVector& InitialVelocity);
@@ -75,6 +68,8 @@ private:
 	void OnMountMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	void OnDismountMontageBlendingOut(UAnimMontage* Montage, bool bInterrupted);
 	void OnDismountMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+	void HandleMountEnd();
+	void HandleDismountEnd();
 	void CompleteRideSession(ARide* Ride, bool bDestroyRide, bool bRestoreGroundState,
 		ERideActionState FinalState = ERideActionState::Detached);
 	void AttemptForcedDetach();
@@ -92,8 +87,9 @@ private:
 	bool TransferControlToPlayer(ARide* Ride, bool bRestoreRideOnFailure = true);
 	bool LockCurrentCamera(APlayerController* Controller);
 	void BlendFromLockedCamera(APlayerController* Controller, AActor* NewViewTarget);
-	void UpdateTransitionCamera();
+	void UpdateTransitionCamera(float DeltaTime);
 	void ReleaseTransitionCamera();
+	void RefreshTransitionTick();
 	USpringArmComponent* GetCameraSpringArm(AActor* ViewTarget) const;
 	void RefreshCameraRig(AActor* ViewTarget) const;
 	void ClearTransitionTimers();
@@ -105,8 +101,8 @@ private:
 
 	void BeginRideCollision();
 	void EndRideCollision(ARide* Ride);
-	void MountTimer();
-	void NormalDismountTimer();
+	void UpdateMountTransition();
+	void UpdateNormalDismountTransition();
 	bool TryEvaluateTransitionCurve(const UCurveFloat* Curve, float& OutValue) const;
 	void RestoreTransitionRootMotionMode();
 	void ResetRideIKState(bool bRestoreGroundPhase);
@@ -121,12 +117,8 @@ private:
 	TObjectPtr<ARide> CurrentRide = nullptr;
 
 	ERideActionState RideActionState = ERideActionState::Detached;
-	ERideAnimPhase CurRideAnimPhase = ERideAnimPhase::Riding;
 
-	FTimerHandle MountTimerHandle;
-	FTimerHandle NormalDismountTimerHandle;
 	FTimerHandle TransitionWatchdogHandle;
-	FTimerHandle TransitionCameraTimerHandle;
 	FTimerHandle ForcedDetachRetryTimerHandle;
 	FVector TransitionStartTargetOffset = FVector::ZeroVector;
 	FVector TransitionTargetOffset = FVector::ZeroVector;
@@ -150,6 +142,8 @@ private:
 	uint8 SavedCustomMovementMode = 0;
 	FName SavedCollisionProfile;
 	TEnumAsByte<ECollisionEnabled::Type> SavedCollisionEnabled = ECollisionEnabled::QueryAndPhysics;
+	FCollisionResponseContainer SavedCollisionResponses;
+	TEnumAsByte<ECollisionChannel> SavedCollisionObjectType = ECC_Pawn;
 	bool bSavedSkipJumpStart = false;
 	bool bSavedAutoManageCameraTarget = true;
 	TEnumAsByte<ERootMotionMode::Type> SavedRootMotionMode = ERootMotionMode::RootMotionFromMontagesOnly;

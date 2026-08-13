@@ -7,15 +7,6 @@
 #include "UObject/NoExportTypes.h"
 #include "StatusData.generated.h"
 
-UENUM(BlueprintType)
-enum class ERideAnimPhase : uint8
-{
-	Mount UMETA(DisplayName = "Mount"),
-	DisMount_Normal UMETA(DisplayName = "DisMount_Normal"),
-	Riding UMETA(DisplayName = "Riding"),
-};
-
-
 UCLASS()
 class UE5PROJECT_API UStatusData : public UObject
 {

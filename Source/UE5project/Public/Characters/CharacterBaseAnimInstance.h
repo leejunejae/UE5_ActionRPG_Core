@@ -131,9 +131,6 @@ private:
 	UPROPERTY(Transient, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
 		TObjectPtr<UAnimSequence> ActiveRepeatedStepAnimation = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Stance, Meta = (AllowPrivateAccess = true))
-		ERideAnimPhase CurRideAnimPhase;
-
 public:
 	FOnAnimInstanceMulDel OnEnterWalkState;
 	FOnAnimInstanceMulDel OnEnterLadderState;

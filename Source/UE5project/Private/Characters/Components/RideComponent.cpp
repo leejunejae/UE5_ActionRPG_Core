@@ -26,7 +26,8 @@
 
 URideComponent::URideComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = false;
 }
 
 void URideComponent::BeginPlay()
@@ -48,6 +49,26 @@ void URideComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	ReleaseTransitionCamera();
 	Player = nullptr;
 	Super::EndPlay(EndPlayReason);
+}
+
+void URideComponent::TickComponent(float DeltaTime, ELevelTick TickType,
+	FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	if (RideActionState == ERideActionState::Mounting)
+	{
+		UpdateMountTransition();
+	}
+	else if (RideActionState == ERideActionState::DismountingNormal)
+	{
+		UpdateNormalDismountTransition();
+	}
+
+	if (IsValid(TransitionSpringArm))
+	{
+		UpdateTransitionCamera(DeltaTime);
+	}
 }
 
 bool URideComponent::RequestSpawnRide()
@@ -195,14 +216,13 @@ bool URideComponent::BeginRideSession(ARide* NewRide, const FVector& InitialVelo
 	// Transition poses are owned exclusively by the full-body montage. Keep the
 	// underlying ride state machine on locomotion so it does not play the same
 	// mount sequence a second time.
-	CurRideAnimPhase = ERideAnimPhase::Riding;
 	RideActionState = ERideActionState::Mounting;
 	Player->GetCharacterStatusComponent()->SetState(TAG_State_Ride);
 	MountStartTransform = Player->GetActorTransform();
 	MountHorizontalAlpha = 0.0f;
 	MountVerticalAlpha = 0.0f;
 
-	GetWorld()->GetTimerManager().SetTimer(MountTimerHandle, this, &URideComponent::MountTimer, 0.01f, true);
+	RefreshTransitionTick();
 	if (!PlayRideTransitionAnimation(true))
 	{
 		ForceDetachFromRide(true);
@@ -280,13 +300,11 @@ bool URideComponent::RequestDismount(FVector InitVelocity)
 	Player->SetSkipJumpStart(false);
 	// The dismount montage owns the transition pose and completion delegate.
 	// Do not enter the legacy AnimBP dismount state at the same time.
-	CurRideAnimPhase = ERideAnimPhase::Riding;
 	NormalDismountStartTransform = Player->GetActorTransform();
 	DismountHorizontalAlpha = 0.0f;
 	DismountVerticalAlpha = 0.0f;
 	bDismountVisualStateReleased = false;
-	GetWorld()->GetTimerManager().SetTimer(
-		NormalDismountTimerHandle, this, &URideComponent::NormalDismountTimer, 0.01f, true);
+	RefreshTransitionTick();
 	if (!PlayRideTransitionAnimation(false))
 	{
 		ForceDetachFromRide(true);
@@ -309,8 +327,8 @@ void URideComponent::HandleMountEnd()
 	Player->SetActorLocationAndRotation(MountTransform.GetLocation(), MountTransform.GetRotation().Rotator());
 	CurrentRide->AttachRider();
 	Player->GetCapsuleComponent()->SetCollisionEnabled(SavedCollisionEnabled);
-	CurRideAnimPhase = ERideAnimPhase::Riding;
 	RideActionState = ERideActionState::Riding;
+	RefreshTransitionTick();
 	ClearMountAction();
 }
 
@@ -486,6 +504,7 @@ void URideComponent::ForceDetachFromRide(bool bDestroyRide)
 	}
 
 	RideActionState = ERideActionState::ForceDetaching;
+	RefreshTransitionTick();
 	bForcedDetachDestroyRide = bDestroyRide;
 	bForcedDetachRestoreGroundState = !(IsValid(Player) && Player->GetCharacterStatusComponent() &&
 		Player->GetCharacterStatusComponent()->IsDead());
@@ -614,11 +633,11 @@ void URideComponent::CompleteRideSession(ARide* Ride, bool bDestroyRide, bool bR
 	UnregisterRide(Ride);
 	CurrentRide = nullptr;
 	RestorePlayerState(bRestoreGroundState);
-	CurRideAnimPhase = ERideAnimPhase::Riding;
 	RideActionState = FinalState;
 	bDismountVisualStateReleased = false;
 	bForcedDetachCompletionStarted = false;
 	ForcedDetachAttemptCount = 0;
+	RefreshTransitionTick();
 
 	if (bDestroyRide && IsValid(Ride))
 	{
@@ -638,6 +657,8 @@ void URideComponent::CapturePlayerState()
 	SavedCustomMovementMode = Movement->CustomMovementMode;
 	SavedCollisionProfile = Player->GetCapsuleComponent()->GetCollisionProfileName();
 	SavedCollisionEnabled = Player->GetCapsuleComponent()->GetCollisionEnabled();
+	SavedCollisionResponses = Player->GetCapsuleComponent()->GetCollisionResponseToChannels();
+	SavedCollisionObjectType = Player->GetCapsuleComponent()->GetCollisionObjectType();
 	bSavedSkipJumpStart = Player->ShouldSkipJumpStart();
 	if (const UAnimInstance* AnimInstance = Player->GetMesh() ? Player->GetMesh()->GetAnimInstance() : nullptr)
 	{
@@ -669,6 +690,8 @@ void URideComponent::RestorePlayerState(bool bRestoreGroundState)
 
 	const bool bPreserveMovingDismount = RideActionState == ERideActionState::DismountingMoving;
 	Player->GetCapsuleComponent()->SetCollisionProfileName(SavedCollisionProfile);
+	Player->GetCapsuleComponent()->SetCollisionObjectType(SavedCollisionObjectType);
+	Player->GetCapsuleComponent()->SetCollisionResponseToChannels(SavedCollisionResponses);
 	Player->GetCapsuleComponent()->SetCollisionEnabled(SavedCollisionEnabled);
 	Player->SetSkipJumpStart(bPreserveMovingDismount ? true : (bRestoreGroundState ? bSavedSkipJumpStart : false));
 	if (bRestoreGroundState)
@@ -742,12 +765,14 @@ bool URideComponent::IsSafeDismountTransform(const FTransform& Candidate, const 
 		FMath::Max(Capsule->GetScaledCapsuleRadius() - Tolerance, 1.0f),
 		FMath::Max(Capsule->GetScaledCapsuleHalfHeight() - Tolerance, 1.0f));
 	const FVector Location = Candidate.GetLocation();
-	return !GetWorld()->OverlapBlockingTestByProfile(
+	const FCollisionResponseParams ResponseParams(SavedCollisionResponses);
+	return !GetWorld()->OverlapBlockingTestByChannel(
 		Location,
 		Candidate.GetRotation(),
-		SavedCollisionProfile,
+		SavedCollisionObjectType,
 		Shape,
-		QueryParams);
+		QueryParams,
+		ResponseParams);
 }
 
 bool URideComponent::TryResolveGroundedDismountTransform(
@@ -779,14 +804,16 @@ bool URideComponent::TryResolveGroundedDismountTransform(
 	}
 
 	FHitResult GroundHit;
-	if (!GetWorld()->SweepSingleByProfile(
+	const FCollisionResponseParams ResponseParams(SavedCollisionResponses);
+	if (!GetWorld()->SweepSingleByChannel(
 		GroundHit,
 		SweepStart,
 		SweepEnd,
 		FQuat::Identity,
-		SavedCollisionProfile,
+		SavedCollisionObjectType,
 		CapsuleShape,
-		QueryParams) ||
+		QueryParams,
+		ResponseParams) ||
 		!GroundHit.bBlockingHit || !Movement->IsWalkable(GroundHit))
 	{
 		return false;
@@ -963,15 +990,10 @@ void URideComponent::BlendFromLockedCamera(APlayerController* Controller, AActor
 	Controller->SetViewTarget(NewViewTarget);
 	TransitionCamera->Destroy();
 	TransitionCamera = nullptr;
-	GetWorld()->GetTimerManager().SetTimer(
-		TransitionCameraTimerHandle,
-		this,
-		&URideComponent::UpdateTransitionCamera,
-		0.01f,
-		true);
+	RefreshTransitionTick();
 }
 
-void URideComponent::UpdateTransitionCamera()
+void URideComponent::UpdateTransitionCamera(float DeltaTime)
 {
 	if (!IsValid(TransitionController) || !IsValid(TransitionViewTarget) || !IsValid(TransitionSpringArm))
 	{
@@ -979,7 +1001,7 @@ void URideComponent::UpdateTransitionCamera()
 		return;
 	}
 
-	TransitionCameraElapsed += 0.01f;
+	TransitionCameraElapsed += DeltaTime;
 	const URideProfileDataAsset* Profile = GetRideProfile();
 	if (!IsValid(Profile))
 	{
@@ -1035,10 +1057,6 @@ void URideComponent::RefreshCameraRig(AActor* ViewTarget) const
 
 void URideComponent::ReleaseTransitionCamera()
 {
-	if (GetWorld())
-	{
-		GetWorld()->GetTimerManager().ClearTimer(TransitionCameraTimerHandle);
-	}
 	if (IsValid(TransitionCamera))
 	{
 		TransitionCamera->Destroy();
@@ -1056,6 +1074,16 @@ void URideComponent::ReleaseTransitionCamera()
 	TransitionController = nullptr;
 	TransitionViewTarget = nullptr;
 	TransitionCameraElapsed = 0.0f;
+	RefreshTransitionTick();
+}
+
+void URideComponent::RefreshTransitionTick()
+{
+	const bool bNeedsTransitionTick =
+		RideActionState == ERideActionState::Mounting ||
+		RideActionState == ERideActionState::DismountingNormal ||
+		IsValid(TransitionSpringArm);
+	SetComponentTickEnabled(bNeedsTransitionTick);
 }
 
 void URideComponent::ClearTransitionTimers()
@@ -1065,8 +1093,6 @@ void URideComponent::ClearTransitionTimers()
 		return;
 	}
 	FTimerManager& Timers = GetWorld()->GetTimerManager();
-	Timers.ClearTimer(MountTimerHandle);
-	Timers.ClearTimer(NormalDismountTimerHandle);
 	Timers.ClearTimer(TransitionWatchdogHandle);
 	Timers.ClearTimer(ForcedDetachRetryTimerHandle);
 }
@@ -1125,11 +1151,13 @@ void URideComponent::EndRideCollision(ARide* Ride)
 	if (bHasPlayerStateSnapshot)
 	{
 		Player->GetCapsuleComponent()->SetCollisionProfileName(SavedCollisionProfile);
+		Player->GetCapsuleComponent()->SetCollisionObjectType(SavedCollisionObjectType);
+		Player->GetCapsuleComponent()->SetCollisionResponseToChannels(SavedCollisionResponses);
 		Player->GetCapsuleComponent()->SetCollisionEnabled(SavedCollisionEnabled);
 	}
 }
 
-void URideComponent::MountTimer()
+void URideComponent::UpdateMountTransition()
 {
 	if (!IsValid(Player) || !IsValid(CurrentRide) || RideActionState != ERideActionState::Mounting)
 	{
@@ -1160,7 +1188,7 @@ void URideComponent::MountTimer()
 	Player->SetActorLocationAndRotation(Location, Rotation.Rotator());
 }
 
-void URideComponent::NormalDismountTimer()
+void URideComponent::UpdateNormalDismountTransition()
 {
 	if (!IsValid(Player) || RideActionState != ERideActionState::DismountingNormal)
 	{
@@ -1250,9 +1278,4 @@ float URideComponent::GetRideSpeed() const
 float URideComponent::GetRideDirection() const
 {
 	return IsValid(CurrentRide) ? CurrentRide->GetRideDirection() : 0.0f;
-}
-
-FTransform URideComponent::GetMountTransform() const
-{
-	return IsValid(CurrentRide) ? CurrentRide->GetMountTransform() : FTransform::Identity;
 }

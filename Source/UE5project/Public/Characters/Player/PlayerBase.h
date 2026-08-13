@@ -203,7 +203,6 @@ public:
 protected:
 
 public:
-	ERideAnimPhase GetCurRideAnimPhase();
 #pragma endregion State & Stance
 
 	/* ============================================================

@@ -734,11 +734,6 @@ UStaticMeshComponent* APlayerBase::GetMainWeaponMesh() const
 	return EquipmentComponent ? EquipmentComponent->GetMainWeaponComponent() : nullptr;
 }
 
-ERideAnimPhase APlayerBase::GetCurRideAnimPhase()
-{
-	return RideComponent ? RideComponent->GetCurRideAnimPhase() : ERideAnimPhase::Riding;
-}
-
 /* ============================================================
  *  Interface Implementations
  * ============================================================ */

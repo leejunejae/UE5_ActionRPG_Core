@@ -18,7 +18,6 @@ void UAnimMode_Ride::Tick(float DeltaSeconds)
 
 	auto* Anim = AnimInst.Get();
 
-	Anim->CurRideAnimPhase = Ch->GetCurRideAnimPhase();
 	Anim->IsInAir = Ch->GetCharacterMovement()->IsFalling();
 	Anim->IsJumping = Anim->IsFalling = Anim->IsLanding = false;
 	if (Anim->IsInAir)
