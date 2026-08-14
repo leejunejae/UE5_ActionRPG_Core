@@ -42,7 +42,9 @@ class UPlayerConfig;
 class APlayerRide;
 class ARide;
 
+enum class EWeaponType : uint8;
 struct FGameplayTag;
+struct FHitReactionRequest;
 
 DECLARE_DELEGATE(FOnSingleDelegate);
 
@@ -230,7 +232,11 @@ private:
 	bool bForcedRotatingInputDirection = false;
 	float ForcedRotationSpeed = 720.0f;
 
-	UAnimMontage* RollMontage;
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> ConfiguredDodgeMontage = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> ActiveDodgeMontage = nullptr;
 #pragma endregion Ground
 
 	/* ============================================================
@@ -275,7 +281,7 @@ public:
 public:
 	UPlayerStatusComponent* GetCharacterStatusComponent() const;
 
-	void OnActionFinished(bool bInterrupted);
+	void HandleAttackFinished(bool bInterrupted);
 	void OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	void HandleLadderExit();
 #pragma endregion Status
@@ -327,6 +333,16 @@ private:
 
 	// ---- 버퍼 소비 콜백 ----
 	void HandleBufferedAction(const FGameplayTag& ActionTag);
+	void FinishActionIfCurrent(const FGameplayTag& ExpectedAction);
+	void HandleActionTransition(const FGameplayTag& PreviousAction, const FGameplayTag& NextAction,
+		EActionExitReason ExitReason);
+	void ExitActionRuntime(const FGameplayTag& ActionTag, EActionExitReason ExitReason);
+	void ExitDodgeRuntime(EActionExitReason ExitReason);
+	void TryReturnToLocomotion(const FVector2D& MovementInput);
+	void RefreshActionAnimationProfile(EWeaponType WeaponType);
+
+	float DodgeLocomotionBlendOutTime = 0.15f;
+	FActionExitBlendSettings DodgeExitBlendSettings;
 
 	bool IsAttackInput;
 
@@ -351,6 +367,7 @@ private:
 	FTimerHandle RespawnFinalizeTimerHandle;
 
 	FORCEINLINE UPlayerHitReactionComponent* GetHitReactionComponent() const;
+	bool TryExecuteHitReaction(const FHitReactionRequest& ReactionRequest);
 #pragma endregion HitReaction
 
 #pragma endregion Combat

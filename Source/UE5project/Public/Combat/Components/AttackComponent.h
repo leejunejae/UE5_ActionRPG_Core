@@ -17,6 +17,13 @@ struct FBoneTransformSegment;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnMultiOneParamDelegate, bool);
 
+UENUM(BlueprintType)
+enum class EAttackSessionState : uint8
+{
+	Idle,
+	Active
+};
+
 USTRUCT(BlueprintType)
 struct FBoneTransformSample
 {
@@ -50,12 +57,15 @@ public:
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 public:	
 	void OnMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	virtual const FBaseAttackData* ExecuteAttack(FName AttackName, float Playrate = 1.0f);
-	virtual void PlayAnimation(FAttackContext AttackInfo, int32 index, float Playrate = 1.0f);
+	virtual bool PlayAnimation(const FAttackContext& AttackInfo, int32 Index, float Playrate = 1.0f);
 	virtual void ExecuteAttackTrace(float StartTime, float EndTime, bool bDrawDebug = false);
+	void CancelAttack(EActionExitReason ExitReason = EActionExitReason::Interrupted,
+		bool bStopMontage = true);
 
 	void BeginAttackTrace(FGameplayTag Profile, const UAnimSequence* AnimKey, FName WindowName, float StartTime);
 	void TickAttackTrace(float DeltaTime, bool bDrawDebug);
@@ -64,11 +74,12 @@ public:
 	void InitAttackContextSet(const FAttackContextSet* InContextSet){CurAttackContextSet = InContextSet;}
 
 	FORCEINLINE float GetLastTraceTime() { return LastTraceTime; }
+	FORCEINLINE bool IsAttackActive() const { return AttackSessionState == EAttackSessionState::Active; }
+	FORCEINLINE bool IsAttackTraceActive() const { return bAttackTraceActive; }
 
 	FOnMultiOneParamDelegate OnAttackFinished;
 
 protected:
-	FOnMontageEnded OnMontageEndedDelegate;
 	TSet<AActor*> HitActorListCurrentAttack;
 	const FBoneTransformSegment* CurrentSeg = nullptr;
 
@@ -81,4 +92,18 @@ protected:
 		int32 ComboIndex = 0;
 
 	float LastTraceTime = 0.0f;
+
+private:
+	void FinishAttackSession(bool bInterrupted, bool bStopMontage,
+		EActionExitReason ExitReason = EActionExitReason::Completed);
+	void ResetAttackTrace();
+
+	UPROPERTY(VisibleAnywhere, Category = "Attack|Runtime")
+	EAttackSessionState AttackSessionState = EAttackSessionState::Idle;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> ActiveAttackMontage;
+
+	bool bAttackTraceActive = false;
+	bool bFinishingAttackSession = false;
 };

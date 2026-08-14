@@ -25,3 +25,8 @@ const FPlayerAnimSet* UPlayerAnimRegistrySubsystem::GetPlayerAnimSet(const EWeap
 
 	return nullptr;
 }
+
+FPlayerAnimSet UPlayerAnimRegistrySubsystem::ResolvePlayerAnimSet(const EWeaponType& WeaponType) const
+{
+	return PlayerAnimAsset ? PlayerAnimAsset->ResolvePlayerAnimSet(WeaponType) : FPlayerAnimSet{};
+}

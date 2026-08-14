@@ -51,6 +51,7 @@
 
 // 데이터 참조
 #include "Characters/Player/PlayerConfig.h"
+#include "Core/Subsystems/GameInstanceSystem/PlayerAnimRegistrySubsystem.h"
 
 // 유틸리티
 #include "Utils/GameplayTagsBase.h"
@@ -91,12 +92,6 @@ APlayerBase::APlayerBase(const FObjectInitializer& ObjectInitializer)
 
 	GetCapsuleComponent()->SetCapsuleHalfHeight(90.0f);
 
-	static ConstructorHelpers::FObjectFinder<UAnimMontage> RollMontageAsset(TEXT("/Game/04_Animations/Player/SSH/Roll/Normal/Roll_Montage.Roll_Montage"));
-	if (RollMontageAsset.Succeeded())
-	{
-		RollMontage = RollMontageAsset.Object;
-	}
-
 	GetMesh()->SetGenerateOverlapEvents(true);
 
 	CurLocomotionGait = ELocomotionGait::Jog;
@@ -128,6 +123,7 @@ void APlayerBase::BeginPlay()
 	Super::BeginPlay();
 
 	ApplyConfig();
+	RefreshActionAnimationProfile(EWeaponType::None);
 
 	CharacterBaseAnim = Cast<UPlayerBaseAnimInstance>(GetMesh()->GetAnimInstance());
 
@@ -234,7 +230,7 @@ void APlayerBase::ApplyConfig()
 {
 	if (!Config) { ensureMsgf(false, TEXT("Config missing")); return; }
 
-	GetCharacterStatusComponent()->WindowRules = Config->WindowRules;
+	GetCharacterStatusComponent()->SetWindowRules(Config->WindowRules);
 	GetMesh()->SetSkeletalMesh(Config->Mesh);
 	GetMesh()->SetAnimInstanceClass(Config->AnimBP);
 	GetHitReactionComponent()->SetHitReactionListDA(Config->HitReactData);
@@ -325,13 +321,15 @@ void APlayerBase::PostInitializeComponents()
 
 	InteractComponent->OnArrivedInteractionPoint.BindUObject(this, &APlayerBase::HandleArrivedInteractionPoint);
 	InteractComponent->OnInteractionMoveCancelled.BindUObject(this, &APlayerBase::HandleInteractionMoveCancelled);
+	EquipmentComponent->OnWeaponChangedDelegate.AddUObject(this, &APlayerBase::RefreshActionAnimationProfile);
 
 	if (GetCharacterStatusComponent())
 	{
 		// ★ 버퍼에서 소비된 행동의 실제 실행을 위한 바인딩
 		GetCharacterStatusComponent()->OnActionConsumed.BindUObject(this, &APlayerBase::HandleBufferedAction);
+		GetCharacterStatusComponent()->OnActionTransition.BindUObject(this, &APlayerBase::HandleActionTransition);
 
-		if(GetAttackComponent()) GetAttackComponent()->OnAttackFinished.AddUObject(this, &APlayerBase::OnActionFinished);
+		if(GetAttackComponent()) GetAttackComponent()->OnAttackFinished.AddUObject(this, &APlayerBase::HandleAttackFinished);
 		if(GetClimbComponent()) GetClimbComponent()->OnLadderExit.AddUObject(this, &APlayerBase::HandleLadderExit);
 	}
 
@@ -379,6 +377,7 @@ void APlayerBase::Move(const FInputActionValue& value)
 		const FRotator Rotation = GetControlRotation();
 		const FRotator YawRotation(0, Rotation.Yaw, 0);
 		InputVector = FVector(DirectionValue.X, DirectionValue.Y, 0.0f);
+		TryReturnToLocomotion(DirectionValue);
 
 		FVector2D MovementScale = DirectionValue;
 		MovementScale.Normalize();
@@ -433,7 +432,6 @@ void APlayerBase::AttackInput()
 
 	if (GetCharacterStatusComponent()->RequestAction(TAG_Action_Attack))
 	{
-		UE_LOG(Log_Character_Player_Input, Error, TEXT("[APlayerBase] Can Attack Action"));
 		ExecuteAttack(); // 즉시 가능하면 바로 실행
 	}
 	// else: 버퍼에 저장됨 → Window 열리면 HandleBufferedAction → ExecuteAttack
@@ -464,19 +462,24 @@ void APlayerBase::DodgeInput()
 
 void APlayerBase::BlockInput()
 {
-	if (!GetCharacterStatusComponent()->CanTryAction(TAG_Action_Guard)) return;
+	if (IsBlockInput) return;
+	UPlayerStatusComponent* StatusComponent = GetCharacterStatusComponent();
+	if (!StatusComponent || !StatusComponent->CanTryAction(TAG_Action_Guard)) return;
+	StatusComponent->SwitchAction(TAG_Action_Guard);
 	ExecuteBlock();
 }
 
 void APlayerBase::BlockInputEnd()
 {
 	IsBlockInput = false;
-	OnActionFinished(false);
+	FinishActionIfCurrent(TAG_Action_Guard);
 }
 
 void APlayerBase::InteractInput()
 {
-	if (!GetCharacterStatusComponent()->CanTryAction(TAG_Action_Interact)) return;
+	UPlayerStatusComponent* StatusComponent = GetCharacterStatusComponent();
+	if (!StatusComponent || !StatusComponent->CanTryAction(TAG_Action_Interact)) return;
+	StatusComponent->SwitchAction(TAG_Action_Interact);
 	ExecuteInteract();
 }
 
@@ -501,27 +504,26 @@ void APlayerBase::SpawnRideInputCompleted()
  * ============================================================ */
 void APlayerBase::ExecuteAttack()
 {
-	GetCharacterStatusComponent()->SwitchAction(TAG_Action_Attack);
-
 	IsAttackInput = true;
 	const FBaseAttackData* Played = GetAttackComponent()->ExecuteAttack(FName("DefaultCombo"));
-	if (Played)
+	if (!Played)
 	{
-		if (const FWeaponSetsInfo* Weapon = GetEquipmentComponent()->GetEquipedWeapon())
-		{
-			const float Cost = Weapon->StaminaCost * Played->StaminaCostMultiplier;
-			GetStatComponent()->ChangeStamina(Cost, EStatChangeType::Damage);
-		}
+		IsAttackInput = false;
+		FinishActionIfCurrent(TAG_Action_Attack);
+		return;
+	}
+
+	if (const FWeaponSetsInfo* Weapon = GetEquipmentComponent()->GetEquipedWeapon())
+	{
+		const float Cost = Weapon->StaminaCost * Played->StaminaCostMultiplier;
+		GetStatComponent()->ChangeStamina(Cost, EStatChangeType::Damage);
 	}
 }
 
 void APlayerBase::ExecuteJump()
 {
-	GetCharacterStatusComponent()->SwitchAction(TAG_Action_Jump);
-
 	if (CharacterBaseAnim->GetCurrentActiveMontage())
 	{
-		CharacterBaseAnim->Montage_Stop(0.1f);
 		GetWorld()->GetTimerManager().SetTimerForNextTick(this, &Super::Jump);
 	}
 	else
@@ -532,7 +534,10 @@ void APlayerBase::ExecuteJump()
 
 void APlayerBase::ExecuteDodge()
 {
-	GetCharacterStatusComponent()->SwitchAction(TAG_Action_Dodge);
+	if (ActiveDodgeMontage)
+	{
+		ExitDodgeRuntime(EActionExitReason::Transition);
+	}
 
 	const FPlayerStats Stats = GetStatComponent()->GetCharacterStats();
 	const float LoadRatio = Stats.EquipLoad.Max > KINDA_SMALL_NUMBER
@@ -588,19 +593,75 @@ void APlayerBase::ExecuteDodge()
 
 	FName RollDirectionName = AngleToDirection[Closest];
 
-	CharacterBaseAnim->Montage_Stop(0.1f);
-	CharacterBaseAnim->Montage_Play(RollMontage);
-	CharacterBaseAnim->Montage_JumpToSection(RollDirectionName, RollMontage);
+	UAnimMontage* DodgeMontage = ConfiguredDodgeMontage.Get();
+	if (!CharacterBaseAnim || !DodgeMontage)
+	{
+		FinishActionIfCurrent(TAG_Action_Dodge);
+		return;
+	}
+
+	if (CharacterBaseAnim->Montage_Play(DodgeMontage) <= 0.0f)
+	{
+		FinishActionIfCurrent(TAG_Action_Dodge);
+		return;
+	}
+	ActiveDodgeMontage = DodgeMontage;
+	CharacterBaseAnim->Montage_JumpToSection(RollDirectionName, DodgeMontage);
 
 	FOnMontageEnded EndDelegate;
 	EndDelegate.BindUObject(this, &APlayerBase::OnDodgeMontageEnded);
-	CharacterBaseAnim->Montage_SetEndDelegate(EndDelegate, RollMontage);
+	CharacterBaseAnim->Montage_SetEndDelegate(EndDelegate, DodgeMontage);
+}
+
+void APlayerBase::TryReturnToLocomotion(const FVector2D& MovementInput)
+{
+	UPlayerStatusComponent* StatusComponent = GetCharacterStatusComponent();
+	if (!StatusComponent || MovementInput.IsNearlyZero() ||
+		!StatusComponent->IsWindowOpen(TAG_Window_Locomotion))
+	{
+		return;
+	}
+
+	const FGameplayTag CurrentAction = StatusComponent->GetCurrentAction();
+	if (!CurrentAction.MatchesTagExact(TAG_Action_Attack) &&
+		!CurrentAction.MatchesTagExact(TAG_Action_Dodge) &&
+		!CurrentAction.MatchesTagExact(TAG_Action_Guard) &&
+		!CurrentAction.MatchesTagExact(TAG_Action_HitReact))
+	{
+		return;
+	}
+
+	ExitActionRuntime(CurrentAction, EActionExitReason::Locomotion);
+	FinishActionIfCurrent(CurrentAction);
+}
+
+void APlayerBase::RefreshActionAnimationProfile(EWeaponType WeaponType)
+{
+	UWorld* World = GetWorld();
+	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	UPlayerAnimRegistrySubsystem* Registry = GameInstance
+		? GameInstance->GetSubsystem<UPlayerAnimRegistrySubsystem>() : nullptr;
+	if (!Registry)
+	{
+		ConfiguredDodgeMontage = nullptr;
+		DodgeLocomotionBlendOutTime = 0.15f;
+		DodgeExitBlendSettings = FActionExitBlendSettings{};
+		return;
+	}
+
+	const FPlayerAnimSet AnimSet = Registry->ResolvePlayerAnimSet(WeaponType);
+	ConfiguredDodgeMontage = AnimSet.DodgeMontage.LoadSynchronous();
+	DodgeLocomotionBlendOutTime = AnimSet.DodgeLocomotionBlendOutTime >= 0.0f
+		? AnimSet.DodgeLocomotionBlendOutTime : 0.15f;
+	DodgeExitBlendSettings = AnimSet.DodgeExitBlendSettings;
+	if (DodgeExitBlendSettings.Locomotion < 0.0f && AnimSet.DodgeLocomotionBlendOutTime >= 0.0f)
+	{
+		DodgeExitBlendSettings.Locomotion = AnimSet.DodgeLocomotionBlendOutTime;
+	}
 }
 
 void APlayerBase::ExecuteBlock()
 {
-	GetCharacterStatusComponent()->SwitchAction(TAG_Action_Guard);
-
 	IsBlockInput = true;
 }
 
@@ -628,7 +689,6 @@ void APlayerBase::ExecuteInteract()
 		if (!InteractTargetValid)
 			return;
 
-		GetCharacterStatusComponent()->SwitchAction(TAG_Action_Interact);
 		GetController()->SetIgnoreMoveInput(true);
 		IsInteraction = InteractComponent->MovetoInteractPos();
 		if (!IsInteraction)
@@ -639,14 +699,92 @@ void APlayerBase::ExecuteInteract()
 	}
 }
 
-void APlayerBase::OnActionFinished(bool bInterrupted)
+void APlayerBase::HandleAttackFinished(bool bInterrupted)
 {
-	if(!bInterrupted) GetCharacterStatusComponent()->ClearAction();
+	IsAttackInput = false;
+	bForcedRotatingInputDirection = false;
+	FinishActionIfCurrent(TAG_Action_Attack);
+}
+
+void APlayerBase::FinishActionIfCurrent(const FGameplayTag& ExpectedAction)
+{
+	UPlayerStatusComponent* StatusComponent = GetCharacterStatusComponent();
+	if (StatusComponent && StatusComponent->GetCurrentAction().MatchesTagExact(ExpectedAction))
+	{
+		StatusComponent->ClearAction();
+	}
 }
 
 void APlayerBase::OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
-	OnActionFinished(bInterrupted);
+	if (Montage != ActiveDodgeMontage)
+	{
+		return;
+	}
+	ActiveDodgeMontage = nullptr;
+	FinishActionIfCurrent(TAG_Action_Dodge);
+}
+
+void APlayerBase::HandleActionTransition(const FGameplayTag& PreviousAction,
+	const FGameplayTag& NextAction, EActionExitReason ExitReason)
+{
+	if (!PreviousAction.IsValid() || PreviousAction.MatchesTagExact(NextAction))
+	{
+		return;
+	}
+
+	ExitActionRuntime(PreviousAction, ExitReason);
+}
+
+void APlayerBase::ExitActionRuntime(const FGameplayTag& ActionTag, EActionExitReason ExitReason)
+{
+	if (ActionTag.MatchesTagExact(TAG_Action_Attack))
+	{
+		IsAttackInput = false;
+		bForcedRotatingInputDirection = false;
+		if (GetAttackComponent())
+		{
+			GetAttackComponent()->CancelAttack(ExitReason, true);
+		}
+	}
+	else if (ActionTag.MatchesTagExact(TAG_Action_Dodge))
+	{
+		ExitDodgeRuntime(ExitReason);
+	}
+	else if (ActionTag.MatchesTagExact(TAG_Action_Guard))
+	{
+		IsBlockInput = false;
+	}
+	else if (ActionTag.MatchesTagExact(TAG_Action_HitReact))
+	{
+		if (GetHitReactionComponent())
+		{
+			GetHitReactionComponent()->CancelHitReaction(ExitReason, true);
+		}
+	}
+}
+
+void APlayerBase::ExitDodgeRuntime(EActionExitReason ExitReason)
+{
+	UAnimMontage* DodgeMontage = ActiveDodgeMontage.Get();
+	ActiveDodgeMontage = nullptr;
+	if (!CharacterBaseAnim || !DodgeMontage)
+	{
+		return;
+	}
+
+	FOnMontageEnded EmptyDelegate;
+	CharacterBaseAnim->Montage_SetEndDelegate(EmptyDelegate, DodgeMontage);
+	if (CharacterBaseAnim->Montage_IsPlaying(DodgeMontage))
+	{
+		FAlphaBlendArgs BlendOut = DodgeMontage->GetBlendOutArgs();
+		const float OverrideTime = DodgeExitBlendSettings.GetOverride(ExitReason);
+		if (OverrideTime >= 0.0f)
+		{
+			BlendOut.BlendTime = OverrideTime;
+		}
+		CharacterBaseAnim->Montage_StopWithBlendOut(BlendOut, DodgeMontage);
+	}
 }
 
 void APlayerBase::HandleLadderExit()
@@ -673,7 +811,8 @@ void APlayerBase::Landed(const FHitResult& Hit)
 	}
 	SetSkipJumpStart(false);
 	GetCharacterMovement()->bOrientRotationToMovement = true;
-	OnActionFinished(false);
+	FinishActionIfCurrent(TAG_Action_Jump);
+	FinishActionIfCurrent(TAG_Action_HitReact);
 }
 
 /* ============================================================
@@ -822,6 +961,7 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 	{
 		StatComponent->ApplyDamage(AttackInfo.Damage, AttackInfo.AttackType);
 		StatComponent->ChangePoise(AttackInfo.PoiseDamage, EStatChangeType::Damage);
+		break;
 	}
 	case EHitResponse::Flinch:
 	case EHitResponse::KnockBack:
@@ -832,8 +972,7 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 		if (GetStatComponent()->GetCommonStats().GetPoise() <= 0.0f && !GetCharacterStatusComponent()->IsDead())
 		{
 			FHitReactionRequest InputReaction = { Response, HitAngle };
-			GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
-			GetHitReactionComponent()->ExecuteHitResponse(InputReaction);
+			TryExecuteHitReaction(InputReaction);
 		}
 		break;
 	}
@@ -841,10 +980,13 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 	{
 		StatComponent->ApplyDamage(AttackInfo.Damage, AttackInfo.AttackType);
 		StatComponent->ChangePoise(AttackInfo.PoiseDamage, EStatChangeType::Damage);
-		if (GetStatComponent()->GetCommonStats().GetPoise() <= 0.0f || GetCharacterStatusComponent()->IsDead())
+		if (GetStatComponent()->GetCommonStats().GetPoise() <= 0.0f &&
+			!GetCharacterStatusComponent()->IsDead() &&
+			GetCharacterStatusComponent()->CanTryAction(TAG_Action_HitReact))
 		{
 			CharacterBaseAnim->SetHitAir(true);
-			GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
+			GetCharacterStatusComponent()->SwitchAction(
+				TAG_Action_HitReact, EActionExitReason::Interrupted);
 		}
 		break;
 	}
@@ -869,8 +1011,7 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 			if (!GetCharacterStatusComponent()->IsDead())
 			{
 				FHitReactionRequest InputReaction = { Response, HitAngle };
-				GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
-				GetHitReactionComponent()->ExecuteHitResponse(InputReaction);
+				TryExecuteHitReaction(InputReaction);
 			}
 		}
 		else
@@ -878,16 +1019,43 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 			StatComponent->ApplyDamage(AttackInfo.Damage, AttackInfo.AttackType);
 			Response = Response == EHitResponse::Block ? EHitResponse::BlockBreak : EHitResponse::BlockStun;
 			FHitReactionRequest InputReaction = { Response, HitAngle };
-			GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
-			GetHitReactionComponent()->ExecuteHitResponse(InputReaction);
+			TryExecuteHitReaction(InputReaction);
 		}
 		break;
 	}
 	}
 }
 
+bool APlayerBase::TryExecuteHitReaction(const FHitReactionRequest& ReactionRequest)
+{
+	UPlayerStatusComponent* StatusComponent = GetCharacterStatusComponent();
+	UPlayerHitReactionComponent* ReactionComponent = GetHitReactionComponent();
+	if (!StatusComponent || !ReactionComponent || StatusComponent->IsDead() ||
+		!StatusComponent->CanTryAction(TAG_Action_HitReact))
+	{
+		return false;
+	}
+
+	StatusComponent->SwitchAction(TAG_Action_HitReact, EActionExitReason::Interrupted);
+	if (!ReactionComponent->ExecuteHitResponse(ReactionRequest))
+	{
+		FinishActionIfCurrent(TAG_Action_HitReact);
+		return false;
+	}
+
+	return true;
+}
+
 void APlayerBase::HandleDeathStarted()
 {
+	if (GetAttackComponent())
+	{
+		GetAttackComponent()->CancelAttack(EActionExitReason::Death, true);
+	}
+	bForcedRotatingInputDirection = false;
+	IsAttackInput = false;
+	IsBlockInput = false;
+
 	// 입력 차단
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))
 	{

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Combat/Data/CombatData.h"
+#include "Characters/Data/StatusData.h"
 #include "Items/Weapons/Data/WeaponData.h"
 #include "Utils/AnimBoneDataRegistryRoot.h"
 #include "Engine/DataTable.h"
@@ -129,6 +130,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		TArray<FBaseAttackData> AttackDetail;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transition")
+		FActionExitBlendSettings ExitBlendSettings;
 
 	bool IsValid() const
 	{

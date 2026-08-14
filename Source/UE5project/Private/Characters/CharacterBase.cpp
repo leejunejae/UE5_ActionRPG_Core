@@ -67,10 +67,6 @@ void ACharacterBase::PostInitializeComponents()
 		GetCharacterStatusComponent()->OnRespawnFinalized.AddUObject(this, &ACharacterBase::HandleRespawnFinalized);
 	}
 
-	if (GetHitReactionComponent())
-	{
-		GetHitReactionComponent()->HitEndDelegate.AddUObject(GetCharacterStatusComponent(), &UCharacterStatusComponent::ClearAction);
-	}
 }
 
 void ACharacterBase::SetCurLocomotionGait(ELocomotionGait NewGait)

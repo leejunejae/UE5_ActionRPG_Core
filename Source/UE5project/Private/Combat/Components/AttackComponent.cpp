@@ -44,8 +44,21 @@ void UAttackComponent::BeginPlay()
 
 }
 
+void UAttackComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	FinishAttackSession(true, true, EActionExitReason::Interrupted);
+	Super::EndPlay(EndPlayReason);
+}
+
 const FBaseAttackData* UAttackComponent::ExecuteAttack(FName AttackName, float Playrate)
 {
+	if (!CurAttackContextSet)
+	{
+		UE_LOG(Log_Attack, Warning, TEXT("[AttackComponent] Attack context set is not configured for '%s'."),
+		       *GetNameSafe(GetOwner()));
+		return nullptr;
+	}
+
 	bool CanPlayAttack = false;
 	int32 CandidateIndex = ComboIndex;
 	FAttackContext CandidateContext = CurAttackContext;
@@ -72,57 +85,132 @@ const FBaseAttackData* UAttackComponent::ExecuteAttack(FName AttackName, float P
 
 	if (!CanPlayAttack || !CandidateContext.AttackDetail.IsValidIndex(CandidateIndex)) return nullptr;
 
+	if (!PlayAnimation(CandidateContext, CandidateIndex, Playrate))
+	{
+		CancelAttack(EActionExitReason::Interrupted, true);
+		return nullptr;
+	}
+
 	CurAttackContext = CandidateContext;
 	ComboIndex = CandidateIndex;
-
-	LastTraceTime = 0.0f;
+	AttackSessionState = EAttackSessionState::Active;
+	ResetAttackTrace();
 	HitActorListCurrentAttack.Empty();
-	PlayAnimation(CurAttackContext, ComboIndex, Playrate);
 
 	return &CurAttackContext.AttackDetail[ComboIndex]; // 실행한 단계 데이터
 }
 
-void UAttackComponent::PlayAnimation(FAttackContext AttackInfo, int32 index, float Playrate)
+bool UAttackComponent::PlayAnimation(const FAttackContext& AttackInfo, int32 Index, float Playrate)
 {
 	ACharacter* Char = Cast<ACharacter>(GetOwner());
-	if (!Char) return;
+	if (!Char || !AttackInfo.Anim || !AttackInfo.AttackDetail.IsValidIndex(Index)) return false;
 
 	UAnimInstance* Anim = Char->GetMesh()->GetAnimInstance();
-	if (!Anim) return;
+	if (!Anim) return false;
 
-	Anim->Montage_Play(AttackInfo.Anim, Playrate);
-	Anim->Montage_JumpToSection(AttackInfo.AttackDetail[index].SectionName, AttackInfo.Anim);
+	const FName SectionName = AttackInfo.AttackDetail[Index].SectionName;
+	if (SectionName.IsNone() || !AttackInfo.Anim->IsValidSectionName(SectionName))
+	{
+		UE_LOG(Log_Attack, Warning, TEXT("[AttackComponent] Invalid attack section '%s' in montage '%s'."),
+		       *SectionName.ToString(), *GetNameSafe(AttackInfo.Anim));
+		return false;
+	}
+
+	// 콤보 다음 단계가 같은 몽타주를 다시 시작할 때 이전 단계의 EndDelegate가
+	// 새 공격 세션을 중단 처리하지 않도록 먼저 해제한다.
+	if (ActiveAttackMontage)
+	{
+		FOnMontageEnded EmptyDelegate;
+		Anim->Montage_SetEndDelegate(EmptyDelegate, ActiveAttackMontage);
+	}
+	ResetAttackTrace();
+
+	const float PlayedDuration = Anim->Montage_Play(AttackInfo.Anim, Playrate);
+	if (PlayedDuration <= 0.0f)
+	{
+		UE_LOG(Log_Attack, Warning, TEXT("[AttackComponent] Failed to play attack montage '%s'."),
+		       *GetNameSafe(AttackInfo.Anim));
+		return false;
+	}
+
+	ActiveAttackMontage = AttackInfo.Anim;
+	Anim->Montage_JumpToSection(SectionName, AttackInfo.Anim);
 
 	FOnMontageEnded MontageEndDelegate;
 	MontageEndDelegate.BindUObject(this, &UAttackComponent::OnMontageEnded);
 	Anim->Montage_SetEndDelegate(MontageEndDelegate, AttackInfo.Anim);
+	return true;
 }
 
 void UAttackComponent::OnMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
-	ACharacter* Char = Cast<ACharacter>(GetOwner());
-	if (!Char) return;
-
-	UAnimInstance* Anim = Char->GetMesh()->GetAnimInstance();
-	if (!Anim) return;
-
-	FString EndMontage = Montage ? Montage->GetName() : TEXT("None");
-	UAnimMontage* CurrentMontage = Anim ? Anim->GetCurrentActiveMontage() : nullptr;
-	FString CurMontage = CurrentMontage ? CurrentMontage->GetName() : TEXT("None");
-
-	if (!(EndMontage.Equals(CurMontage)))
+	if (Montage != ActiveAttackMontage)
 	{
-		ComboIndex = 0;
-		CurAttackContext = FAttackContext();
+		return;
 	}
 
-	OnAttackFinished.Broadcast(bInterrupted);
+	FinishAttackSession(bInterrupted, false, EActionExitReason::Completed);
+}
 
-	Anim->OnMontageEnded.RemoveDynamic(this, &UAttackComponent::OnMontageEnded);
+void UAttackComponent::CancelAttack(EActionExitReason ExitReason, bool bStopMontage)
+{
+	FinishAttackSession(true, bStopMontage, ExitReason);
+}
+
+void UAttackComponent::FinishAttackSession(bool bInterrupted, bool bStopMontage, EActionExitReason ExitReason)
+{
+	if (bFinishingAttackSession || AttackSessionState == EAttackSessionState::Idle)
+	{
+		ResetAttackTrace();
+		return;
+	}
+
+	TGuardValue<bool> FinishingGuard(bFinishingAttackSession, true);
+	UAnimMontage* MontageToStop = ActiveAttackMontage;
+
+	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
+	{
+		if (UAnimInstance* AnimInstance = Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr)
+		{
+			if (MontageToStop)
+			{
+				FOnMontageEnded EmptyDelegate;
+				AnimInstance->Montage_SetEndDelegate(EmptyDelegate, MontageToStop);
+				if (bStopMontage && AnimInstance->Montage_IsPlaying(MontageToStop))
+				{
+					FAlphaBlendArgs BlendOut = MontageToStop->GetBlendOutArgs();
+					const float OverrideTime = CurAttackContext.ExitBlendSettings.GetOverride(ExitReason);
+					if (OverrideTime >= 0.0f)
+					{
+						BlendOut.BlendTime = OverrideTime;
+					}
+					AnimInstance->Montage_StopWithBlendOut(BlendOut, MontageToStop);
+				}
+			}
+		}
+	}
+
+	ResetAttackTrace();
+	HitActorListCurrentAttack.Empty();
+	CurAttackContext = FAttackContext();
+	ComboIndex = 0;
+	ActiveAttackMontage = nullptr;
+	AttackSessionState = EAttackSessionState::Idle;
+	OnAttackFinished.Broadcast(bInterrupted);
+}
+
+void UAttackComponent::ResetAttackTrace()
+{
+	CurrentSeg = nullptr;
+	LastTraceTime = 0.0f;
+	bAttackTraceActive = false;
 }
 
 void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool bDrawDebug)
 {
+	if (!IsAttackActive() || !bAttackTraceActive || EndTime <= StartTime) return;
+	if (!CurAttackContext.AttackDetail.IsValidIndex(ComboIndex)) return;
+
 	ACharacter* Character = Cast<ACharacter>(GetOwner());
 	if (!Character)
 	{
@@ -137,7 +225,7 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 	}
 
 	// 이전프레임과 현재프레임 사이를 0.001초 간격으로 나눔
-	int32 TraceCorrectionCount = (EndTime - StartTime) / 0.001f;
+	const int32 TraceCorrectionCount = FMath::Max(1, FMath::CeilToInt((EndTime - StartTime) / 0.001f));
 
 	// 현재 루트본의 위치
 	FTransform CurrentRootWorldTransform = Character->GetMesh()->GetBoneTransform(0);
@@ -159,11 +247,10 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 	const FVector StartSocketRelativeLocation = TraceSource.TraceComponent->GetSocketTransform(TEXT("Start"), RTS_Component).GetLocation();
 	const FVector EndSocketRelativeLocation = TraceSource.TraceComponent->GetSocketTransform(TEXT("End"), RTS_Component).GetLocation();
 
-	const float subDT = (EndTime - StartTime) / TraceCorrectionCount;
-
 	for (int32 i = 1; i <= TraceCorrectionCount; ++i)
 	{
-		const float PrevTime = StartTime + (i * 0.001f);
+		const float SampleAlpha = static_cast<float>(i) / static_cast<float>(TraceCorrectionCount);
+		const float PrevTime = FMath::Lerp(StartTime, EndTime, SampleAlpha);
 
 		const FTransform BoneData = CurrentSeg->GetTransformAtTime(PrevTime);
 
@@ -272,20 +359,28 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 
 void UAttackComponent::BeginAttackTrace(FGameplayTag Profile, const UAnimSequence* AnimKey, FName WindowName, float StartTime)
 {
-	if (!AnimKey) return;
+	ResetAttackTrace();
+	if (!IsAttackActive() || !AnimKey) return;
 
 	UAnimBoneDataSubsystem* Subsys = GetWorld()->GetGameInstance()->GetSubsystem<UAnimBoneDataSubsystem>();
 	if (!Subsys) return;
 
-	UE_LOG(Log_Attack, Error, TEXT("[AttackComponent] Profile Tag = %s"), *Profile.ToString());
-
 	CurrentSeg = Subsys->GetAnimBoneData(Profile, AnimKey, WindowName);
+	if (!CurrentSeg)
+	{
+		UE_LOG(Log_Attack, Warning,
+		       TEXT("[AttackComponent] Missing baked trace data. Profile=%s Animation=%s Window=%s"),
+		       *Profile.ToString(), *GetNameSafe(AnimKey), *WindowName.ToString());
+		return;
+	}
+
 	LastTraceTime = StartTime;
+	bAttackTraceActive = true;
 }
 
 void UAttackComponent::TickAttackTrace(float DeltaTime, bool bDrawDebug)
 {
-	if (!CurrentSeg) return;
+	if (!IsAttackActive() || !bAttackTraceActive || !CurrentSeg) return;
 
 	const float PrevTime = LastTraceTime;
 	const float CurrentTime = LastTraceTime + DeltaTime;
@@ -294,16 +389,14 @@ void UAttackComponent::TickAttackTrace(float DeltaTime, bool bDrawDebug)
 
 	ExecuteAttackTrace(PrevTime, CurrentTime, bDrawDebug);
 
-	UE_LOG(Log_Attack, Error, TEXT("PrevTime : %f, CurrentTime : %f"), PrevTime, CurrentTime);
-
 	LastTraceTime = CurrentTime;
 }
 
 void UAttackComponent::EndAttackTrace(float EndTime, bool bDrawDebug)
 {
-	if (EndTime <= LastTraceTime) return;
-
-	UE_LOG(Log_Attack, Error, TEXT("PrevTime : %f, EndTime : %f"), LastTraceTime, EndTime);
-	ExecuteAttackTrace(LastTraceTime, EndTime, bDrawDebug);
-	LastTraceTime = 0.0f;
+	if (IsAttackActive() && bAttackTraceActive && CurrentSeg && EndTime > LastTraceTime)
+	{
+		ExecuteAttackTrace(LastTraceTime, FMath::Min(EndTime, CurrentSeg->EndTime), bDrawDebug);
+	}
+	ResetAttackTrace();
 }

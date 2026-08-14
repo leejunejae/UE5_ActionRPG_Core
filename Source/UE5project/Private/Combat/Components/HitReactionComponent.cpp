@@ -25,6 +25,12 @@ void UHitReactionComponent::BeginPlay()
 	Super::BeginPlay();
 }
 
+void UHitReactionComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	FinishHitReaction(true, false, EActionExitReason::Interrupted);
+	Super::EndPlay(EndPlayReason);
+}
+
 void UHitReactionComponent::InitializeComponentLogic()
 {
 	
@@ -36,16 +42,16 @@ void UHitReactionComponent::SetHitReactionDA(UHitReactionDataAsset* HitReactionD
 	HitReactionDataAsset = HitReactionDA;
 }
 
-void UHitReactionComponent::ExecuteHitResponse(const FHitReactionRequest ReactionData)
+bool UHitReactionComponent::ExecuteHitResponse(const FHitReactionRequest& ReactionData)
 {
-	if (!HitReactionDataAsset) return;
+	if (!HitReactionDataAsset)
+	{
+		if (bHitReactionActive) CancelHitReaction(EActionExitReason::Interrupted, true);
+		else ClearHitReactActionIfCurrent();
+		return false;
+	}
 
-	const UEnum* EnumPtr = StaticEnum<EHitResponse>();
-	if (!EnumPtr) return;
-
-	FName ResponseRowName = FName(EnumPtr->GetNameStringByValue(static_cast<int64>(ReactionData.Response)));
-
-	CurHitReaction = HitReactionDataAsset->FindHitReactionInfo(ReactionData.Response);
+	const FHitReactionInfo CandidateReaction = HitReactionDataAsset->FindHitReactionInfo(ReactionData.Response);
 
 	static const TMap<EHitPointHorizontal, float> DirectionToYaw = {
 		{ EHitPointHorizontal::Front, 0.0f },
@@ -62,7 +68,7 @@ void UHitReactionComponent::ExecuteHitResponse(const FHitReactionRequest Reactio
 
 	FHitReactionDetail MatchInfo;
 
-	for (FHitReactionDetail Info : CurHitReaction.HitReactionDetail)
+	for (const FHitReactionDetail& Info : CandidateReaction.HitReactionDetail)
 	{
 		EHitPointHorizontal CurrentPoint = Info.HitPointHorizontal;
 
@@ -76,49 +82,114 @@ void UHitReactionComponent::ExecuteHitResponse(const FHitReactionRequest Reactio
 		}
 	}
 
-	PlayReaction(CurHitReaction, MatchInfo.SectionName);
+	if (!PlayReaction(CandidateReaction, MatchInfo.SectionName))
+	{
+		if (bHitReactionActive) CancelHitReaction(EActionExitReason::Interrupted, true);
+		else ClearHitReactActionIfCurrent();
+		return false;
+	}
 
 	HitStartDelegate.Broadcast();
+	return true;
 }
 
-void UHitReactionComponent::PlayReaction(const FHitReactionInfo HitReaction, const FName SectionName)
+bool UHitReactionComponent::PlayReaction(const FHitReactionInfo& HitReaction, const FName SectionName)
 {
-	UAnimInstance* AnimInstance = Cast<ACharacter>(GetOwner())->GetMesh()->GetAnimInstance();
-
-	if (!AnimInstance) return;
-
-	AnimInstance->Montage_Play(HitReaction.Anim, 1.0f, EMontagePlayReturnType::MontageLength, 0.0f, false);
-
-	UE_LOG(LogTemp, Warning, TEXT("%s"), *SectionName.ToString());
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	UAnimInstance* AnimInstance = Character && Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance || !HitReaction.Anim || SectionName.IsNone()) return false;
 
 	FHitReactionDetail DataForFind;
 	DataForFind.SectionName = SectionName;
 	const FHitReactionDetail* FoundData = HitReaction.HitReactionDetail.Find(DataForFind);
 
-	if (!FoundData)
+	if (!FoundData || !HitReaction.Anim->IsValidSectionName(FoundData->SectionName))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("Data Not Found"));
-		return;
+		UE_LOG(Log_Hit, Warning, TEXT("[HitReactionComponent] Invalid reaction section '%s' in montage '%s'."),
+		       *SectionName.ToString(), *GetNameSafe(HitReaction.Anim));
+		return false;
 	}
 
-	AnimInstance->Montage_JumpToSection(FoundData->SectionName);
+	// 연속 피격 시 이전 몽타주의 종료 콜백이 새 HitReact 행동을 지우지 않게 교체 전에 해제한다.
+	if (ActiveHitMontage)
+	{
+		FOnMontageBlendingOutStarted EmptyDelegate;
+		AnimInstance->Montage_SetBlendingOutDelegate(EmptyDelegate, ActiveHitMontage);
+	}
 
+	const float PlayedDuration = AnimInstance->Montage_Play(
+		HitReaction.Anim, 1.0f, EMontagePlayReturnType::MontageLength, 0.0f, false);
+	if (PlayedDuration <= 0.0f) return false;
 
-	if (HitMontageBlendingOutDelegate.IsBound())
-		HitMontageBlendingOutDelegate.Unbind();
+	CurHitReaction = HitReaction;
+	ActiveHitMontage = HitReaction.Anim;
+	bHitReactionActive = true;
+	AnimInstance->Montage_JumpToSection(FoundData->SectionName, HitReaction.Anim);
 
-	HitMontageBlendingOutDelegate.BindUObject(this, &UHitReactionComponent::OnHitReactionEnded);
-
-	AnimInstance->Montage_SetBlendingOutDelegate(HitMontageBlendingOutDelegate, HitReaction.Anim);
+	FOnMontageBlendingOutStarted BlendingOutDelegate;
+	BlendingOutDelegate.BindUObject(this, &UHitReactionComponent::OnHitReactionEnded);
+	AnimInstance->Montage_SetBlendingOutDelegate(BlendingOutDelegate, HitReaction.Anim);
+	return true;
 }
 
 void UHitReactionComponent::OnHitReactionEnded(UAnimMontage* Montage, bool bInterrupted)
 {
-	if (Montage != CurHitReaction.Anim) return;
+	if (Montage != ActiveHitMontage) return;
 
 	if (AActor* Owner = GetOwner())UE_LOG(Log_Hit, Log, TEXT("[HitReactionComponent] %s stagger response End"), *Owner->GetName());
+	FinishHitReaction(false, true, EActionExitReason::Completed);
+}
 
-	HitEndDelegate.Broadcast();
+void UHitReactionComponent::CancelHitReaction(EActionExitReason ExitReason, bool bStopMontage)
+{
+	FinishHitReaction(bStopMontage, true, ExitReason);
+}
+
+void UHitReactionComponent::FinishHitReaction(bool bStopMontage, bool bBroadcastEnd, EActionExitReason ExitReason)
+{
+	if (bFinishingHitReaction || !bHitReactionActive) return;
+	TGuardValue<bool> FinishingGuard(bFinishingHitReaction, true);
+
+	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
+	{
+		if (UAnimInstance* AnimInstance = Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr)
+		{
+			if (ActiveHitMontage)
+			{
+				FOnMontageBlendingOutStarted EmptyDelegate;
+				AnimInstance->Montage_SetBlendingOutDelegate(EmptyDelegate, ActiveHitMontage);
+				if (bStopMontage && AnimInstance->Montage_IsPlaying(ActiveHitMontage))
+				{
+					FAlphaBlendArgs BlendOut = ActiveHitMontage->GetBlendOutArgs();
+					const float OverrideTime = CurHitReaction.ExitBlendSettings.GetOverride(ExitReason);
+					if (OverrideTime >= 0.0f)
+					{
+						BlendOut.BlendTime = OverrideTime;
+					}
+					AnimInstance->Montage_StopWithBlendOut(BlendOut, ActiveHitMontage);
+				}
+			}
+		}
+	}
+
+	ActiveHitMontage = nullptr;
+	CurHitReaction = FHitReactionInfo();
+	bHitReactionActive = false;
+	ClearHitReactActionIfCurrent();
+	if (bBroadcastEnd)
+	{
+		HitEndDelegate.Broadcast();
+	}
+}
+
+void UHitReactionComponent::ClearHitReactActionIfCurrent() const
+{
+	const ACharacterBase* Character = Cast<ACharacterBase>(GetOwner());
+	UCharacterStatusComponent* Status = Character ? Character->GetCharacterStatusComponent() : nullptr;
+	if (Status && Status->GetCurrentAction().MatchesTagExact(TAG_Action_HitReact))
+	{
+		Status->ClearAction();
+	}
 }
 
 float UHitReactionComponent::CalculateHitAngle(const FVector HitPoint)

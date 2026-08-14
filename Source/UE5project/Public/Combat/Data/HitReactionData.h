@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Engine/DataTable.h"
 #include "Combat/Data/CombatData.h"
+#include "Characters/Data/StatusData.h"
 #include "UObject/NoExportTypes.h"
 #include "HitReactionData.generated.h"
 
@@ -85,6 +86,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		TSet<FHitReactionDetail> HitReactionDetail;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Transition")
+		FActionExitBlendSettings ExitBlendSettings;
 
 	bool IsValid() const
 	{

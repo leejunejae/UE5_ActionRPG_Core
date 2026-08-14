@@ -35,6 +35,7 @@ UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Jump, "Window.Jump")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Dodge, "Window.Dodge")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Parry, "Window.Parry")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Mount, "Window.Mount")
+UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Locomotion, "Window.Locomotion")
 
 // =====================
 // State & Action

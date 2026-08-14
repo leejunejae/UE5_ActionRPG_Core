@@ -358,7 +358,6 @@ void AEnemyBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 			UE_LOG(Log_Hit, Log, TEXT("[EnemyBase] %s stagger occurred"), *Owner->GetName());
 			FHitReactionRequest InputReaction = { Response,HitAngle };
 			GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
-			GetHitReactionComponent()->ExecuteHitResponse(InputReaction);
 			HitReactionComponent->ExecuteHitResponse(InputReaction);
 		}
 		break;

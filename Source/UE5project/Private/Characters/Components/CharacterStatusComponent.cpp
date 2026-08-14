@@ -50,14 +50,17 @@ void UCharacterStatusComponent::ApplyCloseOnActionBegin(const FGameplayTag& Acti
 	if (!WindowRules || !ActionTag.IsValid())
 		return;
 
-	UE_LOG(Log_Character_Player_Input, Error, TEXT("[CharacterStatusComponent] Apply Close Action Begin"));
-
 	if (const FGameplayTagContainer* CloseSet = WindowRules->CloseOnActionBegin.Find(ActionTag))
 	{
-		UE_LOG(Log_Character_Player_Input, Error, TEXT("[CharacterStatusComponent] Close Window Set By Action Valid"));
 		for (const FGameplayTag& W : *CloseSet)
 			OpenWindows.Remove(W);
 	}
+}
+
+void UCharacterStatusComponent::SetWindowRules(UActionWindowRules* NewWindowRules)
+{
+	WindowRules = NewWindowRules;
+	ResetWindowsToStateDefaults();
 }
 
 void UCharacterStatusComponent::SetState(const FGameplayTag& NewStateTag)
@@ -73,9 +76,15 @@ void UCharacterStatusComponent::SetState(const FGameplayTag& NewStateTag)
 	TryConsumeBufferedActions();
 }
 
-void UCharacterStatusComponent::SwitchAction(const FGameplayTag& NewActionTag)
+void UCharacterStatusComponent::SwitchAction(const FGameplayTag& NewActionTag, EActionExitReason ExitReason)
 {
 	if (!NewActionTag.IsValid()) return;
+
+	const FGameplayTag PreviousAction = CurrentActionTag;
+	if (PreviousAction.IsValid() && !PreviousAction.MatchesTagExact(NewActionTag))
+	{
+		OnActionTransition.ExecuteIfBound(PreviousAction, NewActionTag, ExitReason);
+	}
 
 	// 교체 철학: 행동이 바뀌면 이전 행동에서 열어둔 Window는 신뢰 불가
 	// => 현재 State 기본값으로 완전 리셋 후, 새 행동 시작 닫기 적용
@@ -92,7 +101,6 @@ void UCharacterStatusComponent::ClearAction()
 {
 	CurrentActionTag = FGameplayTag();
 	ResetWindowsToStateDefaults();
-	UE_LOG(Log_Character_Player, Error, TEXT("[StatusComp] ClearAction"));
 }
 
 void UCharacterStatusComponent::OpenWindow(const FGameplayTag& WindowTag)
@@ -144,7 +152,6 @@ bool UCharacterStatusComponent::RequestAction(const FGameplayTag& ActionTag, int
 	// 가능하면 즉시 교체 실행
 	if (CanTryAction(ActionTag))
 	{
-		UE_LOG(Log_Character_Player_Input, Error, TEXT("[CharacterStatusComponent] CanTryAction"));
 		SwitchAction(ActionTag);
 		return true;
 	}
@@ -220,6 +227,13 @@ void UCharacterStatusComponent::EnterDeath()
 
 	// 사망 직전 State 보존 (모션 선택 + 뒷정리 분기용)
 	PrevStateBeforeDeath = CurrentStateTag;
+
+	// 진행 중 액션의 소유 리소스를 먼저 정리한 뒤 상태 태그와 버퍼를 비운다.
+	if (CurrentActionTag.IsValid())
+	{
+		OnActionTransition.ExecuteIfBound(
+			CurrentActionTag, FGameplayTag(), EActionExitReason::Death);
+	}
 
 	// 진행 중 액션/입력 버퍼 정리
 	CurrentActionTag = FGameplayTag();

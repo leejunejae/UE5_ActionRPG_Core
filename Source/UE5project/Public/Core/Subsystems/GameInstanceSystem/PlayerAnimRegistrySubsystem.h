@@ -25,4 +25,5 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	
 	const FPlayerAnimSet* GetPlayerAnimSet(const EWeaponType& WeaponType) const;
+	FPlayerAnimSet ResolvePlayerAnimSet(const EWeaponType& WeaponType) const;
 };

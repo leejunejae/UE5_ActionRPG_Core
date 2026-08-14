@@ -16,6 +16,8 @@ class UCharacterMovementComponent;
 
 DECLARE_MULTICAST_DELEGATE(FOnMultiDelegate);
 DECLARE_DELEGATE_OneParam(FOnSingleTagDelegate, const FGameplayTag& /*ActionTag*/);
+DECLARE_DELEGATE_ThreeParams(FOnActionTransitionDelegate,
+	const FGameplayTag& /*PreviousAction*/, const FGameplayTag& /*NextAction*/, EActionExitReason /*Reason*/);
 
 USTRUCT(BlueprintType)
 struct FBufferedAction
@@ -50,11 +52,13 @@ public:
 		float BufferDuration = 0.18f;
 
 	// ---- State ----
+	void SetWindowRules(UActionWindowRules* NewWindowRules);
 	void SetState(const FGameplayTag& NewStateTag);
 	FGameplayTag GetCurrentState() const { return CurrentStateTag; }
 
 	// ---- Action ----
-	void SwitchAction(const FGameplayTag& NewActionTag); // 행동 교체(이전 행동 윈도우 무효)
+	void SwitchAction(const FGameplayTag& NewActionTag,
+		EActionExitReason ExitReason = EActionExitReason::Transition); // 행동 교체(이전 행동 윈도우 무효)
 	FGameplayTag GetCurrentAction() const { return CurrentActionTag; }
 	void ClearAction(); // 행동 종료시 설정 초기화
 	bool IsWindowOpen(const FGameplayTag& WindowTag) const { return WindowTag.IsValid() && OpenWindows.Contains(WindowTag);} // 윈도우 확인
@@ -70,6 +74,7 @@ public:
 
 	// ---- 버퍼 소비 시 실제 행동 실행을 위한 델리게이트 ----
 	FOnSingleTagDelegate OnActionConsumed;
+	FOnActionTransitionDelegate OnActionTransition;
 private:
 	// 현재 상태/행동 태그
 	UPROPERTY(VisibleAnywhere, Category = "State") FGameplayTag CurrentStateTag;  // State.Normal 등

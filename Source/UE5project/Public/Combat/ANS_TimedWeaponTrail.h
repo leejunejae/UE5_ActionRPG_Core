@@ -25,6 +25,4 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData")
 		bool bSubWeapon = false;
 
-protected:
-	TScriptInterface<IEquipmentDataInterface> CachedWeaponInterface;
 };

@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Animation/BlendSpace1D.h"
 #include "Core/MovementTypes.h"
+#include "Characters/Data/StatusData.h"
 #include "UObject/NoExportTypes.h"
 #include "GameplayTagContainer.h" 
 #include "AnimData.generated.h"
@@ -105,6 +106,17 @@ public:
         TSoftObjectPtr<UAnimSequence> GetUp;
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
         TSoftObjectPtr<UAnimSequence> Guard;
+
+    // 공통 회피를 기본으로 사용하고 무기별로 필요한 경우에만 덮어쓴다.
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Dodge")
+        TSoftObjectPtr<UAnimMontage> DodgeMontage;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Dodge")
+        FActionExitBlendSettings DodgeExitBlendSettings;
+
+    // 음수면 CommonAnimSet의 값을 사용한다.
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Dodge", meta = (ClampMin = "-1.0", ClampMax = "0.5"))
+        float DodgeLocomotionBlendOutTime = -1.0f;
 
     UPROPERTY(EditDefaultsOnly, Category = "Death") 
         TSoftObjectPtr<UAnimMontage> GroundDeathMontage;

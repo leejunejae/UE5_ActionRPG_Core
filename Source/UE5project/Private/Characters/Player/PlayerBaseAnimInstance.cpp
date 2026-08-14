@@ -70,38 +70,36 @@ void UPlayerBaseAnimInstance::HandleWeaponChange(EWeaponType WeaponData)
 		return;
 	}
 
-	const EWeaponType TargetAnimType = WeaponData;
+	const FPlayerAnimSet TargetAnimSet = PlayerAnimSubsystem->ResolvePlayerAnimSet(WeaponData);
 
-	const FPlayerAnimSet* TargetAnimSet = PlayerAnimSubsystem->GetPlayerAnimSet(TargetAnimType);
+	Locomotion_Normal_CycleBS = TargetAnimSet.Locomotion_Normal_CycleBS.LoadSynchronous();
+	Locomotion_Combat_Forward_BS = TargetAnimSet.Locomotion_Combat_Forward_BS.LoadSynchronous();
+	Locomotion_Combat_Backward_BS = TargetAnimSet.Locomotion_Combat_Backward_BS.LoadSynchronous();
+	Locomotion_Idle = TargetAnimSet.Locomotion_Idle.LoadSynchronous();
+	Locomotion_Start = TargetAnimSet.Locomotion_Start.LoadSynchronous();
+	Locomotion_Stop_Jog = TargetAnimSet.Locomotion_Stop_Jog.LoadSynchronous();
+	Locomotion_Stop_Run = TargetAnimSet.Locomotion_Stop_Run.LoadSynchronous();
 
-	Locomotion_Normal_CycleBS = TargetAnimSet->Locomotion_Normal_CycleBS.IsNull() ? nullptr : TargetAnimSet->Locomotion_Normal_CycleBS.LoadSynchronous();
-	Locomotion_Combat_Forward_BS = TargetAnimSet->Locomotion_Combat_Forward_BS.IsNull() ? nullptr : TargetAnimSet->Locomotion_Combat_Forward_BS.LoadSynchronous();
-	Locomotion_Combat_Backward_BS = TargetAnimSet->Locomotion_Combat_Backward_BS.IsNull() ? nullptr : TargetAnimSet->Locomotion_Combat_Backward_BS.LoadSynchronous();
-	Locomotion_Idle = TargetAnimSet->Locomotion_Idle.IsNull() ? nullptr : TargetAnimSet->Locomotion_Idle.LoadSynchronous();
-	Locomotion_Start = TargetAnimSet->Locomotion_Start.IsNull() ? nullptr : TargetAnimSet->Locomotion_Start.LoadSynchronous();
-	Locomotion_Stop_Jog = TargetAnimSet->Locomotion_Stop_Jog.IsNull() ? nullptr : TargetAnimSet->Locomotion_Stop_Jog.LoadSynchronous();
-	Locomotion_Stop_Run = TargetAnimSet->Locomotion_Stop_Run.IsNull() ? nullptr : TargetAnimSet->Locomotion_Stop_Run.LoadSynchronous();
+	Jump_Start = TargetAnimSet.Jump_Start.LoadSynchronous();
+	Jump_Loop = TargetAnimSet.Jump_Loop.LoadSynchronous();
+	Fall_Loop = TargetAnimSet.Fall_Loop.LoadSynchronous();
+	Land_Jump = TargetAnimSet.Land_Jump.LoadSynchronous();
+	Land_Fall = TargetAnimSet.Land_Fall.LoadSynchronous();
+	Land_Jog = TargetAnimSet.Land_Jog.LoadSynchronous();
+	Land_High = TargetAnimSet.Land_High.LoadSynchronous();
 
-	Jump_Start = TargetAnimSet->Jump_Start.IsNull() ? nullptr : TargetAnimSet->Jump_Start.LoadSynchronous();
-	Jump_Loop = TargetAnimSet->Jump_Loop.IsNull() ? nullptr : TargetAnimSet->Jump_Loop.LoadSynchronous();
-	Fall_Loop = TargetAnimSet->Fall_Loop.IsNull() ? nullptr : TargetAnimSet->Fall_Loop.LoadSynchronous();
-	Land_Jump = TargetAnimSet->Land_Jump.IsNull() ? nullptr : TargetAnimSet->Land_Jump.LoadSynchronous();
-	Land_Fall = TargetAnimSet->Land_Fall.IsNull() ? nullptr : TargetAnimSet->Land_Fall.LoadSynchronous();
-	Land_Jog = TargetAnimSet->Land_Jog.IsNull() ? nullptr : TargetAnimSet->Land_Jog.LoadSynchronous();
-	Land_High = TargetAnimSet->Land_High.IsNull() ? nullptr : TargetAnimSet->Land_High.LoadSynchronous();
-
-	HitAir_Start = TargetAnimSet->HitAir_Start.IsNull() ? nullptr : TargetAnimSet->HitAir_Start.LoadSynchronous();
-	HitAir_Loop = TargetAnimSet->HitAir_Loop.IsNull() ? nullptr : TargetAnimSet->HitAir_Loop.LoadSynchronous();
-	HitAir_End = TargetAnimSet->HitAir_End.IsNull() ? nullptr : TargetAnimSet->HitAir_End.LoadSynchronous();
-	GetUp = TargetAnimSet->GetUp.IsNull() ? nullptr : TargetAnimSet->GetUp.LoadSynchronous();
-	Guard = TargetAnimSet->Guard.IsNull() ? nullptr : TargetAnimSet->Guard.LoadSynchronous();
-	GroundDeathMontage = TargetAnimSet->GroundDeathMontage.IsNull() ? nullptr : TargetAnimSet->GroundDeathMontage.LoadSynchronous();
-	AirDeathMontage = TargetAnimSet->AirDeathMontage.IsNull() ? nullptr : TargetAnimSet->AirDeathMontage.LoadSynchronous();
-	LadderDeathMontage = TargetAnimSet->LadderDeathMontage.IsNull() ? nullptr : TargetAnimSet->LadderDeathMontage.LoadSynchronous();
-	RideDeathMontage = TargetAnimSet->RideDeathMontage.IsNull() ? nullptr : TargetAnimSet->RideDeathMontage.LoadSynchronous();
-	SpawnMontage = TargetAnimSet->SpawnMontage.IsNull() ? nullptr : TargetAnimSet->SpawnMontage.LoadSynchronous();
+	HitAir_Start = TargetAnimSet.HitAir_Start.LoadSynchronous();
+	HitAir_Loop = TargetAnimSet.HitAir_Loop.LoadSynchronous();
+	HitAir_End = TargetAnimSet.HitAir_End.LoadSynchronous();
+	GetUp = TargetAnimSet.GetUp.LoadSynchronous();
+	Guard = TargetAnimSet.Guard.LoadSynchronous();
+	GroundDeathMontage = TargetAnimSet.GroundDeathMontage.LoadSynchronous();
+	AirDeathMontage = TargetAnimSet.AirDeathMontage.LoadSynchronous();
+	LadderDeathMontage = TargetAnimSet.LadderDeathMontage.LoadSynchronous();
+	RideDeathMontage = TargetAnimSet.RideDeathMontage.LoadSynchronous();
+	SpawnMontage = TargetAnimSet.SpawnMontage.LoadSynchronous();
 	
-	float WeaponIKAlpha = TargetAnimSet->bUseWeaponIK ? 1.0f : 0.0f;
+	float WeaponIKAlpha = TargetAnimSet.bUseWeaponIK ? 1.0f : 0.0f;
 	SetIKLayerAlpha_Native(FGameplayTag::RequestGameplayTag(FName("IK.Layer.Ground.HandWeapon")), ELimbList::HandL, WeaponIKAlpha);
 
 	bInitAnimSet = true;

@@ -17,46 +17,36 @@ void UANS_TimedWeaponTrail::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimS
 		return;
 	}
 #endif
-	if (MeshComp && MeshComp->GetAnimInstance())
-	{
-		for (UActorComponent* Comp : MeshComp->GetOwner()->GetComponents())
-		{
-			if (Comp->GetClass()->ImplementsInterface(UEquipmentDataInterface::StaticClass()))
-				CachedWeaponInterface = TScriptInterface<IEquipmentDataInterface>(Comp);
-		}
-	}
 }
 
 void UANS_TimedWeaponTrail::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, float FrameDeltaTime, const FAnimNotifyEventReference& EventReference)
 {
-	if (MeshComp && MeshComp->GetAnimInstance() && CachedWeaponInterface.GetObject() && CachedWeaponInterface.GetInterface())
+	if (!MeshComp || !MeshComp->GetOwner()) return;
+
+	UActorComponent* EquipmentComponent = nullptr;
+	for (UActorComponent* Component : MeshComp->GetOwner()->GetComponents())
+	{
+		if (Component && Component->GetClass()->ImplementsInterface(UEquipmentDataInterface::StaticClass()))
+		{
+			EquipmentComponent = Component;
+			break;
+		}
+	}
+
+	if (EquipmentComponent)
 	{
 		if(UFXSystemComponent* TargetFX = GetSpawnedEffect(MeshComp))
 		{
-			FVector TrailStart = IEquipmentDataInterface::Execute_GetWeaponSocketLocation(CachedWeaponInterface.GetObject(), FName("Start"), bSubWeapon);
-			FVector TrailEnd = IEquipmentDataInterface::Execute_GetWeaponSocketLocation(CachedWeaponInterface.GetObject(), FName("End"), bSubWeapon);
-
-			UE_LOG(LogTemp, Warning, TEXT("TrailStart = [X : %f, Y : %f, Z : %f]"),
-				TrailStart.X,
-				TrailStart.Y,
-				TrailStart.Z
-			);
+			FVector TrailStart = IEquipmentDataInterface::Execute_GetWeaponSocketLocation(EquipmentComponent, FName("Start"), bSubWeapon);
+			FVector TrailEnd = IEquipmentDataInterface::Execute_GetWeaponSocketLocation(EquipmentComponent, FName("End"), bSubWeapon);
 
 			TargetFX->SetVectorParameter(FName("TrailStart"), TrailStart);
 			TargetFX->SetVectorParameter(FName("TrailEnd"), TrailEnd);
 		}
-		else
-		{
-			UE_LOG(LogTemp, Warning, TEXT("FX NOT VALID"));
-		}
-	}
-	else
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Notify Ignored"));
 	}
 }
 
 void UANS_TimedWeaponTrail::NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, const FAnimNotifyEventReference& EventReference)
 {
-	CachedWeaponInterface = TScriptInterface<IEquipmentDataInterface>();
+	Super::NotifyEnd(MeshComp, Anim, EventReference);
 }
