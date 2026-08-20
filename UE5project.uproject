@@ -65,6 +65,11 @@
 			"Name": "IconCreator",
 			"Enabled": true,
 			"MarketplaceURL": "com.epicgames.launcher://ue/Fab/product/1509c8dc-fed5-452b-abdb-b96a6bba4a7a"
+		},
+		{
+			"Name": "NoiseMapGenerator",
+			"Enabled": true,
+			"MarketplaceURL": "com.epicgames.launcher://ue/Fab/product/2fd402da-2ee0-4532-b219-a0703790151d"
 		}
 	]
 }

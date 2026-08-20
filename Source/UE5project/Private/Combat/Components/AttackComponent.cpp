@@ -23,6 +23,7 @@
 #include "GameplayTags.h"
 
 #include "Utils/CoreLog.h"
+#include "Utils/WeaponTrajectoryUtility.h"
 
 
 // Sets default values for this component's properties
@@ -242,27 +243,25 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 		return;
 	}
 
-	FTransform TargetWeaponOffset = TraceSource.TraceComponent->GetRelativeTransform();
-
-	const FVector StartSocketRelativeLocation = TraceSource.TraceComponent->GetSocketTransform(TEXT("Start"), RTS_Component).GetLocation();
-	const FVector EndSocketRelativeLocation = TraceSource.TraceComponent->GetSocketTransform(TEXT("End"), RTS_Component).GetLocation();
+	const FWeaponTrajectoryGeometry WeaponGeometry = FWeaponTrajectoryUtility::BuildGeometry(
+		Character->GetMesh(), TraceSource.TraceComponent, CurrentSeg->BoneName,
+		TEXT("Start"), TEXT("End"));
+	if (!WeaponGeometry.IsValid())
+	{
+		UE_LOG(Log_Attack, Error, TEXT("[UAttackComponent] Weapon trajectory geometry invalid"));
+		return;
+	}
 
 	for (int32 i = 1; i <= TraceCorrectionCount; ++i)
 	{
 		const float SampleAlpha = static_cast<float>(i) / static_cast<float>(TraceCorrectionCount);
 		const float PrevTime = FMath::Lerp(StartTime, EndTime, SampleAlpha);
 
-		const FTransform BoneData = CurrentSeg->GetTransformAtTime(PrevTime);
-
-		// 데이터(손) -> 월드(root) 적용
-		const FTransform HandWorld = BoneData * CurrentRootWorldTransform;
-
-		// 손월드 -> 무기월드 오프셋 적용
-		const FTransform WeaponWorld = TargetWeaponOffset * HandWorld;
-
-		// 소켓 로컬(무기 기준) -> 월드
-		const FVector StartLoc = WeaponWorld.TransformPosition(StartSocketRelativeLocation);
-		const FVector EndLoc = WeaponWorld.TransformPosition(EndSocketRelativeLocation);
+		FVector StartLoc;
+		FVector EndLoc;
+		FWeaponTrajectoryUtility::GetSocketWorldPositions(
+			WeaponGeometry, CurrentSeg->GetTransformAtTime(PrevTime),
+			CurrentRootWorldTransform, StartLoc, EndLoc);
 
 		float CurWeaponLength = FVector::Distance(StartLoc, EndLoc);
 		float CurHalfHeight = (CurWeaponLength * 0.5f);

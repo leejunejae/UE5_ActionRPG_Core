@@ -9,6 +9,7 @@
 
 #include "Utils/AttackBoneDataRegistry.h"
 #include "Animation/Notifies/ANS_AttackHitWindow.h"
+#include "Combat/ANS_TimedWeaponTrail.h"
 #include "AssetRegistry/AssetRegistryModule.h"
 #include "Curves/CurveVector.h"
 #include "UObject/SavePackage.h"
@@ -44,17 +45,23 @@ void UAnimBoneTransformLibrary::GatherAttackHitWindows(const UAnimSequence* Anim
     for (const FAnimNotifyEvent& Ev : Anim->Notifies)
     {
         if (!Ev.NotifyStateClass) continue;
-        if (Ev.NotifyStateClass->GetClass() != UANS_AttackHitWindow::StaticClass()) continue;
-
-        const UANS_AttackHitWindow* WindowANS = Cast<UANS_AttackHitWindow>(Ev.NotifyStateClass);
-        if (!WindowANS) continue;
 
         const float S = Ev.GetTriggerTime();
         const float E = Ev.GetEndTriggerTime();
 
-        if (E > S)
+        if (const UANS_AttackHitWindow* WindowANS = Cast<UANS_AttackHitWindow>(Ev.NotifyStateClass))
         {
-            OutWindows.Add(FHitWindow(WindowANS->WindowName, WindowANS->TargetBone, S, E));
+            if (E > S)
+            {
+                OutWindows.Add(FHitWindow(WindowANS->WindowName, WindowANS->TargetBone, S, E));
+            }
+        }
+        else if (const UANS_TimedWeaponTrail* TrailANS = Cast<UANS_TimedWeaponTrail>(Ev.NotifyStateClass))
+        {
+            if (E > S)
+            {
+                OutWindows.Add(FHitWindow(TrailANS->WindowName, TrailANS->TargetBone, S, E));
+            }
         }
     }
 
@@ -180,7 +187,7 @@ void UAnimBoneTransformLibrary::BuildHitDataFromNotifyWindows(
 
     if (Windows.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[BuildHitData] No UANS_AttackHitWindow found in %s"), *AnimSequence->GetName());
+        UE_LOG(LogTemp, Warning, TEXT("[BuildHitData] No attack trace or weapon trail window found in %s"), *AnimSequence->GetName());
         return;
     }
 

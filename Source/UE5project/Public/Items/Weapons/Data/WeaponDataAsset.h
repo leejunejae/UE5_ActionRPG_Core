@@ -7,6 +7,8 @@
 #include "Items/Weapons/Data/WeaponData.h"
 #include "WeaponDataAsset.generated.h"
 
+class UNiagaraSystem;
+
 /**
  * 
  */
@@ -23,6 +25,15 @@ struct FWeaponConfig
     // 히트 판정 반경(무기 고유)
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
     float HitBoxRadius = 10.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trail")
+    TSoftObjectPtr<UNiagaraSystem> TrailSystem = nullptr;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trail")
+    FName TrailStartSocket = TEXT("Start");
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trail")
+    FName TrailEndSocket = TEXT("End");
 };
 
 USTRUCT(BlueprintType)
@@ -41,9 +52,6 @@ public:
         // 슬롯용 아이콘
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
         TObjectPtr<UTexture2D> SlotIcon = nullptr;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        TSoftObjectPtr<UParticleSystem> Trail = nullptr;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
         TSoftObjectPtr<USoundBase> Sound = nullptr;

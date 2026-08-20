@@ -8,6 +8,7 @@
 #include "Core/Subsystems/GameInstanceSystem/ArmorDataSubsystem.h"
 #include "Items/Weapons/Data/WeaponDataAsset.h"
 #include "Items/Armor/Data/ArmorDataAsset.h"
+#include "NiagaraSystem.h"
 #include "Utils/CoreLog.h"
 
 UEquipmentComponent::UEquipmentComponent()
@@ -84,14 +85,18 @@ void UEquipmentComponent::EquipWeapon_Implementation(FName WeaponKey)
 
 	WeaponMesh->SetStaticMesh(nullptr);
 	SubEquipMesh->SetStaticMesh(nullptr);
+	MainWeaponTrailSystem = nullptr;
+	SubWeaponTrailSystem = nullptr;
 
 	EquipedWeapon = FindWeapon;
 	EquipedWeaponKey = WeaponKey;
 	WeaponMesh->SetStaticMesh(EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.Mesh.LoadSynchronous());
+	MainWeaponTrailSystem = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.WeaponConfig.TrailSystem.LoadSynchronous();
 
 	if (EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.HasSubWeapon)
 	{
 		SubEquipMesh->SetStaticMesh(EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.SubMesh.LoadSynchronous());
+		SubWeaponTrailSystem = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.SubConfig.TrailSystem.LoadSynchronous();
 	}
 
 	RecalcEquipLoad();
@@ -101,12 +106,27 @@ void UEquipmentComponent::EquipWeapon_Implementation(FName WeaponKey)
 
 FVector UEquipmentComponent::GetWeaponSocketLocation_Implementation(FName SocketName, bool IsSubWeapon) const
 {
-	if (!EquipedWeapon)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[EquipmentComponent] GetWeaponSocketLocation called with no valid weapon"));
-		return FVector::ZeroVector;
-	}
-	return !IsSubWeapon ? WeaponMesh->GetSocketLocation(SocketName) : SubEquipMesh->GetSocketLocation(SocketName);
+	const UStaticMeshComponent* TargetMesh = IsSubWeapon ? SubEquipMesh.Get() : WeaponMesh.Get();
+	return TargetMesh ? TargetMesh->GetSocketLocation(SocketName) : FVector::ZeroVector;
+}
+
+UNiagaraSystem* UEquipmentComponent::GetWeaponTrailSystem_Implementation(bool IsSubWeapon) const
+{
+	return IsSubWeapon ? SubWeaponTrailSystem.Get() : MainWeaponTrailSystem.Get();
+}
+
+FName UEquipmentComponent::GetWeaponTrailStartSocket_Implementation(bool IsSubWeapon) const
+{
+	if (!EquipedWeapon || !EquipedWeapon->WeaponDefenition.Get()) return TEXT("Start");
+	const FWeaponInstance& Instance = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance;
+	return IsSubWeapon ? Instance.SubConfig.TrailStartSocket : Instance.WeaponConfig.TrailStartSocket;
+}
+
+FName UEquipmentComponent::GetWeaponTrailEndSocket_Implementation(bool IsSubWeapon) const
+{
+	if (!EquipedWeapon || !EquipedWeapon->WeaponDefenition.Get()) return TEXT("End");
+	const FWeaponInstance& Instance = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance;
+	return IsSubWeapon ? Instance.SubConfig.TrailEndSocket : Instance.WeaponConfig.TrailEndSocket;
 }
 
 FAttackTraceSource UEquipmentComponent::GetAttackTraceSource(EAttackSourceType AttackSourceType) const
