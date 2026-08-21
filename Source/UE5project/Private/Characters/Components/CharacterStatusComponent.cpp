@@ -34,6 +34,9 @@ FGameplayTag UCharacterStatusComponent::ToWindowTag(const FGameplayTag& ActionTa
 void UCharacterStatusComponent::ResetWindowsToStateDefaults()
 {
 	OpenWindows.Reset();
+	BaseWindows.Reset();
+	WindowRefCounts.Reset();
+	ActiveWindowLeases.Reset();
 
 	if (!WindowRules || !CurrentStateTag.IsValid())
 		return;
@@ -41,7 +44,10 @@ void UCharacterStatusComponent::ResetWindowsToStateDefaults()
 	if (const FGameplayTagContainer* Defaults = WindowRules->DefaultWindowsByState.Find(CurrentStateTag))
 	{
 		for (const FGameplayTag& W : *Defaults)
+		{
+			BaseWindows.Add(W);
 			OpenWindows.Add(W);
+		}
 	}
 }
 
@@ -53,7 +59,10 @@ void UCharacterStatusComponent::ApplyCloseOnActionBegin(const FGameplayTag& Acti
 	if (const FGameplayTagContainer* CloseSet = WindowRules->CloseOnActionBegin.Find(ActionTag))
 	{
 		for (const FGameplayTag& W : *CloseSet)
+		{
+			BaseWindows.Remove(W);
 			OpenWindows.Remove(W);
+		}
 	}
 }
 
@@ -92,9 +101,6 @@ void UCharacterStatusComponent::SwitchAction(const FGameplayTag& NewActionTag, E
 
 	CurrentActionTag = NewActionTag;
 	ApplyCloseOnActionBegin(NewActionTag);
-
-	// 전환 직후 버퍼도 한 번 소비 시도
-	TryConsumeBufferedActions();
 }
 
 void UCharacterStatusComponent::ClearAction()
@@ -103,20 +109,52 @@ void UCharacterStatusComponent::ClearAction()
 	ResetWindowsToStateDefaults();
 }
 
-void UCharacterStatusComponent::OpenWindow(const FGameplayTag& WindowTag)
+uint64 UCharacterStatusComponent::AcquireWindows(const FGameplayTagContainer& WindowTags)
 {
-	if (!WindowTag.IsValid()) return;
+	if (WindowTags.IsEmpty()) return 0;
 
-	OpenWindows.Add(WindowTag);
+	const uint64 LeaseId = NextWindowLeaseId++;
+	if (NextWindowLeaseId == 0)
+	{
+		NextWindowLeaseId = 1;
+	}
+	ActiveWindowLeases.Add(LeaseId, WindowTags);
+
+	for (const FGameplayTag& WindowTag : WindowTags)
+	{
+		if (!WindowTag.IsValid()) continue;
+		++WindowRefCounts.FindOrAdd(WindowTag);
+		OpenWindows.Add(WindowTag);
+	}
 
 	// 윈도우가 열리는 순간 버퍼 소비
 	TryConsumeBufferedActions();
+	return LeaseId;
 }
 
-void UCharacterStatusComponent::CloseWindow(const FGameplayTag& WindowTag)
+void UCharacterStatusComponent::ReleaseWindows(uint64 LeaseId)
 {
-	if (!WindowTag.IsValid()) return;
-	OpenWindows.Remove(WindowTag);
+	FGameplayTagContainer WindowTags;
+	if (LeaseId == 0 || !ActiveWindowLeases.RemoveAndCopyValue(LeaseId, WindowTags))
+	{
+		return;
+	}
+
+	for (const FGameplayTag& WindowTag : WindowTags)
+	{
+		int32* RefCount = WindowRefCounts.Find(WindowTag);
+		if (!RefCount) continue;
+
+		--(*RefCount);
+		if (*RefCount <= 0)
+		{
+			WindowRefCounts.Remove(WindowTag);
+			if (!BaseWindows.Contains(WindowTag))
+			{
+				OpenWindows.Remove(WindowTag);
+			}
+		}
+	}
 }
 
 bool UCharacterStatusComponent::CanTryAction(const FGameplayTag& ActionTag) const
@@ -180,8 +218,23 @@ bool UCharacterStatusComponent::RequestAction(const FGameplayTag& ActionTag, int
 	return false;
 }
 
+void UCharacterStatusComponent::RemoveBufferedAction(const FGameplayTag& ActionTag)
+{
+	if (!ActionTag.IsValid()) return;
+	BufferedActions.RemoveAll([&ActionTag](const FBufferedAction& BufferedAction)
+	{
+		return BufferedAction.ActionTag.MatchesTagExact(ActionTag);
+	});
+}
+
 void UCharacterStatusComponent::TryConsumeBufferedActions()
 {
+	if (bConsumingBufferedAction)
+	{
+		return;
+	}
+	TGuardValue<bool> ConsumingGuard(bConsumingBufferedAction, true);
+
 	PruneExpiredBufferedActions();
 	if (BufferedActions.Num() == 0) return;
 
@@ -208,6 +261,8 @@ void UCharacterStatusComponent::TryConsumeBufferedActions()
 	const FGameplayTag Chosen = BufferedActions[BestIdx].ActionTag;
 	BufferedActions.RemoveAtSwap(BestIdx);
 
+	// SwitchAction은 버퍼를 재귀적으로 소비하지 않는다.
+	// 현재 요청을 완전히 실행한 뒤 다음 Window 변경에서 다음 버퍼를 평가한다.
 	SwitchAction(Chosen);
 	OnActionConsumed.ExecuteIfBound(Chosen);
 }

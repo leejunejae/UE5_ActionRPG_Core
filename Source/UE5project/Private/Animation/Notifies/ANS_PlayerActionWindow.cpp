@@ -36,12 +36,18 @@ void UANS_PlayerActionWindow::NotifyBegin(USkeletalMeshComponent* MeshComp,
 	UCharacterStatusComponent* Status = Owner->FindComponentByClass<UCharacterStatusComponent>();
 	if (!Status) return;
 
-	TArray<FGameplayTag> Tags;
-	WindowsToOpen.GetGameplayTagArray(Tags);
-
-	for (const FGameplayTag& Tag : Tags)
+	for (auto It = ActiveWindowLeases.CreateIterator(); It; ++It)
 	{
-		Status->OpenWindow(Tag);
+		if (!It.Key().IsValid())
+		{
+			It.RemoveCurrent();
+		}
+	}
+
+	const uint64 LeaseId = Status->AcquireWindows(WindowsToOpen);
+	if (LeaseId != 0)
+	{
+		ActiveWindowLeases.FindOrAdd(MeshComp).Add(LeaseId);
 	}
 }
 
@@ -59,15 +65,18 @@ void UANS_PlayerActionWindow::NotifyEnd(USkeletalMeshComponent* MeshComp,
 	UCharacterStatusComponent* Status = Owner->FindComponentByClass<UCharacterStatusComponent>();
 	if (!Status) return;
 
-	UAnimInstance* AnimInstance = MeshComp->GetAnimInstance();
-	if (!AnimInstance || !AnimInstance->Montage_IsPlaying(Cast<UAnimMontage>(Animation)))
-		return;
-
-	TArray<FGameplayTag> Tags;
-	WindowsToOpen.GetGameplayTagArray(Tags);
-
-	for (const FGameplayTag& Tag : Tags)
+	TArray<uint64>* Leases = ActiveWindowLeases.Find(MeshComp);
+	if (!Leases || Leases->IsEmpty())
 	{
-		Status->CloseWindow(Tag);
+		return;
 	}
+
+	// 같은 Notify가 재생 중 다시 시작된 경우 Begin 순서대로 종료된다.
+	const uint64 LeaseId = (*Leases)[0];
+	Leases->RemoveAt(0);
+	if (Leases->IsEmpty())
+	{
+		ActiveWindowLeases.Remove(MeshComp);
+	}
+	Status->ReleaseWindows(LeaseId);
 }

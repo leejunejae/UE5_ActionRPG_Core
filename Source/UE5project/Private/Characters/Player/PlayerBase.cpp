@@ -355,7 +355,14 @@ void APlayerBase::HandleBufferedAction(const FGameplayTag& ActionTag)
 	}
 	else if (ActionTag == TAG_Action_Guard)
 	{
-		ExecuteBlock();
+		if (bWantsToGuard)
+		{
+			ExecuteBlock();
+		}
+		else
+		{
+			FinishActionIfCurrent(TAG_Action_Guard);
+		}
 	}
 	else if (ActionTag == TAG_Action_Interact)
 	{
@@ -462,25 +469,34 @@ void APlayerBase::DodgeInput()
 
 void APlayerBase::BlockInput()
 {
+	bWantsToGuard = true;
 	if (IsBlockInput) return;
 	UPlayerStatusComponent* StatusComponent = GetCharacterStatusComponent();
-	if (!StatusComponent || !StatusComponent->CanTryAction(TAG_Action_Guard)) return;
-	StatusComponent->SwitchAction(TAG_Action_Guard);
-	ExecuteBlock();
+	if (!StatusComponent) return;
+	if (StatusComponent->RequestAction(TAG_Action_Guard))
+	{
+		ExecuteBlock();
+	}
 }
 
 void APlayerBase::BlockInputEnd()
 {
+	bWantsToGuard = false;
 	IsBlockInput = false;
+	if (UPlayerStatusComponent* StatusComponent = GetCharacterStatusComponent())
+	{
+		StatusComponent->RemoveBufferedAction(TAG_Action_Guard);
+	}
 	FinishActionIfCurrent(TAG_Action_Guard);
 }
 
 void APlayerBase::InteractInput()
 {
 	UPlayerStatusComponent* StatusComponent = GetCharacterStatusComponent();
-	if (!StatusComponent || !StatusComponent->CanTryAction(TAG_Action_Interact)) return;
-	StatusComponent->SwitchAction(TAG_Action_Interact);
-	ExecuteInteract();
+	if (StatusComponent && StatusComponent->RequestAction(TAG_Action_Interact))
+	{
+		ExecuteInteract();
+	}
 }
 
 void APlayerBase::SpawnRideInput()
@@ -671,6 +687,7 @@ void APlayerBase::ExecuteInteract()
 	{
 		if (GetCharacterStatusComponent()->GetCurrentState().MatchesTagExact(TAG_State_Ladder))
 		{
+			FinishActionIfCurrent(TAG_Action_Interact);
 			return;
 		}
 
@@ -687,7 +704,10 @@ void APlayerBase::ExecuteInteract()
 		bool InteractTargetValid = InteractComponent->SetInteractActorByDegree(this, 60.0f);
 
 		if (!InteractTargetValid)
+		{
+			FinishActionIfCurrent(TAG_Action_Interact);
 			return;
+		}
 
 		GetController()->SetIgnoreMoveInput(true);
 		IsInteraction = InteractComponent->MovetoInteractPos();
@@ -1055,6 +1075,7 @@ void APlayerBase::HandleDeathStarted()
 	bForcedRotatingInputDirection = false;
 	IsAttackInput = false;
 	IsBlockInput = false;
+	bWantsToGuard = false;
 
 	// 입력 차단
 	if (APlayerController* PC = Cast<APlayerController>(GetController()))

@@ -64,11 +64,13 @@ public:
 	bool IsWindowOpen(const FGameplayTag& WindowTag) const { return WindowTag.IsValid() && OpenWindows.Contains(WindowTag);} // 윈도우 확인
 
 	// ---- Window control (Notify에서 호출) ----
-	void OpenWindow(const FGameplayTag& WindowTag);
-	void CloseWindow(const FGameplayTag& WindowTag);
+	// Lease가 무효화된 뒤 뒤늦게 도착한 NotifyEnd는 현재 Action의 Window를 닫지 못한다.
+	uint64 AcquireWindows(const FGameplayTagContainer& WindowTags);
+	void ReleaseWindows(uint64 LeaseId);
 
 	// ---- Input request ----
 	bool RequestAction(const FGameplayTag& ActionTag, int32 Priority = 0);
+	void RemoveBufferedAction(const FGameplayTag& ActionTag);
 	bool CanTryAction(const FGameplayTag& ActionTag) const;
 
 
@@ -83,9 +85,14 @@ private:
 	// 현재 열려있는 Window.* 집합
 	UPROPERTY(VisibleAnywhere, Category = "State")
 		TSet<FGameplayTag> OpenWindows;
+	TSet<FGameplayTag> BaseWindows;
+	TMap<FGameplayTag, int32> WindowRefCounts;
+	TMap<uint64, FGameplayTagContainer> ActiveWindowLeases;
+	uint64 NextWindowLeaseId = 1;
 
 	// 입력 버퍼
 	TArray<FBufferedAction> BufferedActions;
+	bool bConsumingBufferedAction = false;
 
 private:
 	static FGameplayTag ToWindowTag(const FGameplayTag& ActionTag);

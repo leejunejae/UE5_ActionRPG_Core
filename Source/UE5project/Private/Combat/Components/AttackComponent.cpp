@@ -225,7 +225,7 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 		return;
 	}
 
-	// 이전프레임과 현재프레임 사이를 0.001초 간격으로 나눔
+	// 이전 프레임과 현재 프레임 사이를 0.001초 간격으로 균등하게 나눈다.
 	const int32 TraceCorrectionCount = FMath::Max(1, FMath::CeilToInt((EndTime - StartTime) / 0.001f));
 
 	// 현재 루트본의 위치
@@ -252,6 +252,21 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 		return;
 	}
 
+	UWorld* World = GetWorld();
+	if (!World) return;
+
+	const FBaseAttackData& Detail = CurAttackContext.AttackDetail[ComboIndex];
+	FAttackDamageSource DamageSource;
+	if (IAttackSourceInterface* AttackSource = Cast<IAttackSourceInterface>(Character))
+	{
+		DamageSource = AttackSource->GetAttackDamageSource();
+	}
+
+	FCollisionQueryParams CollisionParams;
+	CollisionParams.AddIgnoredActor(GetOwner());
+	const float Radius = TraceSource.Radius;
+	TArray<FHitResult> HitResults;
+
 	for (int32 i = 1; i <= TraceCorrectionCount; ++i)
 	{
 		const float SampleAlpha = static_cast<float>(i) / static_cast<float>(TraceCorrectionCount);
@@ -263,22 +278,22 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 			WeaponGeometry, CurrentSeg->GetTransformAtTime(PrevTime),
 			CurrentRootWorldTransform, StartLoc, EndLoc);
 
-		float CurWeaponLength = FVector::Distance(StartLoc, EndLoc);
-		float CurHalfHeight = (CurWeaponLength * 0.5f);
+		const FVector CapsuleAxis = EndLoc - StartLoc;
+		if (CapsuleAxis.IsNearlyZero())
+		{
+			continue;
+		}
+		const float CurHalfHeight = FMath::Max(CapsuleAxis.Size() * 0.5f, Radius);
+		const FVector CapsuleCenter = (StartLoc + EndLoc) * 0.5f;
+		const FQuat CapsuleRotation = FRotationMatrix::MakeFromZ(CapsuleAxis.GetSafeNormal()).ToQuat();
+		const FCollisionShape DetectShape = FCollisionShape::MakeCapsule(Radius, CurHalfHeight);
 
-		TArray<FHitResult> HitResults;
-		FCollisionQueryParams CollisionParams;
-		CollisionParams.AddIgnoredActor(GetOwner());
-
-		float Radius = TraceSource.Radius;
-
-		FCollisionShape DetectShape = FCollisionShape::MakeCapsule(Radius, CurHalfHeight);
-
-		bool bHit = GetWorld()->SweepMultiByChannel(
+		HitResults.Reset();
+		const bool bHit = World->SweepMultiByChannel(
 			HitResults,
-			StartLoc,
-			EndLoc,
-			FQuat::Identity,
+			CapsuleCenter,
+			CapsuleCenter,
+			CapsuleRotation,
 			ECC_GameTraceChannel3,
 			DetectShape,
 			CollisionParams
@@ -297,30 +312,18 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 
 					if (HitActor->Implements<UHitReactionInterface>())
 					{
-						FAttackDamageSource DamageSource;
-						//= IAttackSourceInterface::Execute_GetAttackDamageSource(AttackSourceInterface.GetObject());
-						if (IAttackSourceInterface* AttackSource = Cast<IAttackSourceInterface>(Character))
-							DamageSource = AttackSource->GetAttackDamageSource();
-
-						UAnimInstance* Anim = Character->GetMesh()->GetAnimInstance();
-						FName CurrentSection = Anim->Montage_GetCurrentSection(CurAttackContext.Anim);
-						//UE_LOG(Log_Attack, Log, TEXT("[AttackComponent] Current Section %s"), *CurrentSection.ToString());
-						
-						const FBaseAttackData* Detail = CurAttackContext.AttackDetail.FindByKey(CurrentSection);
-						if (!Detail) return;
-
-						float OutDamage = DamageSource.AttackRating * Detail->DamageMultiplier;
-						float OutPoiseDamage = DamageSource.PoiseRating * Detail->PoiseDamageMultiplier;
-						float OutStanceDamage = DamageSource.StanceRating * Detail->StanceDamageMultiplier;
-						EHitResponse OutResponse = Detail->Response;
-						EDamageType OutAttackType = Detail->DamageType;
-						EElementalType OutElementType = Detail->ElementType;
-						float OutElementalBuildup = Detail->ElementalBuildup;
+						float OutDamage = DamageSource.AttackRating * Detail.DamageMultiplier;
+						float OutPoiseDamage = DamageSource.PoiseRating * Detail.PoiseDamageMultiplier;
+						float OutStanceDamage = DamageSource.StanceRating * Detail.StanceDamageMultiplier;
+						EHitResponse OutResponse = Detail.Response;
+						EDamageType OutAttackType = Detail.DamageType;
+						EElementalType OutElementType = Detail.ElementType;
+						float OutElementalBuildup = Detail.ElementalBuildup;
 						FVector OutHitPoint = Result.ImpactPoint;
 						FString OutHitPointName = Result.PhysMaterial.IsValid() ? Result.PhysMaterial->GetName() : FString();
-						bool OutCanBlocked = Detail->CanBlocked;
-						bool OutCanParried = Detail->CanParried;
-						bool OutCanAvoid = Detail->CanAvoid;
+						bool OutCanBlocked = Detail.CanBlocked;
+						bool OutCanParried = Detail.CanParried;
+						bool OutCanAvoid = Detail.CanAvoid;
 
 						FAttackRequest OutAttackData(
 							OutDamage,
@@ -346,14 +349,12 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 		
 		if (bDrawDebug)
 		{
-			FVector CurCapsuleCenter = (StartLoc + EndLoc) * 0.5f;
-			FVector CurCapsuleAxis = (EndLoc - StartLoc).GetSafeNormal();
-			FQuat CurCapsuleRotation = FRotationMatrix::MakeFromZ(CurCapsuleAxis).ToQuat();
-			DrawDebugCapsule(GetWorld(), CurCapsuleCenter, CurHalfHeight, Radius, CurCapsuleRotation, FColor::Red, false, 5.0f);
+			DrawDebugCapsule(World, CapsuleCenter, CurHalfHeight, Radius,
+				CapsuleRotation, FColor::Red, false, 5.0f);
 		}
-
-		LastTraceTime = EndTime;
 	}
+
+	LastTraceTime = EndTime;
 }
 
 void UAttackComponent::BeginAttackTrace(FGameplayTag Profile, const UAnimSequence* AnimKey, FName WindowName, float StartTime)

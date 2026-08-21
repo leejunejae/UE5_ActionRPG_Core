@@ -88,11 +88,11 @@ public:
     }
 
 #if WITH_EDITOR
-    void UpsertSamples(const UAnimSequence* Anim, const FHitDataEntry& Entry)
+    void ReplaceSamples(const UAnimSequence* Anim, FHitDataEntry Entry)
     {
         if (!Anim)
         {
-            UE_LOG(LogTemp, Warning, TEXT("UpsertSamples: Anim Invalid"));
+            UE_LOG(LogTemp, Warning, TEXT("ReplaceSamples: Anim Invalid"));
             return;
         }
 
@@ -103,14 +103,14 @@ public:
             AssetId = FPrimaryAssetId(FName("AnimSequence"), Anim->GetFName());
         }
 
-        FHitDataEntry& Existing = HitDataMap.FindOrAdd(AssetId);
-
-        //const FSoftObjectPath Key = AnimSoft.ToSoftObjectPath();
-        for (const auto& Pair : Entry.Segments)
+        if (Entry.Segments.IsEmpty())
         {
-            Existing.Segments.Add(Pair.Key, Pair.Value);
+            HitDataMap.Remove(AssetId);
         }
-        //HitDataMap.FindOrAdd(AssetId) = Entry;
+        else
+        {
+            HitDataMap.FindOrAdd(AssetId) = MoveTemp(Entry);
+        }
 
         MarkPackageDirty();
     }

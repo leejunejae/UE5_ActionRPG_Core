@@ -29,4 +29,8 @@ public:
 	virtual void NotifyEnd(USkeletalMeshComponent* MeshComp,
 		UAnimSequenceBase* Animation,
 		const FAnimNotifyEventReference& EventReference) override;
+
+private:
+	// 같은 Notify 자산이 같은 Mesh에서 재진입해도 이전 Lease를 먼저 반납한다.
+	TMap<TWeakObjectPtr<USkeletalMeshComponent>, TArray<uint64>> ActiveWindowLeases;
 };

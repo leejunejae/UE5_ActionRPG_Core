@@ -185,32 +185,27 @@ void UAnimBoneTransformLibrary::BuildHitDataFromNotifyWindows(
     TArray<FHitWindow> Windows;
     GatherAttackHitWindows(AnimSequence, Windows);
 
-    if (Windows.Num() == 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[BuildHitData] No attack trace or weapon trail window found in %s"), *AnimSequence->GetName());
-        return;
-    }
-
-    // 2) 윈도우별로 Key/Asset 생성 + Registry 등록
-    for (int32 i = 0; i < Windows.Num(); ++i)
-    {
-        TArray<FHitWindow> SingleWindow;
-        SingleWindow.Add(Windows[i]);
-
-        FHitDataEntry Entry;
-
-        BuildSegmentsFromWindows(
-            Entry.Segments,
-            SingleWindow,
-            AnimSequence,
-            SampleInterval
-        );
-
-        Registry->UpsertSamples(AnimSequence, Entry);
-    }
+    // 2) 현재 애니메이션의 전체 윈도우를 한 번에 다시 만든다.
+    // 삭제되거나 이름이 변경된 윈도우가 Registry에 남지 않도록 기존 엔트리를 교체한다.
+    FHitDataEntry Entry;
+    BuildSegmentsFromWindows(
+        Entry.Segments,
+        Windows,
+        AnimSequence,
+        SampleInterval
+    );
+    Registry->ReplaceSamples(AnimSequence, MoveTemp(Entry));
 
     // 3) Registry 저장
     SaveObjectPackage(Registry);
+
+    if (Windows.IsEmpty())
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("[BuildHitData] No attack trace or weapon trail window found in %s; removed stale registry entry."),
+            *AnimSequence->GetName());
+        return;
+    }
 
     UE_LOG(LogTemp, Log, TEXT("[BuildHitData] Done. Anim=%s, Windows=%d"),
         *AnimSequence->GetName(), Windows.Num());

@@ -233,6 +233,15 @@ void UANS_TimedWeaponTrail::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSe
 			}
 			else if (NiagaraComponent)
 			{
+				if (State)
+				{
+					const float NextSampleTime =
+						State->LastSampleTime + FMath::Max(FrameDeltaTime, 0.0f);
+					State->LastSampleTime = State->NotifyEndTime > State->NotifyStartTime
+						? FMath::Min(NextSampleTime, State->NotifyEndTime)
+						: NextSampleTime;
+				}
+
 				const TArray<FVector> StartSamples { TrailStart };
 				const TArray<FVector> EndSamples { TrailEnd };
 				const TArray<float> LinkOrderSamples {

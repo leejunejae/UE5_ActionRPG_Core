@@ -160,6 +160,7 @@ public:
 #pragma region Stat
 private:
 	bool IsBlockInput = false;
+	bool bWantsToGuard = false;
 
 public:
 	UPlayerStatComponent* GetStatComponent() const;
