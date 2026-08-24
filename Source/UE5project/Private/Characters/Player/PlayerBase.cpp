@@ -149,6 +149,7 @@ void APlayerBase::BeginPlay()
 void APlayerBase::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	GuardReentryLockoutRemaining = FMath::Max(0.f, GuardReentryLockoutRemaining - DeltaTime);
 
 	if (bForcedRotatingInputDirection)
 	{
@@ -188,7 +189,10 @@ void APlayerBase::Tick(float DeltaTime)
 				Jog();   // 바닥나면 조그로 강제 전환
 		}
 
-		GetStatComponent()->TickStaminaRegen(DeltaTime);
+		const bool bIsActivelyGuarding = GetCharacterStatusComponent() &&
+			GetCharacterStatusComponent()->GetCurrentAction().MatchesTagExact(TAG_Action_Guard);
+		GetStatComponent()->TickStaminaRegen(
+			DeltaTime, bIsActivelyGuarding ? GuardStaminaRegenMultiplier : 1.0f);
 	}
 
 
@@ -287,7 +291,10 @@ void APlayerBase::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 		EnhancedInputComponent->BindAction(InputConfig->Block, ETriggerEvent::Ongoing, this, &APlayerBase::BlockInput);
 		EnhancedInputComponent->BindAction(InputConfig->Block, ETriggerEvent::Triggered, this, &APlayerBase::BlockInputEnd);
 
-		//EnhancedInputComponent->BindAction(InputConfig->Parry, ETriggerEvent::Triggered, this, &APlayerBase::ParryInput);
+		if (InputConfig->Parry)
+		{
+			EnhancedInputComponent->BindAction(InputConfig->Parry, ETriggerEvent::Started, this, &APlayerBase::ParryInput);
+		}
 
 		EnhancedInputComponent->BindAction(InputConfig->Interact, ETriggerEvent::Triggered, this, &APlayerBase::InteractInput);
 
@@ -364,6 +371,10 @@ void APlayerBase::HandleBufferedAction(const FGameplayTag& ActionTag)
 			FinishActionIfCurrent(TAG_Action_Guard);
 		}
 	}
+	else if (ActionTag == TAG_Action_Parry)
+	{
+		ExecuteParry();
+	}
 	else if (ActionTag == TAG_Action_Interact)
 	{
 		ExecuteInteract();
@@ -435,7 +446,7 @@ void APlayerBase::EndMoveInput()
  * ============================================================ */
 void APlayerBase::AttackInput()
 {
-	if (GetStatComponent()->GetStamina() <= 0.f) return;
+	if (!GetStatComponent()->CanAffordStamina(GetAttackStaminaCost(FName("DefaultCombo")))) return;
 
 	if (GetCharacterStatusComponent()->RequestAction(TAG_Action_Attack))
 	{
@@ -459,7 +470,7 @@ void APlayerBase::JumpInput()
 
 void APlayerBase::DodgeInput()
 {
-	if (GetStatComponent()->GetStamina() <= 0.f) return;
+	if (!GetStatComponent()->CanAffordStamina(GetDodgeStaminaCost())) return;
 
 	if (GetCharacterStatusComponent()->RequestAction(TAG_Action_Dodge))
 	{
@@ -470,6 +481,7 @@ void APlayerBase::DodgeInput()
 void APlayerBase::BlockInput()
 {
 	bWantsToGuard = true;
+	if (GuardReentryLockoutRemaining > 0.f) return;
 	if (IsBlockInput) return;
 	UPlayerStatusComponent* StatusComponent = GetCharacterStatusComponent();
 	if (!StatusComponent) return;
@@ -488,6 +500,17 @@ void APlayerBase::BlockInputEnd()
 		StatusComponent->RemoveBufferedAction(TAG_Action_Guard);
 	}
 	FinishActionIfCurrent(TAG_Action_Guard);
+}
+
+void APlayerBase::ParryInput()
+{
+	if (UPlayerStatusComponent* StatusComponent = GetCharacterStatusComponent())
+	{
+		if (StatusComponent->RequestAction(TAG_Action_Parry))
+		{
+			ExecuteParry();
+		}
+	}
 }
 
 void APlayerBase::InteractInput()
@@ -518,10 +541,45 @@ void APlayerBase::SpawnRideInputCompleted()
 /* ============================================================
  *  Combat Execute — 실행부 (순수 로직, 판단 없음)
  * ============================================================ */
+float APlayerBase::GetAttackStaminaCost(FName AttackName) const
+{
+	const UPlayerAttackComponent* PlayerAttack = GetAttackComponent();
+	const FWeaponSetsInfo* Weapon = GetEquipmentComponent()
+		? GetEquipmentComponent()->GetEquipedWeapon() : nullptr;
+	const FBaseAttackData* NextAttack = PlayerAttack
+		? PlayerAttack->GetNextAttackData(AttackName) : nullptr;
+	return Weapon && NextAttack
+		? FMath::Max(0.f, Weapon->StaminaCost * NextAttack->StaminaCostMultiplier)
+		: 0.f;
+}
+
+float APlayerBase::GetDodgeStaminaCost() const
+{
+	const UPlayerStatComponent* PlayerStat = GetStatComponent();
+	if (!PlayerStat)
+	{
+		return FMath::Max(0.f, DodgeStaminaBase);
+	}
+
+	const FPlayerStats Stats = PlayerStat->GetCharacterStats();
+	const float LoadRatio = Stats.EquipLoad.Max > KINDA_SMALL_NUMBER
+		? FMath::Clamp(Stats.EquipLoad.Current / Stats.EquipLoad.Max, 0.f, 1.f) : 0.f;
+	return FMath::Max(0.f, DodgeStaminaBase * (1.0f + LoadRatio));
+}
+
 void APlayerBase::ExecuteAttack()
 {
+	const FName AttackName("DefaultCombo");
+	const float Cost = GetAttackStaminaCost(AttackName);
+	if (!GetStatComponent()->CanAffordStamina(Cost))
+	{
+		IsAttackInput = false;
+		FinishActionIfCurrent(TAG_Action_Attack);
+		return;
+	}
+
 	IsAttackInput = true;
-	const FBaseAttackData* Played = GetAttackComponent()->ExecuteAttack(FName("DefaultCombo"));
+	const FBaseAttackData* Played = GetAttackComponent()->ExecuteAttack(AttackName);
 	if (!Played)
 	{
 		IsAttackInput = false;
@@ -529,11 +587,7 @@ void APlayerBase::ExecuteAttack()
 		return;
 	}
 
-	if (const FWeaponSetsInfo* Weapon = GetEquipmentComponent()->GetEquipedWeapon())
-	{
-		const float Cost = Weapon->StaminaCost * Played->StaminaCostMultiplier;
-		GetStatComponent()->ChangeStamina(Cost, EStatChangeType::Damage);
-	}
+	GetStatComponent()->TrySpendStamina(Cost);
 }
 
 void APlayerBase::ExecuteJump()
@@ -555,11 +609,12 @@ void APlayerBase::ExecuteDodge()
 		ExitDodgeRuntime(EActionExitReason::Transition);
 	}
 
-	const FPlayerStats Stats = GetStatComponent()->GetCharacterStats();
-	const float LoadRatio = Stats.EquipLoad.Max > KINDA_SMALL_NUMBER
-		? FMath::Clamp(Stats.EquipLoad.Current / Stats.EquipLoad.Max, 0.f, 1.f) : 0.f;
-	const float Cost = DodgeStaminaBase * (1.0f + LoadRatio);  // 무부하 ×1 ~ 만적재 ×2
-	GetStatComponent()->ChangeStamina(Cost, EStatChangeType::Damage);
+	const float Cost = GetDodgeStaminaCost();
+	if (!GetStatComponent()->TrySpendStamina(Cost))
+	{
+		FinishActionIfCurrent(TAG_Action_Dodge);
+		return;
+	}
 
 	const FRotator Rotation = GetControlRotation();
 	const FRotator YawRotation(0, Rotation.Yaw, 0);
@@ -642,6 +697,7 @@ void APlayerBase::TryReturnToLocomotion(const FVector2D& MovementInput)
 	if (!CurrentAction.MatchesTagExact(TAG_Action_Attack) &&
 		!CurrentAction.MatchesTagExact(TAG_Action_Dodge) &&
 		!CurrentAction.MatchesTagExact(TAG_Action_Guard) &&
+		!CurrentAction.MatchesTagExact(TAG_Action_Parry) &&
 		!CurrentAction.MatchesTagExact(TAG_Action_HitReact))
 	{
 		return;
@@ -660,16 +716,20 @@ void APlayerBase::RefreshActionAnimationProfile(EWeaponType WeaponType)
 	if (!Registry)
 	{
 		ConfiguredDodgeMontage = nullptr;
+		ConfiguredParryMontage = nullptr;
 		DodgeLocomotionBlendOutTime = 0.15f;
 		DodgeExitBlendSettings = FActionExitBlendSettings{};
+		ParryExitBlendSettings = FActionExitBlendSettings{};
 		return;
 	}
 
 	const FPlayerAnimSet AnimSet = Registry->ResolvePlayerAnimSet(WeaponType);
 	ConfiguredDodgeMontage = AnimSet.DodgeMontage.LoadSynchronous();
+	ConfiguredParryMontage = AnimSet.ParryMontage.LoadSynchronous();
 	DodgeLocomotionBlendOutTime = AnimSet.DodgeLocomotionBlendOutTime >= 0.0f
 		? AnimSet.DodgeLocomotionBlendOutTime : 0.15f;
 	DodgeExitBlendSettings = AnimSet.DodgeExitBlendSettings;
+	ParryExitBlendSettings = AnimSet.ParryExitBlendSettings;
 	if (DodgeExitBlendSettings.Locomotion < 0.0f && AnimSet.DodgeLocomotionBlendOutTime >= 0.0f)
 	{
 		DodgeExitBlendSettings.Locomotion = AnimSet.DodgeLocomotionBlendOutTime;
@@ -679,6 +739,26 @@ void APlayerBase::RefreshActionAnimationProfile(EWeaponType WeaponType)
 void APlayerBase::ExecuteBlock()
 {
 	IsBlockInput = true;
+}
+
+void APlayerBase::ExecuteParry()
+{
+	if (GetHitReactionComponent())
+	{
+		GetHitReactionComponent()->ResetParryActiveWindow();
+	}
+
+	UAnimMontage* ParryMontage = ConfiguredParryMontage.Get();
+	if (!CharacterBaseAnim || !ParryMontage || CharacterBaseAnim->Montage_Play(ParryMontage) <= 0.0f)
+	{
+		FinishActionIfCurrent(TAG_Action_Parry);
+		return;
+	}
+
+	ActiveParryMontage = ParryMontage;
+	FOnMontageEnded EndDelegate;
+	EndDelegate.BindUObject(this, &APlayerBase::OnParryMontageEnded);
+	CharacterBaseAnim->Montage_SetEndDelegate(EndDelegate, ParryMontage);
 }
 
 void APlayerBase::ExecuteInteract()
@@ -745,6 +825,21 @@ void APlayerBase::OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 	FinishActionIfCurrent(TAG_Action_Dodge);
 }
 
+void APlayerBase::OnParryMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	if (Montage != ActiveParryMontage)
+	{
+		return;
+	}
+
+	ActiveParryMontage = nullptr;
+	if (GetHitReactionComponent())
+	{
+		GetHitReactionComponent()->ResetParryActiveWindow();
+	}
+	FinishActionIfCurrent(TAG_Action_Parry);
+}
+
 void APlayerBase::HandleActionTransition(const FGameplayTag& PreviousAction,
 	const FGameplayTag& NextAction, EActionExitReason ExitReason)
 {
@@ -770,6 +865,10 @@ void APlayerBase::ExitActionRuntime(const FGameplayTag& ActionTag, EActionExitRe
 	else if (ActionTag.MatchesTagExact(TAG_Action_Dodge))
 	{
 		ExitDodgeRuntime(ExitReason);
+	}
+	else if (ActionTag.MatchesTagExact(TAG_Action_Parry))
+	{
+		ExitParryRuntime(ExitReason);
 	}
 	else if (ActionTag.MatchesTagExact(TAG_Action_Guard))
 	{
@@ -971,47 +1070,68 @@ void APlayerBase::HandleInteractionMoveCancelled()
  * ============================================================ */
 void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 {
-	float HitAngle = GetHitReactionComponent()->CalculateHitAngle(AttackInfo.HitPoint);
+	const FHitResolution Resolution = GetHitReactionComponent()->ResolveHit(AttackInfo);
+	const float HitAngle = Resolution.HitAngle;
 
-	EHitResponse Response = GetHitReactionComponent()->EvaluateHitResponse(AttackInfo);
+	if (Resolution.Outcome == EHitOutcome::Avoided)
+	{
+		return;
+	}
+
+	if (Resolution.Outcome == EHitOutcome::Parried)
+	{
+		if (IAttackSourceInterface* AttackSource = Cast<IAttackSourceInterface>(AttackInfo.AttackCauser))
+		{
+			AttackSource->ReceiveParried(this);
+		}
+		return;
+	}
+
+	ECombatReaction Response = Resolution.Reaction;
+
+	if (Resolution.Outcome == EHitOutcome::Hit)
+	{
+		bool bPoiseBroken = false;
+		if (!ApplyDirectHitStats(AttackInfo, bPoiseBroken))
+		{
+			return;
+		}
+
+		switch (Response)
+		{
+		case ECombatReaction::None:
+			return;
+
+		case ECombatReaction::Flinch:
+		case ECombatReaction::KnockBack:
+		case ECombatReaction::KnockDown:
+			if (bPoiseBroken)
+			{
+				const FHitReactionRequest InputReaction = { Response, HitAngle };
+				TryExecuteHitReaction(InputReaction);
+			}
+			return;
+
+		case ECombatReaction::HitAir:
+			if (bPoiseBroken && GetCharacterStatusComponent()->CanTryAction(TAG_Action_HitReact))
+			{
+				CharacterBaseAnim->SetHitAir(true);
+				GetCharacterStatusComponent()->SwitchAction(
+					TAG_Action_HitReact, EActionExitReason::Interrupted);
+			}
+			return;
+
+		default:
+			UE_LOG(Log_Hit, Warning, TEXT("[PlayerBase] Unexpected direct-hit response: %s"),
+				*StaticEnum<ECombatReaction>()->GetNameStringByValue(static_cast<int64>(Response)));
+			return;
+		}
+	}
 
 	switch (Response)
 	{
-	case EHitResponse::NoStagger:
-	{
-		StatComponent->ApplyDamage(AttackInfo.Damage, AttackInfo.AttackType);
-		StatComponent->ChangePoise(AttackInfo.PoiseDamage, EStatChangeType::Damage);
-		break;
-	}
-	case EHitResponse::Flinch:
-	case EHitResponse::KnockBack:
-	case EHitResponse::KnockDown:
-	{
-		GetStatComponent()->ApplyDamage(AttackInfo.Damage, AttackInfo.AttackType);
-		GetStatComponent()->ChangePoise(AttackInfo.PoiseDamage, EStatChangeType::Damage);
-		if (GetStatComponent()->GetCommonStats().GetPoise() <= 0.0f && !GetCharacterStatusComponent()->IsDead())
-		{
-			FHitReactionRequest InputReaction = { Response, HitAngle };
-			TryExecuteHitReaction(InputReaction);
-		}
-		break;
-	}
-	case EHitResponse::HitAir:
-	{
-		StatComponent->ApplyDamage(AttackInfo.Damage, AttackInfo.AttackType);
-		StatComponent->ChangePoise(AttackInfo.PoiseDamage, EStatChangeType::Damage);
-		if (GetStatComponent()->GetCommonStats().GetPoise() <= 0.0f &&
-			!GetCharacterStatusComponent()->IsDead() &&
-			GetCharacterStatusComponent()->CanTryAction(TAG_Action_HitReact))
-		{
-			CharacterBaseAnim->SetHitAir(true);
-			GetCharacterStatusComponent()->SwitchAction(
-				TAG_Action_HitReact, EActionExitReason::Interrupted);
-		}
-		break;
-	}
-	case EHitResponse::Block:
-	case EHitResponse::BlockLarge:
+	case ECombatReaction::GuardHit:
+	case ECombatReaction::GuardHitHeavy:
 	{
 		float PerformanceRatio = GetStatComponent()->GetWeaponPerformanceRatio(EquipmentComponent->GetEquipedWeapon()->RequiredAttributes.ToCharacterStats());
 		float GuardBoost = EquipmentComponent->GetEquipedWeapon()->GuardBoost;
@@ -1037,7 +1157,12 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 		else
 		{
 			StatComponent->ApplyDamage(AttackInfo.Damage, AttackInfo.AttackType);
-			Response = Response == EHitResponse::Block ? EHitResponse::BlockBreak : EHitResponse::BlockStun;
+			Response = ECombatReaction::GuardBreak;
+			GuardReentryLockoutRemaining = GuardReentryLockoutDuration;
+			if (UPlayerStatusComponent* StatusComponent = GetCharacterStatusComponent())
+			{
+				StatusComponent->RemoveBufferedAction(TAG_Action_Guard);
+			}
 			FHitReactionRequest InputReaction = { Response, HitAngle };
 			TryExecuteHitReaction(InputReaction);
 		}
@@ -1064,6 +1189,33 @@ bool APlayerBase::TryExecuteHitReaction(const FHitReactionRequest& ReactionReque
 	}
 
 	return true;
+}
+
+void APlayerBase::ExitParryRuntime(EActionExitReason ExitReason)
+{
+	UAnimMontage* ParryMontage = ActiveParryMontage.Get();
+	ActiveParryMontage = nullptr;
+	if (GetHitReactionComponent())
+	{
+		GetHitReactionComponent()->ResetParryActiveWindow();
+	}
+	if (!CharacterBaseAnim || !ParryMontage)
+	{
+		return;
+	}
+
+	FOnMontageEnded EmptyDelegate;
+	CharacterBaseAnim->Montage_SetEndDelegate(EmptyDelegate, ParryMontage);
+	if (CharacterBaseAnim->Montage_IsPlaying(ParryMontage))
+	{
+		FAlphaBlendArgs BlendOut = ParryMontage->GetBlendOutArgs();
+		const float OverrideTime = ParryExitBlendSettings.GetOverride(ExitReason);
+		if (OverrideTime >= 0.0f)
+		{
+			BlendOut.BlendTime = OverrideTime;
+		}
+		CharacterBaseAnim->Montage_StopWithBlendOut(BlendOut, ParryMontage);
+	}
 }
 
 void APlayerBase::HandleDeathStarted()
@@ -1206,6 +1358,32 @@ FAttackDamageSource APlayerBase::GetAttackDamageSource() const
 {
 	if (!EquipmentComponent) return FAttackDamageSource();
 	return EquipmentComponent->GetAttackDamageSource();
+}
+
+void APlayerBase::ReceiveParried(AActor* ParryInstigator)
+{
+	UPlayerStatusComponent* StatusComponent = GetCharacterStatusComponent();
+	UPlayerHitReactionComponent* ReactionComponent = GetHitReactionComponent();
+	if (!StatusComponent || !ReactionComponent || StatusComponent->IsDead())
+	{
+		return;
+	}
+
+	if (GetAttackComponent())
+	{
+		GetAttackComponent()->CancelAttack(EActionExitReason::Interrupted, true);
+	}
+
+	const FVector InstigatorLocation = IsValid(ParryInstigator)
+		? ParryInstigator->GetActorLocation() : GetActorLocation() + GetActorForwardVector();
+	const FHitReactionRequest ReactionRequest{
+		ECombatReaction::StanceBreak, ReactionComponent->CalculateHitAngle(InstigatorLocation) };
+
+	StatusComponent->SwitchAction(TAG_Action_HitReact, EActionExitReason::Interrupted);
+	if (!ReactionComponent->ExecuteHitResponse(ReactionRequest))
+	{
+		FinishActionIfCurrent(TAG_Action_HitReact);
+	}
 }
 
 /* ============================================================

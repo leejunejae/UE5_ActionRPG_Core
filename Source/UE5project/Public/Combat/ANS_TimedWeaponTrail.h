@@ -20,6 +20,8 @@ struct FWeaponTrailRuntimeState
 	float NotifyStartTime = 0.0f;
 	float NotifyEndTime = 0.0f;
 	float LastSampleTime = 0.0f;
+	FTransform PreviousRootWorldTransform = FTransform::Identity;
+	bool bHasPreviousRootWorldTransform = false;
 	bool bNeedsInitialSample = true;
 	int32 NextLinkOrder = 0;
 	bool bHasPreviousDebugSample = false;
@@ -45,6 +47,9 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData")
 		FName TrailEndParameter = TEXT("TrailEnd");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData")
+		FName TrailMaterialParameter = TEXT("User.TrailMaterial");
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Trajectory")
 		FName WindowName = TEXT("Trail");

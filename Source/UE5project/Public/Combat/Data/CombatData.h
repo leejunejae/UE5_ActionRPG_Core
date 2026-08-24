@@ -23,22 +23,31 @@ enum class EStatChangeType : uint8
 	Heal UMETA(DisplayName = "Heal"),
 };
 
-// 피격 유형 결정
+// 공격 해결 후 실제로 재생할 전투 반응.
+// 공격의 적중/회피/가드/패리 여부는 EHitOutcome이 별도로 표현한다.
 UENUM(BlueprintType)
-enum class EHitResponse : uint8
+enum class ECombatReaction : uint8
 {
 	None UMETA(DisplayName = "None"),
-	NoStagger UMETA(DisplayName = "NoStagger"),
 	Flinch UMETA(DisplayName = "Flinch"),
 	KnockBack UMETA(DisplayName = "KnockBack"),
-	KnockDown UMETA(DislplayName = "KnockDown"),
-	Stun UMETA(DislplayName = "Stun"),
-	HitAir UMETA(DislplayName = "HitAir"),
-	Block UMETA(DisplayName = "Block"),
-	BlockLarge UMETA(DisplayName = "BlockLarge"),
-	BlockBreak UMETA(DisplayName = "BlockBreak"),
-	BlockStun UMETA(DisplayName = "BlockStun"),
-	Parry UMETA(DisplayName = "Parry"),
+	KnockDown UMETA(DisplayName = "KnockDown"),
+	HitAir UMETA(DisplayName = "HitAir"),
+	GuardHit UMETA(DisplayName = "GuardHit"),
+	GuardHitHeavy UMETA(DisplayName = "GuardHitHeavy"),
+	GuardBreak UMETA(DisplayName = "GuardBreak"),
+	StanceBreak UMETA(DisplayName = "StanceBreak"),
+};
+
+// 공격이 방어자에게 어떻게 해결되었는지를 나타낸다.
+// 실제로 재생할 애니메이션 반응(ECombatReaction)과 분리해서 사용한다.
+UENUM(BlueprintType)
+enum class EHitOutcome : uint8
+{
+	Hit UMETA(DisplayName = "Hit"),
+	Avoided UMETA(DisplayName = "Avoided"),
+	Blocked UMETA(DisplayName = "Blocked"),
+	Parried UMETA(DisplayName = "Parried"),
 };
 
 /* ============================================================
@@ -78,7 +87,7 @@ public:
 	float PoiseDamage = 0.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	EHitResponse Response = EHitResponse::None;
+	ECombatReaction Response = ECombatReaction::None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EDamageType AttackType = EDamageType::PhysicalDamage;
@@ -100,6 +109,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FString HitPointName;
 
+	// 가드/패리 방향 판정용 공격 주체. HitPoint는 무기 접촉 위치로 계속 사용한다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TObjectPtr<AActor> AttackCauser = nullptr;
+
 	// ── 판정 플래그 ────────────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	bool CanBlocked = false;
@@ -117,7 +130,7 @@ public:
 		float InDamage,
 		float InStanceDamage,
 		float InPoiseDamage,
-		EHitResponse InResponse,
+		ECombatReaction InResponse,
 		EDamageType InAttackType,
 		EElementalType InElementType,
 		float InElementalBuildup,
@@ -125,7 +138,8 @@ public:
 		FString InHitPointName,
 		bool InCanBlocked,
 		bool InCanParried,
-		bool InCanAvoid)
+		bool InCanAvoid,
+		AActor* InAttackCauser = nullptr)
 		: Damage(InDamage)
 		, StanceDamage(InStanceDamage)
 		, PoiseDamage(InPoiseDamage)
@@ -135,9 +149,31 @@ public:
 		, ElementalBuildup(InElementalBuildup)
 		, HitPoint(InHitPoint)
 		, HitPointName(InHitPointName)
+		, AttackCauser(InAttackCauser)
 		, CanBlocked(InCanBlocked)
 		, CanParried(InCanParried)
 		, CanAvoid(InCanAvoid)
+	{
+	}
+};
+
+USTRUCT(BlueprintType)
+struct FHitResolution
+{
+	GENERATED_BODY()
+
+	UPROPERTY(BlueprintReadOnly)
+	EHitOutcome Outcome = EHitOutcome::Hit;
+
+	UPROPERTY(BlueprintReadOnly)
+	ECombatReaction Reaction = ECombatReaction::None;
+
+	UPROPERTY(BlueprintReadOnly)
+	float HitAngle = 0.0f;
+
+	FHitResolution() = default;
+	FHitResolution(EHitOutcome InOutcome, ECombatReaction InReaction, float InHitAngle)
+		: Outcome(InOutcome), Reaction(InReaction), HitAngle(InHitAngle)
 	{
 	}
 };

@@ -22,6 +22,8 @@ public:
 	void InitializeNPCStats(const FNPCStats& NewStat) { NPCStats = NewStat; }
 	
 	bool ChangeStance(const float Amount, const EStatChangeType StatChangeType);
+	void BreakStance();
+	void RestoreStance();
 
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Stats") // 데이터 테이블로 정해진 NPC의 스탯 값

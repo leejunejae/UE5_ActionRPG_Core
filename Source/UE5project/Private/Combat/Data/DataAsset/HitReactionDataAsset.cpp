@@ -3,7 +3,7 @@
 
 #include "Combat/Data/DataAsset/HitReactionDataAsset.h"
 
-FHitReactionInfo UHitReactionDataAsset::FindHitReactionInfo(const EHitResponse& Response, bool bLogNotFound) const
+FHitReactionInfo UHitReactionDataAsset::FindHitReactionInfo(const ECombatReaction& Response, bool bLogNotFound) const
 {
 	const FHitReactionInfo* Info = HitReactionInfoList.Find(Response);
 	if (Info)

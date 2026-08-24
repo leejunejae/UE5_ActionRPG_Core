@@ -8,6 +8,7 @@
 #include "WeaponDataAsset.generated.h"
 
 class UNiagaraSystem;
+class UMaterialInterface;
 
 /**
  * 
@@ -28,6 +29,10 @@ struct FWeaponConfig
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trail")
     TSoftObjectPtr<UNiagaraSystem> TrailSystem = nullptr;
+
+    // 비어 있으면 TrailSystem의 Ribbon Renderer 기본 머티리얼을 사용한다.
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trail")
+    TSoftObjectPtr<UMaterialInterface> TrailMaterial = nullptr;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trail")
     FName TrailStartSocket = TEXT("Start");

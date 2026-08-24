@@ -88,6 +88,10 @@ AEnemyBase::AEnemyBase(const FObjectInitializer& ObjectInitializer)
 void AEnemyBase::BeginPlay()
 {
 	Super::BeginPlay();
+	if (HitReactionComponent)
+	{
+		HitReactionComponent->HitEndDelegate.AddUObject(this, &AEnemyBase::HandleStanceBreakEnded);
+	}
 	
 	UEnemyDataSubsystem* EnemyDataSubsystem = GetWorld()->GetGameInstance()->GetSubsystem<UEnemyDataSubsystem>();
 
@@ -327,6 +331,68 @@ FAttackDamageSource AEnemyBase::GetAttackDamageSource() const
 	return OutData;
 }
 
+void AEnemyBase::ReceiveParried(AActor* ParryInstigator)
+{
+	if (!CharacterStatusComponent || !HitReactionComponent || CharacterStatusComponent->IsDead())
+	{
+		return;
+	}
+
+	const FVector InstigatorLocation = IsValid(ParryInstigator)
+		? ParryInstigator->GetActorLocation() : GetActorLocation() + GetActorForwardVector();
+	BreakStance(HitReactionComponent->CalculateHitAngle(InstigatorLocation));
+}
+
+bool AEnemyBase::BreakStance(float HitAngle)
+{
+	if (!CharacterStatusComponent || !HitReactionComponent || CharacterStatusComponent->IsDead())
+	{
+		return false;
+	}
+
+	if (AttackComponent)
+	{
+		AttackComponent->CancelAttack(EActionExitReason::Interrupted, true);
+	}
+
+	if (UCharacterStatComponent* EnemyStatComponent = GetStatComponent())
+	{
+		EnemyStatComponent->BreakStance();
+	}
+	StanceBroken = true;
+
+	CharacterStatusComponent->SwitchAction(TAG_Action_HitReact, EActionExitReason::Interrupted);
+	const FHitReactionRequest ReactionRequest{ ECombatReaction::StanceBreak, HitAngle };
+	const bool bPlayedReaction = HitReactionComponent->ExecuteHitResponse(ReactionRequest);
+	UE_LOG(Log_Hit, Log, TEXT("[StanceBreak] Enemy=%s Played=%d"),
+		*GetNameSafe(this), bPlayedReaction);
+	if (!bPlayedReaction &&
+		CharacterStatusComponent->GetCurrentAction().MatchesTagExact(TAG_Action_HitReact))
+	{
+		CharacterStatusComponent->ClearAction();
+	}
+	if (!bPlayedReaction)
+	{
+		HandleStanceBreakEnded();
+	}
+
+	return bPlayedReaction;
+}
+
+void AEnemyBase::HandleStanceBreakEnded()
+{
+	if (!StanceBroken)
+	{
+		return;
+	}
+
+	StanceBroken = false;
+	if (UCharacterStatComponent* EnemyStatComponent = GetStatComponent())
+	{
+		EnemyStatComponent->RestoreStance();
+	}
+}
+
 void AEnemyBase::OnLockedOnByPlayer(bool bIsLockedOn)
 {
 	if (!HPBarWidgetComponent) return;
@@ -339,42 +405,71 @@ void AEnemyBase::OnLockedOnByPlayer(bool bIsLockedOn)
 
 void AEnemyBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 {
-	float HitAngle = HitReactionComponent->CalculateHitAngle(AttackInfo.HitPoint);
-	
-	EHitResponse Response = HitReactionComponent->EvaluateHitResponse(AttackInfo);
+	const FHitResolution Resolution = HitReactionComponent->ResolveHit(AttackInfo);
+	const float HitAngle = Resolution.HitAngle;
 
-	UE_LOG(Log_Hit, Log, TEXT("[EnemyBase] %s was hit by attack that required a %s"), *this->GetName(), *StaticEnum<EHitResponse>()->GetNameStringByValue((int64)Response));
+	if (Resolution.Outcome == EHitOutcome::Avoided)
+	{
+		return;
+	}
+
+	if (Resolution.Outcome == EHitOutcome::Parried)
+	{
+		if (IAttackSourceInterface* AttackSource = Cast<IAttackSourceInterface>(AttackInfo.AttackCauser))
+		{
+			AttackSource->ReceiveParried(this);
+		}
+		return;
+	}
+
+	ECombatReaction Response = Resolution.Reaction;
+
+	UE_LOG(Log_Hit, Log, TEXT("[EnemyBase] %s was hit by attack that required a %s"), *this->GetName(), *StaticEnum<ECombatReaction>()->GetNameStringByValue((int64)Response));
+
+	if (Resolution.Outcome == EHitOutcome::Hit)
+	{
+		bool bPoiseBroken = false;
+		if (!ApplyDirectHitStats(AttackInfo, bPoiseBroken))
+		{
+			return;
+		}
+
+		switch (Response)
+		{
+		case ECombatReaction::None:
+			return;
+
+		case ECombatReaction::Flinch:
+		case ECombatReaction::KnockBack:
+		case ECombatReaction::KnockDown:
+			if (bPoiseBroken)
+			{
+				UE_LOG(Log_Hit, Log, TEXT("[EnemyBase] %s stagger occurred"), *GetName());
+				const FHitReactionRequest InputReaction = { Response, HitAngle };
+				GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
+				HitReactionComponent->ExecuteHitResponse(InputReaction);
+			}
+			return;
+
+		case ECombatReaction::HitAir:
+			if (bPoiseBroken)
+			{
+				CharacterBaseAnim->SetHitAir(true);
+				GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
+			}
+			return;
+
+		default:
+			UE_LOG(Log_Hit, Warning, TEXT("[EnemyBase] Unexpected direct-hit response: %s"),
+				*StaticEnum<ECombatReaction>()->GetNameStringByValue(static_cast<int64>(Response)));
+			return;
+		}
+	}
 
 	switch (Response)
 	{
-	case EHitResponse::Flinch:
-	case EHitResponse::KnockBack:
-	case EHitResponse::KnockDown:
-	{
-		GetStatComponent()->ApplyDamage(AttackInfo.Damage, AttackInfo.AttackType);
-		GetStatComponent()->ChangePoise(AttackInfo.PoiseDamage, EStatChangeType::Damage);
-		if (GetStatComponent()->GetNPCStats().BaseStats.Poise.Current <= 0.0f && !CharacterStatusComponent->IsDead())
-		{
-			UE_LOG(Log_Hit, Log, TEXT("[EnemyBase] %s stagger occurred"), *Owner->GetName());
-			FHitReactionRequest InputReaction = { Response,HitAngle };
-			GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
-			HitReactionComponent->ExecuteHitResponse(InputReaction);
-		}
-		break;
-	}
-	case EHitResponse::HitAir:
-	{
-		GetStatComponent()->ApplyDamage(AttackInfo.Damage, AttackInfo.AttackType);
-		GetStatComponent()->ChangePoise(AttackInfo.PoiseDamage, EStatChangeType::Damage);
-		if (GetStatComponent()->GetNPCStats().BaseStats.Poise.Current <= 0.0f || CharacterStatusComponent->IsDead())
-		{
-			CharacterBaseAnim->SetHitAir(true);
-			GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
-		}
-		break;
-	}
-	case EHitResponse::Block:
-	case EHitResponse::BlockLarge:
+	case ECombatReaction::GuardHit:
+	case ECombatReaction::GuardHitHeavy:
 	{
 		bool IsStaminaEnough = GetStatComponent()->ChangeStance(AttackInfo.StanceDamage, EStatChangeType::Damage);
 		if (IsStaminaEnough)
@@ -390,7 +485,18 @@ void AEnemyBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 		else
 		{
 			GetStatComponent()->ApplyDamage(AttackInfo.Damage, AttackInfo.AttackType);
-			Response = Response == EHitResponse::Block ? EHitResponse::BlockBreak : EHitResponse::BlockStun;
+			if (!CharacterStatusComponent->IsDead())
+			{
+				GetStatComponent()->BreakStance();
+				StanceBroken = true;
+				CharacterStatusComponent->SwitchAction(TAG_Action_HitReact, EActionExitReason::Interrupted);
+				const FHitReactionRequest InputReaction = { ECombatReaction::GuardBreak, HitAngle };
+				if (!HitReactionComponent->ExecuteHitResponse(InputReaction))
+				{
+					CharacterStatusComponent->ClearAction();
+					HandleStanceBreakEnded();
+				}
+			}
 		}
 		break;
 	}

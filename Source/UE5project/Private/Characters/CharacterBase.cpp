@@ -69,6 +69,20 @@ void ACharacterBase::PostInitializeComponents()
 
 }
 
+bool ACharacterBase::ApplyDirectHitStats(const FAttackRequest& AttackInfo, bool& bOutPoiseBroken)
+{
+	bOutPoiseBroken = false;
+	if (!StatComponent)
+	{
+		return false;
+	}
+
+	const bool bSurvived = StatComponent->ApplyDamage(AttackInfo.Damage, AttackInfo.AttackType);
+	StatComponent->ChangePoise(AttackInfo.PoiseDamage, EStatChangeType::Damage);
+	bOutPoiseBroken = StatComponent->GetCommonStats().GetPoise() <= 0.0f;
+	return bSurvived;
+}
+
 void ACharacterBase::SetCurLocomotionGait(ELocomotionGait NewGait)
 {
 	if (!GaitData.Find(NewGait)->bEnabled)

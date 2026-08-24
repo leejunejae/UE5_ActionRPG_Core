@@ -94,11 +94,34 @@ const FBaseAttackData* UAttackComponent::ExecuteAttack(FName AttackName, float P
 
 	CurAttackContext = CandidateContext;
 	ComboIndex = CandidateIndex;
+	++AttackSessionId;
 	AttackSessionState = EAttackSessionState::Active;
 	ResetAttackTrace();
 	HitActorListCurrentAttack.Empty();
 
 	return &CurAttackContext.AttackDetail[ComboIndex]; // 실행한 단계 데이터
+}
+
+const FBaseAttackData* UAttackComponent::GetNextAttackData(FName AttackName) const
+{
+	if (!CurAttackContextSet)
+	{
+		return nullptr;
+	}
+
+	if (CurAttackContext.AttackName == AttackName)
+	{
+		const int32 CandidateIndex = CurAttackContext.AttackDetail.IsValidIndex(ComboIndex + 1)
+			? ComboIndex + 1 : 0;
+		return CurAttackContext.AttackDetail.IsValidIndex(CandidateIndex)
+			? &CurAttackContext.AttackDetail[CandidateIndex] : nullptr;
+	}
+
+	FAttackContext DataForFind;
+	DataForFind.AttackName = AttackName;
+	const FAttackContext* FoundData = CurAttackContextSet->Contexts.Find(DataForFind);
+	return FoundData && FoundData->Anim && FoundData->AttackDetail.IsValidIndex(0)
+		? &FoundData->AttackDetail[0] : nullptr;
 }
 
 bool UAttackComponent::PlayAnimation(const FAttackContext& AttackInfo, int32 Index, float Playrate)
@@ -167,6 +190,7 @@ void UAttackComponent::FinishAttackSession(bool bInterrupted, bool bStopMontage,
 	}
 
 	TGuardValue<bool> FinishingGuard(bFinishingAttackSession, true);
+	++AttackSessionId;
 	UAnimMontage* MontageToStop = ActiveAttackMontage;
 
 	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
@@ -204,6 +228,8 @@ void UAttackComponent::ResetAttackTrace()
 {
 	CurrentSeg = nullptr;
 	LastTraceTime = 0.0f;
+	PreviousTraceRootWorldTransform = FTransform::Identity;
+	bHasPreviousTraceRootWorldTransform = false;
 	bAttackTraceActive = false;
 }
 
@@ -211,6 +237,7 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 {
 	if (!IsAttackActive() || !bAttackTraceActive || EndTime <= StartTime) return;
 	if (!CurAttackContext.AttackDetail.IsValidIndex(ComboIndex)) return;
+	const uint64 TraceSessionId = AttackSessionId;
 
 	ACharacter* Character = Cast<ACharacter>(GetOwner());
 	if (!Character)
@@ -228,8 +255,10 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 	// 이전 프레임과 현재 프레임 사이를 0.001초 간격으로 균등하게 나눈다.
 	const int32 TraceCorrectionCount = FMath::Max(1, FMath::CeilToInt((EndTime - StartTime) / 0.001f));
 
-	// 현재 루트본의 위치
-	FTransform CurrentRootWorldTransform = Character->GetMesh()->GetBoneTransform(0);
+	const FTransform CurrentRootWorldTransform = Character->GetMesh()->GetBoneTransform(0);
+	const FTransform& PreviousRootWorldTransform = bHasPreviousTraceRootWorldTransform
+		? PreviousTraceRootWorldTransform
+		: CurrentRootWorldTransform;
 
 	FAttackTraceSource TraceSource;
 	if (IAttackSourceInterface* AttackSource = Cast<IAttackSourceInterface>(Character))
@@ -271,12 +300,15 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 	{
 		const float SampleAlpha = static_cast<float>(i) / static_cast<float>(TraceCorrectionCount);
 		const float PrevTime = FMath::Lerp(StartTime, EndTime, SampleAlpha);
+		FTransform SampleRootWorldTransform;
+		SampleRootWorldTransform.Blend(
+			PreviousRootWorldTransform, CurrentRootWorldTransform, SampleAlpha);
 
 		FVector StartLoc;
 		FVector EndLoc;
 		FWeaponTrajectoryUtility::GetSocketWorldPositions(
 			WeaponGeometry, CurrentSeg->GetTransformAtTime(PrevTime),
-			CurrentRootWorldTransform, StartLoc, EndLoc);
+			SampleRootWorldTransform, StartLoc, EndLoc);
 
 		const FVector CapsuleAxis = EndLoc - StartLoc;
 		if (CapsuleAxis.IsNearlyZero())
@@ -315,7 +347,7 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 						float OutDamage = DamageSource.AttackRating * Detail.DamageMultiplier;
 						float OutPoiseDamage = DamageSource.PoiseRating * Detail.PoiseDamageMultiplier;
 						float OutStanceDamage = DamageSource.StanceRating * Detail.StanceDamageMultiplier;
-						EHitResponse OutResponse = Detail.Response;
+						ECombatReaction OutResponse = Detail.Response;
 						EDamageType OutAttackType = Detail.DamageType;
 						EElementalType OutElementType = Detail.ElementType;
 						float OutElementalBuildup = Detail.ElementalBuildup;
@@ -337,10 +369,20 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 							OutHitPointName,
 							OutCanBlocked,
 							OutCanParried,
-							OutCanAvoid
+							OutCanAvoid,
+							Character
 						);
 
 						IHitReactionInterface::Execute_OnHit(HitActor, OutAttackData);
+
+						// OnHit은 동기 호출이며 패리/사망 등의 처리에서 이 공격 세션을
+						// 즉시 취소할 수 있다. 취소된 세션의 CurrentSeg를 다음 보정
+						// 샘플에서 다시 사용하지 않는다.
+						if (AttackSessionId != TraceSessionId ||
+							!IsAttackActive() || !bAttackTraceActive || !CurrentSeg)
+						{
+							return;
+						}
 
 					}
 				}
@@ -354,6 +396,8 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 		}
 	}
 
+	PreviousTraceRootWorldTransform = CurrentRootWorldTransform;
+	bHasPreviousTraceRootWorldTransform = true;
 	LastTraceTime = EndTime;
 }
 
@@ -375,12 +419,18 @@ void UAttackComponent::BeginAttackTrace(FGameplayTag Profile, const UAnimSequenc
 	}
 
 	LastTraceTime = StartTime;
+	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
+	{
+		PreviousTraceRootWorldTransform = Character->GetMesh()->GetBoneTransform(0);
+		bHasPreviousTraceRootWorldTransform = true;
+	}
 	bAttackTraceActive = true;
 }
 
 void UAttackComponent::TickAttackTrace(float DeltaTime, bool bDrawDebug)
 {
 	if (!IsAttackActive() || !bAttackTraceActive || !CurrentSeg) return;
+	const uint64 TraceSessionId = AttackSessionId;
 
 	const float PrevTime = LastTraceTime;
 	const float CurrentTime = LastTraceTime + DeltaTime;
@@ -388,15 +438,24 @@ void UAttackComponent::TickAttackTrace(float DeltaTime, bool bDrawDebug)
 	if (CurrentSeg->EndTime < CurrentTime || CurrentSeg->StartTime > CurrentTime) return;
 
 	ExecuteAttackTrace(PrevTime, CurrentTime, bDrawDebug);
+	if (AttackSessionId != TraceSessionId ||
+		!IsAttackActive() || !bAttackTraceActive || !CurrentSeg)
+	{
+		return;
+	}
 
 	LastTraceTime = CurrentTime;
 }
 
 void UAttackComponent::EndAttackTrace(float EndTime, bool bDrawDebug)
 {
+	const uint64 TraceSessionId = AttackSessionId;
 	if (IsAttackActive() && bAttackTraceActive && CurrentSeg && EndTime > LastTraceTime)
 	{
 		ExecuteAttackTrace(LastTraceTime, FMath::Min(EndTime, CurrentSeg->EndTime), bDrawDebug);
 	}
-	ResetAttackTrace();
+	if (AttackSessionId == TraceSessionId)
+	{
+		ResetAttackTrace();
+	}
 }

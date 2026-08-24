@@ -8,6 +8,7 @@
 #include "Core/Subsystems/GameInstanceSystem/ArmorDataSubsystem.h"
 #include "Items/Weapons/Data/WeaponDataAsset.h"
 #include "Items/Armor/Data/ArmorDataAsset.h"
+#include "Materials/MaterialInterface.h"
 #include "NiagaraSystem.h"
 #include "Utils/CoreLog.h"
 
@@ -87,16 +88,20 @@ void UEquipmentComponent::EquipWeapon_Implementation(FName WeaponKey)
 	SubEquipMesh->SetStaticMesh(nullptr);
 	MainWeaponTrailSystem = nullptr;
 	SubWeaponTrailSystem = nullptr;
+	MainWeaponTrailMaterial = nullptr;
+	SubWeaponTrailMaterial = nullptr;
 
 	EquipedWeapon = FindWeapon;
 	EquipedWeaponKey = WeaponKey;
 	WeaponMesh->SetStaticMesh(EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.Mesh.LoadSynchronous());
 	MainWeaponTrailSystem = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.WeaponConfig.TrailSystem.LoadSynchronous();
+	MainWeaponTrailMaterial = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.WeaponConfig.TrailMaterial.LoadSynchronous();
 
 	if (EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.HasSubWeapon)
 	{
 		SubEquipMesh->SetStaticMesh(EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.SubMesh.LoadSynchronous());
 		SubWeaponTrailSystem = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.SubConfig.TrailSystem.LoadSynchronous();
+		SubWeaponTrailMaterial = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.SubConfig.TrailMaterial.LoadSynchronous();
 	}
 
 	RecalcEquipLoad();
@@ -113,6 +118,11 @@ FVector UEquipmentComponent::GetWeaponSocketLocation_Implementation(FName Socket
 UNiagaraSystem* UEquipmentComponent::GetWeaponTrailSystem_Implementation(bool IsSubWeapon) const
 {
 	return IsSubWeapon ? SubWeaponTrailSystem.Get() : MainWeaponTrailSystem.Get();
+}
+
+UMaterialInterface* UEquipmentComponent::GetWeaponTrailMaterial_Implementation(bool IsSubWeapon) const
+{
+	return IsSubWeapon ? SubWeaponTrailMaterial.Get() : MainWeaponTrailMaterial.Get();
 }
 
 FName UEquipmentComponent::GetWeaponTrailStartSocket_Implementation(bool IsSubWeapon) const

@@ -49,6 +49,7 @@ FPlayerAnimSet UPlayerAnimSetDataAsset::ResolvePlayerAnimSet(const EWeaponType& 
 	APPLY_SOFT_OVERRIDE(GetUp)
 	APPLY_SOFT_OVERRIDE(Guard)
 	APPLY_SOFT_OVERRIDE(DodgeMontage)
+	APPLY_SOFT_OVERRIDE(ParryMontage)
 	APPLY_SOFT_OVERRIDE(GroundDeathMontage)
 	APPLY_SOFT_OVERRIDE(AirDeathMontage)
 	APPLY_SOFT_OVERRIDE(LadderDeathMontage)
@@ -65,6 +66,16 @@ FPlayerAnimSet UPlayerAnimSetDataAsset::ResolvePlayerAnimSet(const EWeaponType& 
 	APPLY_BLEND_OVERRIDE(Death)
 	APPLY_BLEND_OVERRIDE(EquipmentChange)
 #undef APPLY_BLEND_OVERRIDE
+
+#define APPLY_PARRY_BLEND_OVERRIDE(Field) \
+	if (Override->ParryExitBlendSettings.Field >= 0.0f) \
+	{ Resolved.ParryExitBlendSettings.Field = Override->ParryExitBlendSettings.Field; }
+	APPLY_PARRY_BLEND_OVERRIDE(Transition)
+	APPLY_PARRY_BLEND_OVERRIDE(Locomotion)
+	APPLY_PARRY_BLEND_OVERRIDE(Interrupted)
+	APPLY_PARRY_BLEND_OVERRIDE(Death)
+	APPLY_PARRY_BLEND_OVERRIDE(EquipmentChange)
+#undef APPLY_PARRY_BLEND_OVERRIDE
 
 	if (Override->DodgeLocomotionBlendOutTime >= 0.0f)
 	{

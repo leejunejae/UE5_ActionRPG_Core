@@ -35,6 +35,8 @@ FTransform FBoneTransformSegment::GetTransformAtTime(float QueryTime) const
 {
     if (Samples.Num() == 0)
         return FTransform::Identity;
+	if (Samples.Num() == 1)
+		return Samples[0].BoneTransform;
 
     const TArray<FBoneFrameSample>& CachedSamples = Samples;
     int32 NumCachedSamples = CachedSamples.Num();
@@ -47,7 +49,9 @@ FTransform FBoneTransformSegment::GetTransformAtTime(float QueryTime) const
     if (QueryTime >= End)
         return CachedSamples.Last().BoneTransform;
 
-    float DeltaTime = CachedSamples[1].Time - CachedSamples[0].Time;
+	float DeltaTime = CachedSamples[1].Time - CachedSamples[0].Time;
+	if (DeltaTime <= KINDA_SMALL_NUMBER)
+		return CachedSamples[0].BoneTransform;
     float ExactIndex = (QueryTime - Start) / DeltaTime;
 
     int32 IndexA = FMath::FloorToInt(ExactIndex);

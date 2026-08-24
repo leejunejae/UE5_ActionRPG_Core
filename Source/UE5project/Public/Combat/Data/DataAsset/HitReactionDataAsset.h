@@ -17,7 +17,7 @@ class UE5PROJECT_API UHitReactionDataAsset : public UDataAsset
 	
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		TMap<EHitResponse, FHitReactionInfo> HitReactionInfoList;
+		TMap<ECombatReaction, FHitReactionInfo> HitReactionInfoList;
 
-	FHitReactionInfo FindHitReactionInfo(const EHitResponse& Response, bool bLogNotFound = false) const;
+	FHitReactionInfo FindHitReactionInfo(const ECombatReaction& Response, bool bLogNotFound = false) const;
 };

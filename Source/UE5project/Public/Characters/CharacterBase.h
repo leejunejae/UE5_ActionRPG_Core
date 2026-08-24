@@ -104,6 +104,10 @@ protected:
 
 public:
 	FORCEINLINE UStatComponent* GetStatComponent() const { return StatComponent; }
+
+protected:
+	/** 방어되지 않은 일반 피격의 공통 HP/Poise 적용. 반환값은 생존 여부다. */
+	bool ApplyDirectHitStats(const FAttackRequest& AttackInfo, bool& bOutPoiseBroken);
 #pragma endregion Stat
 
 #pragma region Ladder

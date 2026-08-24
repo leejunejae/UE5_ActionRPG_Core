@@ -79,6 +79,7 @@ public:
 
 	virtual FAttackTraceSource GetAttackTraceSource(EAttackSourceType AttackSourceType) const override;
 	virtual FAttackDamageSource GetAttackDamageSource() const override;
+	virtual void ReceiveParried(AActor* ParryInstigator) override;
 
 	//void CreateAndAttachEquip(UStaticMesh* MeshAsset, FName SocketName, FTransform Equip, FName CompName);
 #pragma endregion Equip
@@ -125,7 +126,12 @@ public:
 #pragma region HitReaction
 public:
 	void OnHit_Implementation(const FAttackRequest& AttackInfo) override;
+	bool BreakStance(float HitAngle = 0.0f);
 
+private:
+	void HandleStanceBreakEnded();
+
+public:
 	void HandleDeathStarted() override;    // 진입: 입력 차단 + 이전 State 정리
 	void HandleDeathFinalized() override;  // 종료: 래그돌 + 소멸 (추후 GameOver UI 트리거 지점)
 #pragma endregion HitReaction

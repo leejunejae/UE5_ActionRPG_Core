@@ -22,7 +22,7 @@ struct FHitReactionRequest
 	GENERATED_BODY()
 
 public:
-	EHitResponse Response;
+	ECombatReaction Response;
 	float HitAngle;
 };
 

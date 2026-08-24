@@ -9,7 +9,3 @@ UNPCHitReactionComponent::UNPCHitReactionComponent()
 	// ...
 }
 
-EHitResponse UNPCHitReactionComponent::EvaluateHitResponse(const FAttackRequest& AttackRequest)
-{
-	return EHitResponse();
-}

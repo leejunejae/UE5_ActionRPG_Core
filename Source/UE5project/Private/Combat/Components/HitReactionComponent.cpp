@@ -38,20 +38,47 @@ void UHitReactionComponent::InitializeComponentLogic()
 
 void UHitReactionComponent::SetHitReactionDA(UHitReactionDataAsset* HitReactionDA)
 {
-	UE_LOG(LogTemp, Warning, TEXT("Set HitReactionDataAsset"));
 	HitReactionDataAsset = HitReactionDA;
+	UE_LOG(Log_Hit, Log, TEXT("[HitReactionComponent] Owner=%s ActiveData=%s"),
+		*GetNameSafe(GetOwner()), *GetPathNameSafe(HitReactionDataAsset));
 }
 
 bool UHitReactionComponent::ExecuteHitResponse(const FHitReactionRequest& ReactionData)
 {
 	if (!HitReactionDataAsset)
 	{
+		UE_LOG(Log_Hit, Warning, TEXT("[HitReactionComponent] Owner=%s Response=%s failed: active data asset is null."),
+			*GetNameSafe(GetOwner()), *StaticEnum<ECombatReaction>()->GetNameStringByValue(static_cast<int64>(ReactionData.Response)));
+		if (bHitReactionActive) CancelHitReaction(EActionExitReason::Interrupted, true);
+		else ClearHitReactActionIfCurrent();
+		return false;
+	}
+
+	if (!HitReactionDataAsset->HitReactionInfoList.Contains(ReactionData.Response))
+	{
+		UE_LOG(Log_Hit, Warning,
+			TEXT("[HitReactionComponent] Owner=%s Response=%s failed: response is missing from %s."),
+			*GetNameSafe(GetOwner()),
+			*StaticEnum<ECombatReaction>()->GetNameStringByValue(static_cast<int64>(ReactionData.Response)),
+			*GetPathNameSafe(HitReactionDataAsset));
 		if (bHitReactionActive) CancelHitReaction(EActionExitReason::Interrupted, true);
 		else ClearHitReactActionIfCurrent();
 		return false;
 	}
 
 	const FHitReactionInfo CandidateReaction = HitReactionDataAsset->FindHitReactionInfo(ReactionData.Response);
+	if (!CandidateReaction.IsValid())
+	{
+		UE_LOG(Log_Hit, Warning,
+			TEXT("[HitReactionComponent] Owner=%s Response=%s failed: invalid reaction data. Anim=%s Details=%d Asset=%s"),
+			*GetNameSafe(GetOwner()),
+			*StaticEnum<ECombatReaction>()->GetNameStringByValue(static_cast<int64>(ReactionData.Response)),
+			*GetNameSafe(CandidateReaction.Anim), CandidateReaction.HitReactionDetail.Num(),
+			*GetPathNameSafe(HitReactionDataAsset));
+		if (bHitReactionActive) CancelHitReaction(EActionExitReason::Interrupted, true);
+		else ClearHitReactActionIfCurrent();
+		return false;
+	}
 
 	static const TMap<EHitPointHorizontal, float> DirectionToYaw = {
 		{ EHitPointHorizontal::Front, 0.0f },
@@ -84,6 +111,12 @@ bool UHitReactionComponent::ExecuteHitResponse(const FHitReactionRequest& Reacti
 
 	if (!PlayReaction(CandidateReaction, MatchInfo.SectionName))
 	{
+		UE_LOG(Log_Hit, Warning,
+			TEXT("[HitReactionComponent] Owner=%s Response=%s failed to play. Montage=%s Section=%s HitAngle=%.2f Asset=%s"),
+			*GetNameSafe(GetOwner()),
+			*StaticEnum<ECombatReaction>()->GetNameStringByValue(static_cast<int64>(ReactionData.Response)),
+			*GetNameSafe(CandidateReaction.Anim), *MatchInfo.SectionName.ToString(), ReactionData.HitAngle,
+			*GetPathNameSafe(HitReactionDataAsset));
 		if (bHitReactionActive) CancelHitReaction(EActionExitReason::Interrupted, true);
 		else ClearHitReactActionIfCurrent();
 		return false;
@@ -205,59 +238,90 @@ float UHitReactionComponent::CalculateHitAngle(const FVector HitPoint)
 	return HitAngle;
 }
 
-EHitResponse UHitReactionComponent::EvaluateHitResponse(const FAttackRequest& AttackRequest)
+float UHitReactionComponent::CalculateAttackAngle(const FAttackRequest& AttackRequest) const
+{
+	const AActor* OwnerActor = GetOwner();
+	if (!OwnerActor)
+	{
+		return 0.f;
+	}
+
+	const FVector DirectionPoint = IsValid(AttackRequest.AttackCauser)
+		? AttackRequest.AttackCauser->GetActorLocation()
+		: AttackRequest.HitPoint;
+	const float DirectionYaw = (DirectionPoint - OwnerActor->GetActorLocation()).Rotation().Yaw;
+	return FMath::FindDeltaAngleDegrees(OwnerActor->GetActorRotation().Yaw, DirectionYaw);
+}
+
+FHitResolution UHitReactionComponent::ResolveHit(const FAttackRequest& AttackRequest) const
 {
 	ACharacterBase* OwnerCharacter = Cast<ACharacterBase>(GetOwner());
-	if (!OwnerCharacter) return AttackRequest.Response;
+	const float HitAngle = CalculateAttackAngle(AttackRequest);
+	if (!OwnerCharacter)
+	{
+		return { EHitOutcome::Hit, AttackRequest.Response, HitAngle };
+	}
 
 	UCharacterStatusComponent* Status = OwnerCharacter->GetCharacterStatusComponent();
-	if (!Status) return AttackRequest.Response;
+	if (!Status)
+	{
+		return { EHitOutcome::Hit, AttackRequest.Response, HitAngle };
+	}
 
 	const FGameplayTag& ActionTag = Status->GetCurrentAction();
-	EHitResponse FinalResponse = AttackRequest.Response;
 
 	// === 공중 피격 우선 ===
 	if (Status->IsInAir())
 	{
-		return EHitResponse::HitAir;
+		return { EHitOutcome::Hit, ECombatReaction::HitAir, HitAngle };
 	}
 
 	// === 회피 ===
 	if (ActionTag.MatchesTagExact(TAG_Action_Dodge))
 	{
 		if (AttackRequest.CanAvoid)
-			return EHitResponse::None;
+			return { EHitOutcome::Avoided, ECombatReaction::None, HitAngle };
 	}
 
 	// === 패리 (플레이어 / NPC CounterStance 공통) ===
-	if (ActionTag.MatchesTagExact(TAG_Action_Parry))
+	if (ActionTag.MatchesTagExact(TAG_Action_Parry) && IsParryActiveWindowOpen())
 	{
-		const float HitAngle = CalculateHitAngle(AttackRequest.HitPoint);
 		if (AttackRequest.CanParried && FMath::Abs(HitAngle) <= 60.0f)
 		{
-			ParryDelegate.Broadcast(AttackRequest);
-			return EHitResponse::None;
+			return { EHitOutcome::Parried, ECombatReaction::None, HitAngle };
 		}
 	}
 
 	// === 가드 ===
 	if (ActionTag.MatchesTagExact(TAG_Action_Guard))
 	{
-		const float HitAngle = CalculateHitAngle(AttackRequest.HitPoint);
 		if (AttackRequest.CanBlocked && FMath::Abs(HitAngle) <= 60.0f)
 		{
 			switch (AttackRequest.Response)
 			{
-			case EHitResponse::Flinch:
-			case EHitResponse::KnockBack:
-				FinalResponse = EHitResponse::Block;
-				break;
-			case EHitResponse::KnockDown:
-				FinalResponse = EHitResponse::BlockLarge;
-				break;
+			case ECombatReaction::KnockBack:
+			case ECombatReaction::KnockDown:
+				return { EHitOutcome::Blocked, ECombatReaction::GuardHitHeavy, HitAngle };
+			default:
+				return { EHitOutcome::Blocked, ECombatReaction::GuardHit, HitAngle };
 			}
 		}
 	}
 
-	return FinalResponse;
+	return { EHitOutcome::Hit, AttackRequest.Response, HitAngle };
+}
+
+void UHitReactionComponent::BeginParryActiveWindow()
+{
+	++ParryActiveWindowCount;
+}
+
+void UHitReactionComponent::EndParryActiveWindow()
+{
+	ParryActiveWindowCount = FMath::Max(0, ParryActiveWindowCount - 1);
+}
+
+void UHitReactionComponent::ResetParryActiveWindow()
+{
+	ParryActiveWindowCount = 0;
 }

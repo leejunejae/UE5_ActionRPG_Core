@@ -62,6 +62,7 @@ protected:
 public:	
 	void OnMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	virtual const FBaseAttackData* ExecuteAttack(FName AttackName, float Playrate = 1.0f);
+	const FBaseAttackData* GetNextAttackData(FName AttackName) const;
 	virtual bool PlayAnimation(const FAttackContext& AttackInfo, int32 Index, float Playrate = 1.0f);
 	virtual void ExecuteAttackTrace(float StartTime, float EndTime, bool bDrawDebug = false);
 	void CancelAttack(EActionExitReason ExitReason = EActionExitReason::Interrupted,
@@ -92,6 +93,8 @@ protected:
 		int32 ComboIndex = 0;
 
 	float LastTraceTime = 0.0f;
+	FTransform PreviousTraceRootWorldTransform = FTransform::Identity;
+	bool bHasPreviousTraceRootWorldTransform = false;
 
 private:
 	void FinishAttackSession(bool bInterrupted, bool bStopMontage,
@@ -106,4 +109,5 @@ private:
 
 	bool bAttackTraceActive = false;
 	bool bFinishingAttackSession = false;
+	uint64 AttackSessionId = 0;
 };

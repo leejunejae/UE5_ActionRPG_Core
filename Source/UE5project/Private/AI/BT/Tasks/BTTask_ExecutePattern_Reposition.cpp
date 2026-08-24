@@ -15,6 +15,7 @@ UBTTask_ExecutePattern_Reposition::UBTTask_ExecutePattern_Reposition()
 {
 	NodeName = TEXT("Reposition");
 	bCreateNodeInstance = true;
+	bNotifyTaskFinished = true;
 }
 
 EBTNodeResult::Type UBTTask_ExecutePattern_Reposition::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
@@ -72,6 +73,8 @@ EBTNodeResult::Type UBTTask_ExecutePattern_Reposition::ExecuteTask(UBehaviorTree
 	ApplyMovementSettings(Character, Data);
 
 	// --- 4. MoveTo 완료 델리게이트 연결 ---
+	// 이전 실행이 비정상 경로로 끝났더라도 같은 동적 델리게이트가 중복 등록되지 않게 한다.
+	EnemyController->ReceiveMoveCompleted.RemoveDynamic(this, &UBTTask_ExecutePattern_Reposition::OnMoveCompleted);
 	EnemyController->ReceiveMoveCompleted.AddDynamic(this, &UBTTask_ExecutePattern_Reposition::OnMoveCompleted);
 
 	// --- 5. 분기: TowardTarget(Engage)이면 Actor 추적, 아니면 Location 이동 ---
@@ -155,6 +158,15 @@ void UBTTask_ExecutePattern_Reposition::OnMoveCompleted(FAIRequestID RequestID, 
 	// 우리 요청이 아니면 무시
 	if (RequestID != CurrentMoveRequestID || !IsValid(OwnerCompRef)) return;
 
+	UBehaviorTreeComponent* OwnerComp = OwnerCompRef;
+
+	// FinishLatentTask가 태스크를 즉시 종료할 수 있으므로 먼저 콜백과 요청 상태를 정리한다.
+	if (AEnemyBaseAIController* AIC = Cast<AEnemyBaseAIController>(OwnerComp->GetAIOwner()))
+	{
+		AIC->ReceiveMoveCompleted.RemoveDynamic(this, &UBTTask_ExecutePattern_Reposition::OnMoveCompleted);
+	}
+	CurrentMoveRequestID = FAIRequestID();
+
 	// 타임아웃 타이머 취소
 	if (UWorld* World = GetWorld())
 	{
@@ -165,7 +177,7 @@ void UBTTask_ExecutePattern_Reposition::OnMoveCompleted(FAIRequestID RequestID, 
 
 	UE_LOG(Log_AI, Log, TEXT("[Reposition] MoveCompleted: %s"), bSuccess ? TEXT("Success") : TEXT("Failed"));
 
-	FinishLatentTask(*OwnerCompRef, bSuccess ? EBTNodeResult::Succeeded : EBTNodeResult::Failed);
+	FinishLatentTask(*OwnerComp, bSuccess ? EBTNodeResult::Succeeded : EBTNodeResult::Failed);
 }
 
 // ============================================================

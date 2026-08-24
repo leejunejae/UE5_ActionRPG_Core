@@ -17,6 +17,7 @@
 class ACharacter;
 class UArmorDataAsset;
 class UNiagaraSystem;
+class UMaterialInterface;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnWeaponChanged, const EWeaponType);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnArmorChanged, const EArmorSlot);
@@ -58,6 +59,12 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UNiagaraSystem> SubWeaponTrailSystem = nullptr;
 
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> MainWeaponTrailMaterial = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> SubWeaponTrailMaterial = nullptr;
+
 private:
 	void GetCurrentAttackBonuses(float& OutStrengthBonus, float& OutDexterityBonus, float& OutAffinityBonus) const;
 
@@ -71,6 +78,7 @@ public:
 	virtual void EquipWeapon_Implementation(FName WeaponKey) override;
 	FVector GetWeaponSocketLocation_Implementation(FName SocketName, bool IsSubWeapon) const;
 	UNiagaraSystem* GetWeaponTrailSystem_Implementation(bool IsSubWeapon) const;
+	UMaterialInterface* GetWeaponTrailMaterial_Implementation(bool IsSubWeapon) const;
 	FName GetWeaponTrailStartSocket_Implementation(bool IsSubWeapon) const;
 	FName GetWeaponTrailEndSocket_Implementation(bool IsSubWeapon) const;
 

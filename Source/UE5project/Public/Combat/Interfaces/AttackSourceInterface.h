@@ -26,4 +26,6 @@ class UE5PROJECT_API IAttackSourceInterface
 public:
 	virtual FAttackTraceSource GetAttackTraceSource(EAttackSourceType Type) const = 0;
 	virtual FAttackDamageSource GetAttackDamageSource() const = 0;
+	/** 이 공격 주체의 공격이 패리되었을 때 자신의 공격/상태/반응을 정리한다. */
+	virtual void ReceiveParried(AActor* ParryInstigator) = 0;
 };

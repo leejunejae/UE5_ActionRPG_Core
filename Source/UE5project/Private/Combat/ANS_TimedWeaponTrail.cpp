@@ -10,6 +10,7 @@
 #include "Combat/Interfaces/AttackSourceInterface.h"
 #include "Core/Subsystems/GameInstanceSystem/AnimBoneDataSubsystem.h"
 #include "DrawDebugHelpers.h"
+#include "Materials/MaterialInterface.h"
 #include "NiagaraComponent.h"
 #include "NiagaraDataInterfaceArrayFunctionLibrary.h"
 #include "NiagaraFunctionLibrary.h"
@@ -50,7 +51,9 @@ namespace
 		TArray<FVector>& OutEndSamples,
 		TArray<float>& OutTrailUSamples,
 		float TrailStartTime,
-		float TrailEndTime)
+		float TrailEndTime,
+		const FTransform& PreviousRootWorldTransform,
+		const FTransform& CurrentRootWorldTransform)
 	{
 		ACharacter* Character = MeshComp ? Cast<ACharacter>(MeshComp->GetOwner()) : nullptr;
 		IAttackSourceInterface* AttackSource = Character ? Cast<IAttackSourceInterface>(Character) : nullptr;
@@ -61,7 +64,6 @@ namespace
 		const FAttackTraceSource TraceSource = AttackSource->GetAttackTraceSource(SourceType);
 		if (!TraceSource.TraceComponent) return false;
 
-		const FTransform RootWorldTransform = MeshComp->GetBoneTransform(0);
 		const FWeaponTrajectoryGeometry Geometry = FWeaponTrajectoryUtility::BuildGeometry(
 			MeshComp, TraceSource.TraceComponent, Segment.BoneName, StartSocket, EndSocket);
 		if (!Geometry.IsValid()) return false;
@@ -82,10 +84,13 @@ namespace
 				? (SampleCount > 1 ? static_cast<float>(Index) / static_cast<float>(SampleCount - 1) : 0.0f)
 				: static_cast<float>(Index + 1) / static_cast<float>(SampleCount);
 			const float SampleTime = FMath::Lerp(StartTime, EndTime, Alpha);
+			FTransform SampleRootWorldTransform;
+			SampleRootWorldTransform.Blend(
+				PreviousRootWorldTransform, CurrentRootWorldTransform, Alpha);
 			FVector SampleStart;
 			FVector SampleEnd;
 			FWeaponTrajectoryUtility::GetSocketWorldPositions(
-				Geometry, Segment.GetTransformAtTime(SampleTime), RootWorldTransform,
+				Geometry, Segment.GetTransformAtTime(SampleTime), SampleRootWorldTransform,
 				SampleStart, SampleEnd);
 			OutStartSamples.Add(SampleStart);
 			OutEndSamples.Add(SampleEnd);
@@ -118,6 +123,8 @@ void UANS_TimedWeaponTrail::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimS
 		State.NotifyEndTime = Notify->GetEndTriggerTime();
 		State.LastSampleTime = State.NotifyStartTime;
 	}
+	State.PreviousRootWorldTransform = MeshComp->GetBoneTransform(0);
+	State.bHasPreviousRootWorldTransform = true;
 
 	const ACharacterBase* Character = Cast<ACharacterBase>(MeshComp->GetOwner());
 	const UAnimSequence* Sequence = Cast<UAnimSequence>(Anim);
@@ -162,6 +169,10 @@ void UANS_TimedWeaponTrail::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSe
 			FWeaponTrailRuntimeState* State = RuntimeStates.Find(MeshComp);
 			if (NiagaraComponent && State && State->Segment)
 			{
+				const FTransform CurrentRootWorldTransform = MeshComp->GetBoneTransform(0);
+				const FTransform& PreviousRootWorldTransform = State->bHasPreviousRootWorldTransform
+					? State->PreviousRootWorldTransform
+					: CurrentRootWorldTransform;
 				const FAnimNotifyEvent* Notify = EventReference.GetNotify();
 				const float NotifyEndTime = Notify
 					? Notify->GetEndTriggerTime()
@@ -180,7 +191,8 @@ void UANS_TimedWeaponTrail::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSe
 					MeshComp, *State->Segment, StartTime, EndTime,
 					TrajectorySampleInterval, MaxSamplesPerFrame, State->bNeedsInitialSample, bSubWeapon,
 					StartSocket, EndSocket, StartSamples, EndSamples, TrailUSamples,
-					FMath::Max(State->NotifyStartTime, State->Segment->StartTime), SamplingEndTime))
+					FMath::Max(State->NotifyStartTime, State->Segment->StartTime), SamplingEndTime,
+					PreviousRootWorldTransform, CurrentRootWorldTransform))
 				{
 					if (bDebugDrawTrajectory && MeshComp->GetWorld())
 					{
@@ -230,6 +242,8 @@ void UANS_TimedWeaponTrail::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSe
 					State->bNeedsInitialSample = false;
 				}
 				State->LastSampleTime = EndTime;
+				State->PreviousRootWorldTransform = CurrentRootWorldTransform;
+				State->bHasPreviousRootWorldTransform = true;
 			}
 			else if (NiagaraComponent)
 			{
@@ -322,6 +336,12 @@ UFXSystemComponent* UANS_TimedWeaponTrail::SpawnEffect(
 	if (!NewComponent)
 	{
 		return nullptr;
+	}
+
+	if (UMaterialInterface* TrailMaterial =
+		IEquipmentDataInterface::Execute_GetWeaponTrailMaterial(EquipmentComponent, bSubWeapon))
+	{
+		NewComponent->SetVariableMaterial(TrailMaterialParameter, TrailMaterial);
 	}
 
 	if (bApplyRateScaleAsTimeDilation && Animation)

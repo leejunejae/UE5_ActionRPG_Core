@@ -264,7 +264,27 @@ bool UPlayerStatComponent::ChangeStamina(const float Amount, const EStatChangeTy
 	return bChangeSuccess;
 }
 
-void UPlayerStatComponent::TickStaminaRegen(float DeltaTime)
+bool UPlayerStatComponent::CanAffordStamina(float Cost) const
+{
+	return Cost <= 0.f || PlayerStats.Stamina.Current + KINDA_SMALL_NUMBER >= Cost;
+}
+
+bool UPlayerStatComponent::TrySpendStamina(float Cost)
+{
+	if (Cost <= 0.f)
+	{
+		return true;
+	}
+
+	if (!CanAffordStamina(Cost))
+	{
+		return false;
+	}
+
+	return ChangeStamina(Cost, EStatChangeType::Damage);
+}
+
+void UPlayerStatComponent::TickStaminaRegen(float DeltaTime, float RegenRateMultiplier)
 {
 	TimeSinceStaminaSpend += DeltaTime;
 
@@ -272,7 +292,9 @@ void UPlayerStatComponent::TickStaminaRegen(float DeltaTime)
 	if (TimeSinceStaminaSpend < StaminaRegenDelay) return;
 
 	// 기본 회복량 + 지구력 보너스
-	const float EffectiveRegenRate = StaminaRegenRate + PlayerStats.CombatStats.StaminaRegenBonus;
+	const float EffectiveRegenRate =
+		(StaminaRegenRate + PlayerStats.CombatStats.StaminaRegenBonus) *
+		FMath::Max(0.f, RegenRateMultiplier);
 
 	PlayerStats.Stamina.Current = FMath::Clamp(
 		PlayerStats.Stamina.Current + EffectiveRegenRate * DeltaTime,

@@ -111,8 +111,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Dodge")
         TSoftObjectPtr<UAnimMontage> DodgeMontage;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Parry")
+        TSoftObjectPtr<UAnimMontage> ParryMontage;
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Dodge")
         FActionExitBlendSettings DodgeExitBlendSettings;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Parry")
+        FActionExitBlendSettings ParryExitBlendSettings;
 
     // 음수면 CommonAnimSet의 값을 사용한다.
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Dodge", meta = (ClampMin = "-1.0", ClampMax = "0.5"))

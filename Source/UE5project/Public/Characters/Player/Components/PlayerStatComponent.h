@@ -57,8 +57,10 @@ private:
 #pragma region Stamina
 public:
 	bool ChangeStamina(const float Amount, const EStatChangeType SPChangeType);
+	bool CanAffordStamina(float Cost) const;
+	bool TrySpendStamina(float Cost);
 	void ChangeMaxStamina(const float Amount);
-	void TickStaminaRegen(float DeltaTime);
+	void TickStaminaRegen(float DeltaTime, float RegenRateMultiplier = 1.0f);
 
 	FORCEINLINE float GetStamina() const { return PlayerStats.Stamina.Current; }
 	FORCEINLINE float GetMaxStamina() const { return PlayerStats.Stamina.Max; }

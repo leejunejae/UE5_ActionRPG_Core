@@ -9,6 +9,7 @@
 #include "EquipmentDataInterface.generated.h"
 
 class UNiagaraSystem;
+class UMaterialInterface;
 
 // This class does not need to be modified.
 UINTERFACE(MinimalAPI)
@@ -34,6 +35,9 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 		UNiagaraSystem* GetWeaponTrailSystem(bool IsSubWeapon = false) const;
+
+	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
+		UMaterialInterface* GetWeaponTrailMaterial(bool IsSubWeapon = false) const;
 
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 		FName GetWeaponTrailStartSocket(bool IsSubWeapon = false) const;

@@ -12,7 +12,6 @@
 #include "HitReactionComponent.generated.h"
 
 DECLARE_MULTICAST_DELEGATE(FMultiDelegate);
-DECLARE_MULTICAST_DELEGATE_OneParam(FOnParryDelegate, FAttackRequest);
 
 class ICharacterStatusInterface;
 
@@ -40,15 +39,19 @@ public:
 	void CancelHitReaction(EActionExitReason ExitReason = EActionExitReason::Interrupted,
 		bool bStopMontage = true);
 
-	virtual EHitResponse EvaluateHitResponse(const FAttackRequest& AttackRequest);
+	FHitResolution ResolveHit(const FAttackRequest& AttackRequest) const;
 	float CalculateHitAngle(const FVector HitPoint);
+	float CalculateAttackAngle(const FAttackRequest& AttackRequest) const;
+	void BeginParryActiveWindow();
+	void EndParryActiveWindow();
+	void ResetParryActiveWindow();
+	bool IsParryActiveWindowOpen() const { return ParryActiveWindowCount > 0; }
 
 	void OnHitReactionEnded(UAnimMontage* Montage, bool bInterrupted);
 	bool IsHitReactionActive() const { return bHitReactionActive; }
 	
 	FMultiDelegate HitEndDelegate;
 	FMultiDelegate HitStartDelegate;
-	FOnParryDelegate ParryDelegate;
 	
 private:
 	UPROPERTY(VisibleAnywhere, Meta = (AllowPrivateAccess = true))
@@ -65,4 +68,5 @@ private:
 
 	bool bHitReactionActive = false;
 	bool bFinishingHitReaction = false;
+	int32 ParryActiveWindowCount = 0;
 };

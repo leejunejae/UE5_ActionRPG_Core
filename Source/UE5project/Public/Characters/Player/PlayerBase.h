@@ -45,6 +45,7 @@ class ARide;
 enum class EWeaponType : uint8;
 struct FGameplayTag;
 struct FHitReactionRequest;
+struct FAttackRequest;
 
 DECLARE_DELEGATE(FOnSingleDelegate);
 
@@ -185,6 +186,7 @@ public:
 
 	virtual FAttackTraceSource GetAttackTraceSource(EAttackSourceType AttackSourceType) const override;
 	virtual FAttackDamageSource GetAttackDamageSource() const override;
+	virtual void ReceiveParried(AActor* ParryInstigator) override;
 #pragma endregion Inventory & Equip
 
 	/* ============================================================
@@ -221,6 +223,14 @@ protected:
 	float SprintStaminaPerSec = 12.0f;
 	UPROPERTY(EditAnywhere, Category = "Stats|Stamina")
 	float DodgeStaminaBase = 20.f;
+
+	/** 가드 유지 중 적용되는 스태미나 회복 속도 배율. */
+	UPROPERTY(EditAnywhere, Category = "Stats|Stamina", meta = (ClampMin = "0.0", ClampMax = "1.0"))
+	float GuardStaminaRegenMultiplier = 0.25f;
+
+	/** 가드 브레이크/가드 스턴 이후 다시 가드를 시작할 수 없는 시간. */
+	UPROPERTY(EditAnywhere, Category = "Stats|Stamina", meta = (ClampMin = "0.0"))
+	float GuardReentryLockoutDuration = 0.75f;
 public:
 	float GetDirection();
 	void SetRotationInputDirection_Implementation();
@@ -238,6 +248,12 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UAnimMontage> ActiveDodgeMontage = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> ConfiguredParryMontage = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> ActiveParryMontage = nullptr;
 #pragma endregion Ground
 
 	/* ============================================================
@@ -323,13 +339,16 @@ private:
 	void BlockInput();
 	void BlockInputEnd();
 	void InteractInput();
-	//void ParryInput();
+	void ParryInput();
 
 	// ---- 실행 (순수 로직, 판단 없음) ----
 	void ExecuteAttack();
 	void ExecuteJump();
 	void ExecuteDodge();
 	void ExecuteBlock();
+	void ExecuteParry();
+	float GetAttackStaminaCost(FName AttackName) const;
+	float GetDodgeStaminaCost() const;
 	void ExecuteInteract();
 
 	// ---- 버퍼 소비 콜백 ----
@@ -339,16 +358,20 @@ private:
 		EActionExitReason ExitReason);
 	void ExitActionRuntime(const FGameplayTag& ActionTag, EActionExitReason ExitReason);
 	void ExitDodgeRuntime(EActionExitReason ExitReason);
+	void ExitParryRuntime(EActionExitReason ExitReason);
+	void OnParryMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	void TryReturnToLocomotion(const FVector2D& MovementInput);
 	void RefreshActionAnimationProfile(EWeaponType WeaponType);
 
 	float DodgeLocomotionBlendOutTime = 0.15f;
 	FActionExitBlendSettings DodgeExitBlendSettings;
+	FActionExitBlendSettings ParryExitBlendSettings;
 
 	bool IsAttackInput;
 
 	FTimerHandle AttackTimerHandle;
 	float AttackChargeTime = 0.0f;
+	float GuardReentryLockoutRemaining = 0.0f;
 
 public:
 	FORCEINLINE UCombatComponent* GetCombatComponent() const { return CombatComponent; }
