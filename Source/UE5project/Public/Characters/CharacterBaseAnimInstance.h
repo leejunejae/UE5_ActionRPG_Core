@@ -283,17 +283,6 @@ private:
 #pragma endregion State & Stance
 
 
-#pragma region HitReaction
-public:
-	void SetHitAir(bool HitState);
-	void ResetHitAir_Implementation() override;
-
-private:
-	UPROPERTY(BlueprintReadOnly, Category = HitReaction, Meta = (AllowPrivateAccess = true))
-		bool bIsHitAir = false;
-
-#pragma endregion HitReaction
-
 #pragma region Death
 protected:
 	virtual void HandleDeathStarted();

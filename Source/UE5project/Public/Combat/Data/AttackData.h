@@ -72,7 +72,7 @@ public:
 		FName SectionName;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		ECombatReaction Response;
+		EHitDamageLevel DamageLevel = EHitDamageLevel::None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		EDamageType DamageType;

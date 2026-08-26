@@ -86,6 +86,7 @@ bool UStatComponent::Heal(const float Amount)
 void UStatComponent::ChangePoise(const float Amount, const EStatChangeType PoiseChangeType)
 {
 	FCharacterStats& Stats = GetCommonStats();
+	const bool bWasBroken = Stats.Poise.Current <= 0.0f;
 
 	float Delta = Amount;
 
@@ -104,7 +105,7 @@ void UStatComponent::ChangePoise(const float Amount, const EStatChangeType Poise
 
 	Stats.Poise.Current = FMath::Clamp(Stats.Poise.Current - Delta, 0.0f, Stats.Poise.Max);
 
-	if (Stats.Poise.Current <= 0.0f)
+	if (!bWasBroken && Stats.Poise.Current <= 0.0f)
 	{
 		if(AActor* Owner = GetOwner())UE_LOG(Log_Hit, Log, TEXT("[StatComponent] %s Poise has been broken"), *Owner->GetName());
 		PoiseBreakDelegate.Broadcast();

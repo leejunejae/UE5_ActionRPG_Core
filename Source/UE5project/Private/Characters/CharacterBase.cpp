@@ -11,6 +11,7 @@
 #include "Interaction/Climb/Components/ClimbComponent.h"
 #include "MotionWarpingComponent.h"
 #include "Utils/CoreLog.h"
+#include "Utils/GameplayTagsBase.h"
 
 // Sets default values
 ACharacterBase::ACharacterBase(const FObjectInitializer& ObjectInitializer)
@@ -69,6 +70,18 @@ void ACharacterBase::PostInitializeComponents()
 
 }
 
+void ACharacterBase::Landed(const FHitResult& Hit)
+{
+	Super::Landed(Hit);
+
+	if (HitReactionComponent && HitReactionComponent->IsHitAirReactionActive() &&
+		!HitReactionComponent->TransitionHitAirToRecovery())
+	{
+		HitReactionComponent->CancelHitReaction(EActionExitReason::Interrupted, true);
+	}
+
+}
+
 bool ACharacterBase::ApplyDirectHitStats(const FAttackRequest& AttackInfo, bool& bOutPoiseBroken)
 {
 	bOutPoiseBroken = false;
@@ -78,9 +91,25 @@ bool ACharacterBase::ApplyDirectHitStats(const FAttackRequest& AttackInfo, bool&
 	}
 
 	const bool bSurvived = StatComponent->ApplyDamage(AttackInfo.Damage, AttackInfo.AttackType);
+	if (!bSurvived)
+	{
+		return false;
+	}
+
+	const bool bWasPoiseBroken = StatComponent->GetCommonStats().GetPoise() <= 0.0f;
 	StatComponent->ChangePoise(AttackInfo.PoiseDamage, EStatChangeType::Damage);
-	bOutPoiseBroken = StatComponent->GetCommonStats().GetPoise() <= 0.0f;
-	return bSurvived;
+	const bool bIsPoiseBroken = StatComponent->GetCommonStats().GetPoise() <= 0.0f;
+	bOutPoiseBroken = !bWasPoiseBroken && bIsPoiseBroken;
+	return true;
+}
+
+void ACharacterBase::RestorePoise()
+{
+	if (StatComponent)
+	{
+		StatComponent->ChangePoise(
+			StatComponent->GetCommonStats().GetMaxPoise(), EStatChangeType::Restore);
+	}
 }
 
 void ACharacterBase::SetCurLocomotionGait(ELocomotionGait NewGait)
@@ -102,7 +131,10 @@ void ACharacterBase::SetCurLocomotionGait(ELocomotionGait NewGait)
 
 void ACharacterBase::HandleDeathStarted()
 {
-
+	if (HitReactionComponent)
+	{
+		HitReactionComponent->CancelHitReaction(EActionExitReason::Death, true);
+	}
 }
 
 void ACharacterBase::HandleDeathFinalized()

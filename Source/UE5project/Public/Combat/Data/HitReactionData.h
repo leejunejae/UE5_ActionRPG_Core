@@ -28,14 +28,6 @@ public:
 
 
 UENUM(BlueprintType)
-enum class EHitPointVertical : uint8
-{
-	Neutral UMETA(DisplayName = "Neutral"),
-	Up UMETA(DisplayName = "Up"),
-	Down UMETA(DisplayName = "Down"),
-};
-
-UENUM(BlueprintType)
 enum class EHitPointHorizontal : uint8
 {
 	Neutral UMETA(DisplayName = "Neutral"),
@@ -59,10 +51,7 @@ public:
 		FName SectionName;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		EHitPointVertical HitPointVertical;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		EHitPointHorizontal HitPointHorizontal;
+		EHitPointHorizontal HitPointHorizontal = EHitPointHorizontal::Neutral;
 
 	inline bool operator==(const FHitReactionDetail& Other) const
 	{

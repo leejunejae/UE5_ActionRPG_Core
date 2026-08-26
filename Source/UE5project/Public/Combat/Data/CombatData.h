@@ -23,6 +23,17 @@ enum class EStatChangeType : uint8
 	Heal UMETA(DisplayName = "Heal"),
 };
 
+// 공격 데이터가 지정하는 직접 피격 반응의 강도.
+// 가드 및 자세 붕괴 반응은 판정 결과에서 ECombatReaction으로 생성된다.
+UENUM(BlueprintType)
+enum class EHitDamageLevel : uint8
+{
+	None = 0 UMETA(DisplayName = "None"),
+	Flinch = 1 UMETA(DisplayName = "Flinch"),
+	KnockBack = 2 UMETA(DisplayName = "KnockBack"),
+	KnockDown = 3 UMETA(DisplayName = "KnockDown"),
+};
+
 // 공격 해결 후 실제로 재생할 전투 반응.
 // 공격의 적중/회피/가드/패리 여부는 EHitOutcome이 별도로 표현한다.
 UENUM(BlueprintType)
@@ -38,6 +49,17 @@ enum class ECombatReaction : uint8
 	GuardBreak UMETA(DisplayName = "GuardBreak"),
 	StanceBreak UMETA(DisplayName = "StanceBreak"),
 };
+
+FORCEINLINE ECombatReaction ToCombatReaction(EHitDamageLevel DamageLevel)
+{
+	switch (DamageLevel)
+	{
+	case EHitDamageLevel::Flinch: return ECombatReaction::Flinch;
+	case EHitDamageLevel::KnockBack: return ECombatReaction::KnockBack;
+	case EHitDamageLevel::KnockDown: return ECombatReaction::KnockDown;
+	default: return ECombatReaction::None;
+	}
+}
 
 // 공격이 방어자에게 어떻게 해결되었는지를 나타낸다.
 // 실제로 재생할 애니메이션 반응(ECombatReaction)과 분리해서 사용한다.
@@ -87,7 +109,7 @@ public:
 	float PoiseDamage = 0.f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-	ECombatReaction Response = ECombatReaction::None;
+	EHitDamageLevel DamageLevel = EHitDamageLevel::None;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	EDamageType AttackType = EDamageType::PhysicalDamage;
@@ -130,7 +152,7 @@ public:
 		float InDamage,
 		float InStanceDamage,
 		float InPoiseDamage,
-		ECombatReaction InResponse,
+		EHitDamageLevel InDamageLevel,
 		EDamageType InAttackType,
 		EElementalType InElementType,
 		float InElementalBuildup,
@@ -143,7 +165,7 @@ public:
 		: Damage(InDamage)
 		, StanceDamage(InStanceDamage)
 		, PoiseDamage(InPoiseDamage)
-		, Response(InResponse)
+		, DamageLevel(InDamageLevel)
 		, AttackType(InAttackType)
 		, ElementType(InElementType)
 		, ElementalBuildup(InElementalBuildup)

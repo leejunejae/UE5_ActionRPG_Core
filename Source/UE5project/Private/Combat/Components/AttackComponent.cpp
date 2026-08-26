@@ -347,7 +347,7 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 						float OutDamage = DamageSource.AttackRating * Detail.DamageMultiplier;
 						float OutPoiseDamage = DamageSource.PoiseRating * Detail.PoiseDamageMultiplier;
 						float OutStanceDamage = DamageSource.StanceRating * Detail.StanceDamageMultiplier;
-						ECombatReaction OutResponse = Detail.Response;
+						EHitDamageLevel OutDamageLevel = Detail.DamageLevel;
 						EDamageType OutAttackType = Detail.DamageType;
 						EElementalType OutElementType = Detail.ElementType;
 						float OutElementalBuildup = Detail.ElementalBuildup;
@@ -361,7 +361,7 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 							OutDamage,
 							OutStanceDamage,
 							OutPoiseDamage,
-							OutResponse,
+							OutDamageLevel,
 							OutAttackType,
 							OutElementType,
 							OutElementalBuildup,

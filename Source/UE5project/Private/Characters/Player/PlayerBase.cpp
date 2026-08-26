@@ -396,6 +396,11 @@ void APlayerBase::Move(const FInputActionValue& value)
 		const FRotator YawRotation(0, Rotation.Yaw, 0);
 		InputVector = FVector(DirectionValue.X, DirectionValue.Y, 0.0f);
 		TryReturnToLocomotion(DirectionValue);
+		if (GetCharacterStatusComponent()->GetCurrentAction().MatchesTagExact(TAG_Action_HitReact) &&
+			!GetCharacterStatusComponent()->IsWindowOpen(TAG_Window_Locomotion))
+		{
+			return;
+		}
 
 		FVector2D MovementScale = DirectionValue;
 		MovementScale.Normalize();
@@ -931,7 +936,6 @@ void APlayerBase::Landed(const FHitResult& Hit)
 	SetSkipJumpStart(false);
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	FinishActionIfCurrent(TAG_Action_Jump);
-	FinishActionIfCurrent(TAG_Action_HitReact);
 }
 
 /* ============================================================
@@ -1100,24 +1104,40 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 		switch (Response)
 		{
 		case ECombatReaction::None:
+			if (bPoiseBroken)
+			{
+				RestorePoise();
+			}
 			return;
 
 		case ECombatReaction::Flinch:
 		case ECombatReaction::KnockBack:
 		case ECombatReaction::KnockDown:
-			if (bPoiseBroken)
+		{
+			const bool bUpgradeActiveReaction =
+				GetHitReactionComponent()->CanUpgradeActiveReaction(Response);
+			if (bPoiseBroken || bUpgradeActiveReaction)
 			{
 				const FHitReactionRequest InputReaction = { Response, HitAngle };
-				TryExecuteHitReaction(InputReaction);
+				const bool bExecuted = bUpgradeActiveReaction
+					? GetHitReactionComponent()->ExecuteHitResponse(InputReaction)
+					: TryExecuteHitReaction(InputReaction);
+				if (!bExecuted)
+				{
+					RestorePoise();
+				}
 			}
 			return;
+		}
 
 		case ECombatReaction::HitAir:
 			if (bPoiseBroken && GetCharacterStatusComponent()->CanTryAction(TAG_Action_HitReact))
 			{
-				CharacterBaseAnim->SetHitAir(true);
-				GetCharacterStatusComponent()->SwitchAction(
-					TAG_Action_HitReact, EActionExitReason::Interrupted);
+				const FHitReactionRequest InputReaction = { ECombatReaction::HitAir, HitAngle };
+				if (!TryExecuteHitReaction(InputReaction))
+				{
+					RestorePoise();
+				}
 			}
 			return;
 
@@ -1220,6 +1240,8 @@ void APlayerBase::ExitParryRuntime(EActionExitReason ExitReason)
 
 void APlayerBase::HandleDeathStarted()
 {
+	Super::HandleDeathStarted();
+
 	if (GetAttackComponent())
 	{
 		GetAttackComponent()->CancelAttack(EActionExitReason::Death, true);

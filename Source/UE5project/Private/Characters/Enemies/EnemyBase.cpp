@@ -276,6 +276,10 @@ bool AEnemyBase::ApplyEnemyStats(const FEnemyStats* Stat)
 	if (!Stat)
 		return false;
 
+	// 가드 행동 자체는 AI 전투 계층이 담당하지만, 가드 판정에 쓰는 수치는
+	// 적 스탯 데이터가 로드되는 시점에 런타임 캐릭터로 전달한다.
+	GuardNegation = FMath::Clamp(Stat->GuardNegation, 0.0f, 100.0f);
+
 	FNPCStats RuntimeStats;
 	RuntimeStats.BaseStats.Health.InitResource(Stat->Health);
 	RuntimeStats.BaseStats.Poise.InitResource(Stat->Poise);
@@ -437,25 +441,41 @@ void AEnemyBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 		switch (Response)
 		{
 		case ECombatReaction::None:
+			if (bPoiseBroken)
+			{
+				RestorePoise();
+			}
 			return;
 
 		case ECombatReaction::Flinch:
 		case ECombatReaction::KnockBack:
 		case ECombatReaction::KnockDown:
-			if (bPoiseBroken)
+		{
+			const bool bUpgradeActiveReaction =
+				HitReactionComponent->CanUpgradeActiveReaction(Response);
+			if (bPoiseBroken || bUpgradeActiveReaction)
 			{
 				UE_LOG(Log_Hit, Log, TEXT("[EnemyBase] %s stagger occurred"), *GetName());
 				const FHitReactionRequest InputReaction = { Response, HitAngle };
-				GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
-				HitReactionComponent->ExecuteHitResponse(InputReaction);
+				const bool bExecuted = bUpgradeActiveReaction
+					? HitReactionComponent->ExecuteHitResponse(InputReaction)
+					: TryExecuteHitReaction(InputReaction);
+				if (!bExecuted)
+				{
+					RestorePoise();
+				}
 			}
 			return;
+		}
 
 		case ECombatReaction::HitAir:
 			if (bPoiseBroken)
 			{
-				CharacterBaseAnim->SetHitAir(true);
-				GetCharacterStatusComponent()->RequestAction(TAG_Action_HitReact);
+				const FHitReactionRequest InputReaction = { ECombatReaction::HitAir, HitAngle };
+				if (!TryExecuteHitReaction(InputReaction))
+				{
+					RestorePoise();
+				}
 			}
 			return;
 
@@ -479,7 +499,7 @@ void AEnemyBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 			if (!CharacterStatusComponent->IsDead())
 			{
 				FHitReactionRequest InputReaction = { Response, HitAngle };
-				HitReactionComponent->ExecuteHitResponse(InputReaction);
+				TryExecuteHitReaction(InputReaction);
 			}
 		}
 		else
@@ -489,11 +509,9 @@ void AEnemyBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 			{
 				GetStatComponent()->BreakStance();
 				StanceBroken = true;
-				CharacterStatusComponent->SwitchAction(TAG_Action_HitReact, EActionExitReason::Interrupted);
 				const FHitReactionRequest InputReaction = { ECombatReaction::GuardBreak, HitAngle };
-				if (!HitReactionComponent->ExecuteHitResponse(InputReaction))
+				if (!TryExecuteHitReaction(InputReaction))
 				{
-					CharacterStatusComponent->ClearAction();
 					HandleStanceBreakEnded();
 				}
 			}
@@ -501,6 +519,29 @@ void AEnemyBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 		break;
 	}
 	}
+}
+
+bool AEnemyBase::TryExecuteHitReaction(const FHitReactionRequest& ReactionRequest)
+{
+	if (!CharacterStatusComponent || !HitReactionComponent ||
+		CharacterStatusComponent->IsDead())
+	{
+		return false;
+	}
+
+	// 피격은 입력 Window의 허가를 받는 행동이 아니라 외부에서 강제되는 전환이다.
+	// 따라서 버퍼나 CanTryAction을 거치지 않고 현재 프레임에 즉시 전환한다.
+	CharacterStatusComponent->SwitchAction(TAG_Action_HitReact, EActionExitReason::Interrupted);
+	if (!HitReactionComponent->ExecuteHitResponse(ReactionRequest))
+	{
+		if (CharacterStatusComponent->GetCurrentAction().MatchesTagExact(TAG_Action_HitReact))
+		{
+			CharacterStatusComponent->ClearAction();
+		}
+		return false;
+	}
+
+	return true;
 }
 
 void AEnemyBase::HandleDeathStarted()

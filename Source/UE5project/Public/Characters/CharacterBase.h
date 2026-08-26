@@ -41,6 +41,7 @@ protected:
 public:
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
+	virtual void Landed(const FHitResult& Hit) override;
 
 	virtual void PostInitializeComponents() override;
 
@@ -108,6 +109,7 @@ public:
 protected:
 	/** 방어되지 않은 일반 피격의 공통 HP/Poise 적용. 반환값은 생존 여부다. */
 	bool ApplyDirectHitStats(const FAttackRequest& AttackInfo, bool& bOutPoiseBroken);
+	void RestorePoise();
 #pragma endregion Stat
 
 #pragma region Ladder

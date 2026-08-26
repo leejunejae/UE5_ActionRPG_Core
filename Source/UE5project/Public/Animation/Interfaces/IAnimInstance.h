@@ -26,9 +26,6 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 		void ResetTurn();
 
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
-		void ResetHitAir();
-
 	UFUNCTION(BlueprintNativeEvent, Category = "IK")
 		void SetIKPhaseAlpha(FGameplayTag TargetIKPhase, float Weight);
 

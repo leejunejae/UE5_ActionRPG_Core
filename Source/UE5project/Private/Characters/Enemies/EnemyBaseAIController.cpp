@@ -17,6 +17,7 @@
 #include "Perception/AIPerceptionComponent.h"
 #include "AI/CombatDecisionComponent.h"
 #include "Combat/Components/HitReactionComponent.h"
+#include "Characters/Components/CharacterStatusComponent.h"
 
 #include "Utils/CoreLog.h"
 #include "Utils/CustomMathUtility.h"
@@ -571,6 +572,13 @@ void AEnemyBaseAIController::OnStaggeredStarted()
 
 void AEnemyBaseAIController::OnStaggeredEnded()
 {
+    const AEnemyBase* Enemy = Cast<AEnemyBase>(GetPawn());
+    if (!Enemy || !Enemy->GetCharacterStatusComponent() ||
+        Enemy->GetCharacterStatusComponent()->IsDead())
+    {
+        return;
+    }
+
     CurrentState = EAIBehaviorState::Normal;
     UpdateBehaviorStateFromPrimary();
     PushToBlackboard(PrimaryTarget.Get());

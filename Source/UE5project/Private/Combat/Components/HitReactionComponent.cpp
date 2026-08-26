@@ -91,22 +91,48 @@ bool UHitReactionComponent::ExecuteHitResponse(const FHitReactionRequest& Reacti
 		{ EHitPointHorizontal::FrontLeft, -45.0f }
 	};
 
-	float MatchScore = 180.0f;
-
+	float MatchScore = TNumericLimits<float>::Max();
 	FHitReactionDetail MatchInfo;
+	const FHitReactionDetail* NeutralFallback = nullptr;
+	bool bFoundDirectionalMatch = false;
 
 	for (const FHitReactionDetail& Info : CandidateReaction.HitReactionDetail)
 	{
-		EHitPointHorizontal CurrentPoint = Info.HitPointHorizontal;
+		const EHitPointHorizontal CurrentPoint = Info.HitPointHorizontal;
+		if (CurrentPoint == EHitPointHorizontal::Neutral)
+		{
+			// Neutral은 방향별 항목이 하나도 없을 때만 사용하는 명시적 fallback이다.
+			if (!NeutralFallback || Info.SectionName.LexicalLess(NeutralFallback->SectionName))
+			{
+				NeutralFallback = &Info;
+			}
+			continue;
+		}
 
-		float PointToAngle = DirectionToYaw[CurrentPoint];
-		float AngleDiff = FMath::Abs(FMath::FindDeltaAngleDegrees(ReactionData.HitAngle, PointToAngle));
+		const float* PointToAngle = DirectionToYaw.Find(CurrentPoint);
+		if (!PointToAngle)
+		{
+			continue;
+		}
 
-		if (AngleDiff < MatchScore)
+		const float AngleDiff = FMath::Abs(
+			FMath::FindDeltaAngleDegrees(ReactionData.HitAngle, *PointToAngle));
+		const bool bCloser = AngleDiff < MatchScore;
+		const bool bSameDistance = FMath::IsNearlyEqual(AngleDiff, MatchScore);
+		const bool bStableTieBreak = bSameDistance &&
+			static_cast<uint8>(CurrentPoint) < static_cast<uint8>(MatchInfo.HitPointHorizontal);
+
+		if (!bFoundDirectionalMatch || bCloser || bStableTieBreak)
 		{
 			MatchScore = AngleDiff;
 			MatchInfo = Info;
+			bFoundDirectionalMatch = true;
 		}
+	}
+
+	if (!bFoundDirectionalMatch && NeutralFallback)
+	{
+		MatchInfo = *NeutralFallback;
 	}
 
 	if (!PlayReaction(CandidateReaction, MatchInfo.SectionName))
@@ -122,7 +148,53 @@ bool UHitReactionComponent::ExecuteHitResponse(const FHitReactionRequest& Reacti
 		return false;
 	}
 
+	ActiveReaction = ReactionData.Response;
 	HitStartDelegate.Broadcast();
+	return true;
+}
+
+bool UHitReactionComponent::CanUpgradeActiveReaction(ECombatReaction IncomingReaction) const
+{
+	if (!bHitReactionActive)
+	{
+		return false;
+	}
+
+	auto GetDirectHitRank = [](ECombatReaction Reaction) -> int32
+	{
+		switch (Reaction)
+		{
+		case ECombatReaction::Flinch: return 1;
+		case ECombatReaction::KnockBack: return 2;
+		case ECombatReaction::KnockDown: return 3;
+		default: return INDEX_NONE;
+		}
+	};
+
+	const int32 ActiveRank = GetDirectHitRank(ActiveReaction);
+	const int32 IncomingRank = GetDirectHitRank(IncomingReaction);
+	return ActiveRank != INDEX_NONE && IncomingRank > ActiveRank;
+}
+
+bool UHitReactionComponent::TransitionHitAirToRecovery(FName RecoverySection)
+{
+	if (!IsHitAirReactionActive() || !ActiveHitMontage)
+	{
+		return false;
+	}
+
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	UAnimInstance* AnimInstance = Character && Character->GetMesh()
+		? Character->GetMesh()->GetAnimInstance() : nullptr;
+	if (!AnimInstance || !ActiveHitMontage->IsValidSectionName(RecoverySection))
+	{
+		UE_LOG(Log_Hit, Warning,
+			TEXT("[HitReactionComponent] Owner=%s HitAir recovery section '%s' is invalid in %s."),
+			*GetNameSafe(GetOwner()), *RecoverySection.ToString(), *GetNameSafe(ActiveHitMontage));
+		return false;
+	}
+
+	AnimInstance->Montage_JumpToSection(RecoverySection, ActiveHitMontage);
 	return true;
 }
 
@@ -207,6 +279,7 @@ void UHitReactionComponent::FinishHitReaction(bool bStopMontage, bool bBroadcast
 
 	ActiveHitMontage = nullptr;
 	CurHitReaction = FHitReactionInfo();
+	ActiveReaction = ECombatReaction::None;
 	bHitReactionActive = false;
 	ClearHitReactActionIfCurrent();
 	if (bBroadcastEnd)
@@ -259,13 +332,13 @@ FHitResolution UHitReactionComponent::ResolveHit(const FAttackRequest& AttackReq
 	const float HitAngle = CalculateAttackAngle(AttackRequest);
 	if (!OwnerCharacter)
 	{
-		return { EHitOutcome::Hit, AttackRequest.Response, HitAngle };
+		return { EHitOutcome::Hit, ToCombatReaction(AttackRequest.DamageLevel), HitAngle };
 	}
 
 	UCharacterStatusComponent* Status = OwnerCharacter->GetCharacterStatusComponent();
 	if (!Status)
 	{
-		return { EHitOutcome::Hit, AttackRequest.Response, HitAngle };
+		return { EHitOutcome::Hit, ToCombatReaction(AttackRequest.DamageLevel), HitAngle };
 	}
 
 	const FGameplayTag& ActionTag = Status->GetCurrentAction();
@@ -297,10 +370,10 @@ FHitResolution UHitReactionComponent::ResolveHit(const FAttackRequest& AttackReq
 	{
 		if (AttackRequest.CanBlocked && FMath::Abs(HitAngle) <= 60.0f)
 		{
-			switch (AttackRequest.Response)
+			switch (AttackRequest.DamageLevel)
 			{
-			case ECombatReaction::KnockBack:
-			case ECombatReaction::KnockDown:
+			case EHitDamageLevel::KnockBack:
+			case EHitDamageLevel::KnockDown:
 				return { EHitOutcome::Blocked, ECombatReaction::GuardHitHeavy, HitAngle };
 			default:
 				return { EHitOutcome::Blocked, ECombatReaction::GuardHit, HitAngle };
@@ -308,7 +381,7 @@ FHitResolution UHitReactionComponent::ResolveHit(const FAttackRequest& AttackReq
 		}
 	}
 
-	return { EHitOutcome::Hit, AttackRequest.Response, HitAngle };
+	return { EHitOutcome::Hit, ToCombatReaction(AttackRequest.DamageLevel), HitAngle };
 }
 
 void UHitReactionComponent::BeginParryActiveWindow()

@@ -36,7 +36,6 @@ void UCharacterBaseAnimInstance::NativeInitializeAnimation()
 	if (Character)
 	{
 		Character->GetCharacterStatusComponent()->OnDeathStarted.AddUObject(this, &UCharacterBaseAnimInstance::HandleDeathStarted);
-
 		AnimModeMap.Empty();
 		AnimModeMap.Add(TAG_State_Ground, NewObject<UAnimMode_Ground>(this));
 		AnimModeMap.Add(TAG_State_Ladder, NewObject<UAnimMode_Ladder>(this));
@@ -131,16 +130,6 @@ void UCharacterBaseAnimInstance::FootRotation(float DeltaTime, FVector TargetNor
 	FRotator TargetRotator = FRotator(AtanX, 0.0f, AtanY);
 
 	*FootRotator = UKismetMathLibrary::RInterpTo(*FootRotator, TargetRotator, DeltaTime, fInterpSpeed);
-}
-
-void UCharacterBaseAnimInstance::SetHitAir(bool HitState)
-{
-	bIsHitAir = HitState;
-}
-
-void UCharacterBaseAnimInstance::ResetHitAir_Implementation()
-{
-	SetHitAir(false);
 }
 
 void UCharacterBaseAnimInstance::HandleDeathStarted()

@@ -46,9 +46,15 @@ public:
 	void EndParryActiveWindow();
 	void ResetParryActiveWindow();
 	bool IsParryActiveWindowOpen() const { return ParryActiveWindowCount > 0; }
+	bool CanUpgradeActiveReaction(ECombatReaction IncomingReaction) const;
+	bool TransitionHitAirToRecovery(FName RecoverySection = TEXT("Recovery"));
 
 	void OnHitReactionEnded(UAnimMontage* Montage, bool bInterrupted);
 	bool IsHitReactionActive() const { return bHitReactionActive; }
+	bool IsHitAirReactionActive() const
+	{
+		return bHitReactionActive && ActiveReaction == ECombatReaction::HitAir;
+	}
 	
 	FMultiDelegate HitEndDelegate;
 	FMultiDelegate HitStartDelegate;
@@ -69,4 +75,5 @@ private:
 	bool bHitReactionActive = false;
 	bool bFinishingHitReaction = false;
 	int32 ParryActiveWindowCount = 0;
+	ECombatReaction ActiveReaction = ECombatReaction::None;
 };

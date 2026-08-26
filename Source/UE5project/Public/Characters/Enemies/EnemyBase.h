@@ -23,6 +23,7 @@ class UHitReactionComponent;
 class UCharacterStatusComponent;
 class UEnemyBaseAnimInstance;
 class AEnemyBaseAIController;
+struct FHitReactionRequest;
 
 class UWidgetComponent;
 class UOverheadHPWidget;
@@ -129,6 +130,7 @@ public:
 	bool BreakStance(float HitAngle = 0.0f);
 
 private:
+	bool TryExecuteHitReaction(const FHitReactionRequest& ReactionRequest);
 	void HandleStanceBreakEnded();
 
 public:
