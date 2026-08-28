@@ -29,6 +29,64 @@ public:
 };
 
 class UHitReactionDataAsset;
+class UAnimMontage;
+
+UENUM(BlueprintType)
+enum class ECriticalExecutionDirection : uint8
+{
+    Front UMETA(DisplayName = "Front"),
+    Back UMETA(DisplayName = "Back"),
+    Left UMETA(DisplayName = "Left"),
+    Right UMETA(DisplayName = "Right")
+};
+
+USTRUCT(BlueprintType)
+struct FCriticalExecutionAttackerEntry
+{
+    GENERATED_BODY()
+
+    /** 공격자와 피격자 애니메이션 쌍을 연결하는 공통 식별자. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Critical Execution")
+        FName ExecutionID = TEXT("Execution_01");
+
+    /** 적의 시점을 기준으로 플레이어가 접근한 방향. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Critical Execution")
+        ECriticalExecutionDirection Direction = ECriticalExecutionDirection::Front;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Critical Execution")
+        TSoftObjectPtr<UAnimMontage> Montage;
+
+    /** 대상 Transform 기준 플레이어의 시작 Transform. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Critical Execution")
+        FTransform AttackerRelativeTransform =
+            FTransform(FRotator(0.0f, 180.0f, 0.0f), FVector(100.0f, 0.0f, 0.0f));
+
+    bool IsConfigured() const
+    {
+        return !ExecutionID.IsNone() && !Montage.IsNull();
+    }
+};
+
+USTRUCT(BlueprintType)
+struct FCriticalExecutionVictimEntry
+{
+    GENERATED_BODY()
+
+    /** 대응하는 공격자 항목과 동일한 값을 사용한다. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Critical Execution")
+        FName ExecutionID = TEXT("Execution_01");
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Critical Execution")
+        ECriticalExecutionDirection Direction = ECriticalExecutionDirection::Front;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Critical Execution")
+        TSoftObjectPtr<UAnimMontage> Montage;
+
+    bool IsConfigured() const
+    {
+        return !ExecutionID.IsNone() && !Montage.IsNull();
+    }
+};
 
 USTRUCT(BlueprintType)
 struct FAnimDataSet
@@ -43,6 +101,10 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
         TObjectPtr<UAnimMontage> DeathMontage;
+
+    /** 이 스켈레톤 프로필이 피격자로 재생할 동기 처형 애니메이션. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Critical Execution")
+        TArray<FCriticalExecutionVictimEntry> CriticalExecutions;
 };
 
 USTRUCT(BlueprintType)
@@ -113,6 +175,10 @@ public:
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Parry")
         TSoftObjectPtr<UAnimMontage> ParryMontage;
+
+    /** 현재 무기 애니메이션 세트가 공격자로 재생할 동기 처형 애니메이션. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Critical Execution")
+        TArray<FCriticalExecutionAttackerEntry> CriticalExecutions;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Dodge")
         FActionExitBlendSettings DodgeExitBlendSettings;

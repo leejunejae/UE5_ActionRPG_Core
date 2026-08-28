@@ -579,6 +579,13 @@ void AEnemyBaseAIController::OnStaggeredEnded()
         return;
     }
 
+    // Execution 진입 시 기존 StanceBreak 몽타주를 취소하면서도 HitEnd가 발생한다.
+    // 이 콜백으로 AI를 전투 상태에 복귀시키면 공격 몽타주가 피처형 몽타주를 덮어쓴다.
+    if (Enemy->IsCriticalExecutionActive())
+    {
+        return;
+    }
+
     CurrentState = EAIBehaviorState::Normal;
     UpdateBehaviorStateFromPrimary();
     PushToBlackboard(PrimaryTarget.Get());

@@ -1,6 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Characters/Player/PlayerBase.h"
+#include "Characters/Enemies/EnemyBase.h"
+#include "Engine/OverlapResult.h"
 
 // 이동
 #include "Characters/Components/BaseCharacterMovementComponent.h"
@@ -143,12 +145,39 @@ void APlayerBase::BeginPlay()
 	InitSpringArmLocation = SpringArm->GetRelativeLocation();
 }
 
+void APlayerBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	// 실행자가 제거되더라도 피처형 대상이 Execution/AI 정지 상태에 남지 않게 한다.
+	if (ActiveCriticalExecutionTarget.IsValid() || ActiveCriticalExecutionMontage)
+	{
+		ExitCriticalExecutionRuntime(EActionExitReason::Interrupted);
+	}
+	Super::EndPlay(EndPlayReason);
+}
+
 /* ============================================================
  *  Tick
  * ============================================================ */
 void APlayerBase::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	// 동기 Execution 도중 대상이 외부 사망/제거되면 몽타주 종료까지 실행자를
+	// 묶어 두지 않는다. 정상 Execution 완료로 발생한 사망은 DeathPending으로 구분한다.
+	if (ActiveCriticalExecutionMontage)
+	{
+		AEnemyBase* ExecutionTarget = ActiveCriticalExecutionTarget.Get();
+		const bool bTargetUnavailable = !ExecutionTarget;
+		const bool bUnexpectedTargetDeath = ExecutionTarget &&
+			ExecutionTarget->GetCharacterStatusComponent()->IsDead() &&
+			!ExecutionTarget->IsCriticalExecutionDeathPending();
+		if (bTargetUnavailable || bUnexpectedTargetDeath)
+		{
+			ExitCriticalExecutionRuntime(EActionExitReason::Interrupted);
+			FinishActionIfCurrent(TAG_Action_Execution);
+		}
+	}
+
 	GuardReentryLockoutRemaining = FMath::Max(0.f, GuardReentryLockoutRemaining - DeltaTime);
 
 	if (bForcedRotatingInputDirection)
@@ -451,6 +480,8 @@ void APlayerBase::EndMoveInput()
  * ============================================================ */
 void APlayerBase::AttackInput()
 {
+	if (TryStartCriticalExecution()) return;
+
 	if (!GetStatComponent()->CanAffordStamina(GetAttackStaminaCost(FName("DefaultCombo")))) return;
 
 	if (GetCharacterStatusComponent()->RequestAction(TAG_Action_Attack))
@@ -496,6 +527,116 @@ void APlayerBase::BlockInput()
 	}
 }
 
+bool APlayerBase::TryStartCriticalExecution()
+{
+	// 공격 입력이 일반 공격과 Execution 시도를 함께 담당하므로, 이미 Execution이
+	// 진행 중일 때는 재탐색/몽타주 재생을 시도하지 않고 입력만 소비한다.
+	// 여기서 false를 반환하면 AttackInput이 일반 공격 요청까지 계속 진행한다.
+	if (IsCriticalExecutionActive())
+	{
+		return true;
+	}
+
+	UPlayerStatusComponent* StatusComponent = GetCharacterStatusComponent();
+	if (!Config || !StatusComponent || !EquipmentComponent || !CharacterBaseAnim ||
+		!StatusComponent->CanTryAction(TAG_Action_Execution))
+	{
+		return false;
+	}
+	const FCriticalExecutionSettings& ExecutionSettings = Config->CriticalExecution;
+
+	auto IsEligibleTarget = [this, &ExecutionSettings](AEnemyBase* Enemy) -> bool
+	{
+		if (!Enemy || !Enemy->CanReceiveCriticalExecution(this))
+		{
+			return false;
+		}
+
+		const FVector ToEnemy = Enemy->GetActorLocation() - GetActorLocation();
+		if (ToEnemy.SizeSquared2D() > FMath::Square(ExecutionSettings.SearchRange))
+		{
+			return false;
+		}
+
+		// 거리 안에 있더라도 월드 지형에 가려진 대상은 처형 대상으로 선택하지 않는다.
+		FHitResult SightHit;
+		FCollisionQueryParams SightQueryParams(SCENE_QUERY_STAT(CriticalExecutionSight), false, this);
+		const bool bSightBlocked = GetWorld()->LineTraceSingleByChannel(
+			SightHit, GetActorLocation(), Enemy->GetActorLocation(), ECC_Visibility, SightQueryParams);
+		if (bSightBlocked && SightHit.GetActor() != Enemy)
+		{
+			return false;
+		}
+
+		const FVector Direction = ToEnemy.GetSafeNormal2D();
+		const float MinDot = FMath::Cos(FMath::DegreesToRadians(ExecutionSettings.SearchMaxAngle));
+		return FVector::DotProduct(GetActorForwardVector().GetSafeNormal2D(), Direction) >= MinDot;
+	};
+
+	AEnemyBase* BestTarget = nullptr;
+	if (LockOnComponent)
+	{
+		AEnemyBase* LockedEnemy = Cast<AEnemyBase>(LockOnComponent->GetCurrentTarget());
+		if (IsEligibleTarget(LockedEnemy))
+		{
+			BestTarget = LockedEnemy;
+		}
+	}
+
+	if (!BestTarget)
+	{
+		TArray<FOverlapResult> Overlaps;
+		FCollisionObjectQueryParams ObjectQuery;
+		ObjectQuery.AddObjectTypesToQuery(ECC_GameTraceChannel1);
+		FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CriticalExecutionSearch), false, this);
+		GetWorld()->OverlapMultiByObjectType(
+			Overlaps, GetActorLocation(), FQuat::Identity, ObjectQuery,
+			FCollisionShape::MakeSphere(ExecutionSettings.SearchRange), QueryParams);
+
+		float BestDistanceSquared = TNumericLimits<float>::Max();
+		for (const FOverlapResult& Overlap : Overlaps)
+		{
+			AEnemyBase* Enemy = Cast<AEnemyBase>(Overlap.GetActor());
+			if (!IsEligibleTarget(Enemy))
+			{
+				continue;
+			}
+
+			const float DistanceSquared = FVector::DistSquared2D(
+				GetActorLocation(), Enemy->GetActorLocation());
+			if (DistanceSquared < BestDistanceSquared)
+			{
+				BestDistanceSquared = DistanceSquared;
+				BestTarget = Enemy;
+			}
+		}
+	}
+
+	if (!BestTarget)
+	{
+		return false;
+	}
+
+	StatusComponent->SwitchAction(TAG_Action_Execution, EActionExitReason::Interrupted);
+	UAnimMontage* AttackerMontage = nullptr;
+	if (!BestTarget->BeginCriticalExecution(this, AttackerMontage) ||
+		!AttackerMontage || CharacterBaseAnim->Montage_Play(AttackerMontage) <= 0.0f)
+	{
+		BestTarget->FinishCriticalExecution(this, false);
+		FinishActionIfCurrent(TAG_Action_Execution);
+		return false;
+	}
+
+	ActiveCriticalExecutionTarget = BestTarget;
+	ActiveCriticalExecutionMontage = AttackerMontage;
+	GetCharacterMovement()->DisableMovement();
+
+	FOnMontageEnded EndDelegate;
+	EndDelegate.BindUObject(this, &APlayerBase::OnCriticalExecutionMontageEnded);
+	CharacterBaseAnim->Montage_SetEndDelegate(EndDelegate, AttackerMontage);
+	return true;
+}
+
 void APlayerBase::BlockInputEnd()
 {
 	bWantsToGuard = false;
@@ -529,6 +670,8 @@ void APlayerBase::InteractInput()
 
 void APlayerBase::SpawnRideInput()
 {
+	if (IsCriticalExecutionActive()) return;
+
 	if (RideComponent)
 	{
 		RideComponent->HandleRideInputStarted();
@@ -722,6 +865,7 @@ void APlayerBase::RefreshActionAnimationProfile(EWeaponType WeaponType)
 	{
 		ConfiguredDodgeMontage = nullptr;
 		ConfiguredParryMontage = nullptr;
+		ConfiguredCriticalExecutions.Reset();
 		DodgeLocomotionBlendOutTime = 0.15f;
 		DodgeExitBlendSettings = FActionExitBlendSettings{};
 		ParryExitBlendSettings = FActionExitBlendSettings{};
@@ -731,6 +875,7 @@ void APlayerBase::RefreshActionAnimationProfile(EWeaponType WeaponType)
 	const FPlayerAnimSet AnimSet = Registry->ResolvePlayerAnimSet(WeaponType);
 	ConfiguredDodgeMontage = AnimSet.DodgeMontage.LoadSynchronous();
 	ConfiguredParryMontage = AnimSet.ParryMontage.LoadSynchronous();
+	ConfiguredCriticalExecutions = AnimSet.CriticalExecutions;
 	DodgeLocomotionBlendOutTime = AnimSet.DodgeLocomotionBlendOutTime >= 0.0f
 		? AnimSet.DodgeLocomotionBlendOutTime : 0.15f;
 	DodgeExitBlendSettings = AnimSet.DodgeExitBlendSettings;
@@ -845,6 +990,25 @@ void APlayerBase::OnParryMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 	FinishActionIfCurrent(TAG_Action_Parry);
 }
 
+void APlayerBase::OnCriticalExecutionMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	if (Montage != ActiveCriticalExecutionMontage)
+	{
+		return;
+	}
+
+	AEnemyBase* ExecutionTarget = ActiveCriticalExecutionTarget.Get();
+	ActiveCriticalExecutionTarget = nullptr;
+	ActiveCriticalExecutionMontage = nullptr;
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+
+	if (ExecutionTarget)
+	{
+		ExecutionTarget->FinishCriticalExecution(this, !bInterrupted);
+	}
+	FinishActionIfCurrent(TAG_Action_Execution);
+}
+
 void APlayerBase::HandleActionTransition(const FGameplayTag& PreviousAction,
 	const FGameplayTag& NextAction, EActionExitReason ExitReason)
 {
@@ -874,6 +1038,10 @@ void APlayerBase::ExitActionRuntime(const FGameplayTag& ActionTag, EActionExitRe
 	else if (ActionTag.MatchesTagExact(TAG_Action_Parry))
 	{
 		ExitParryRuntime(ExitReason);
+	}
+	else if (ActionTag.MatchesTagExact(TAG_Action_Execution))
+	{
+		ExitCriticalExecutionRuntime(ExitReason);
 	}
 	else if (ActionTag.MatchesTagExact(TAG_Action_Guard))
 	{
@@ -1074,6 +1242,11 @@ void APlayerBase::HandleInteractionMoveCancelled()
  * ============================================================ */
 void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 {
+	if (IsCriticalExecutionActive())
+	{
+		return;
+	}
+
 	const FHitResolution Resolution = GetHitReactionComponent()->ResolveHit(AttackInfo);
 	const float HitAngle = Resolution.HitAngle;
 
@@ -1209,6 +1382,30 @@ bool APlayerBase::TryExecuteHitReaction(const FHitReactionRequest& ReactionReque
 	}
 
 	return true;
+}
+
+void APlayerBase::ExitCriticalExecutionRuntime(EActionExitReason ExitReason)
+{
+	AEnemyBase* ExecutionTarget = ActiveCriticalExecutionTarget.Get();
+	UAnimMontage* ExecutionMontage = ActiveCriticalExecutionMontage.Get();
+	ActiveCriticalExecutionTarget = nullptr;
+	ActiveCriticalExecutionMontage = nullptr;
+
+	if (CharacterBaseAnim && ExecutionMontage)
+	{
+		FOnMontageEnded EmptyDelegate;
+		CharacterBaseAnim->Montage_SetEndDelegate(EmptyDelegate, ExecutionMontage);
+		if (CharacterBaseAnim->Montage_IsPlaying(ExecutionMontage))
+		{
+			CharacterBaseAnim->Montage_Stop(0.1f, ExecutionMontage);
+		}
+	}
+
+	GetCharacterMovement()->SetMovementMode(MOVE_Walking);
+	if (ExecutionTarget)
+	{
+		ExecutionTarget->FinishCriticalExecution(this, false);
+	}
 }
 
 void APlayerBase::ExitParryRuntime(EActionExitReason ExitReason)

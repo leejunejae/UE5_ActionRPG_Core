@@ -95,6 +95,18 @@ void UCharacterStatusComponent::SwitchAction(const FGameplayTag& NewActionTag, E
 		OnActionTransition.ExecuteIfBound(PreviousAction, NewActionTag, ExitReason);
 	}
 
+	if (WindowRules)
+	{
+		if (const FActionInputBufferPolicy* Policy =
+			WindowRules->InputBufferPolicies.Find(NewActionTag))
+		{
+			if (Policy->bClearExistingBufferOnBegin)
+			{
+				BufferedActions.Reset();
+			}
+		}
+	}
+
 	// 교체 철학: 행동이 바뀌면 이전 행동에서 열어둔 Window는 신뢰 불가
 	// => 현재 State 기본값으로 완전 리셋 후, 새 행동 시작 닫기 적용
 	ResetWindowsToStateDefaults();
@@ -185,6 +197,20 @@ bool UCharacterStatusComponent::RequestAction(const FGameplayTag& ActionTag, int
 	{
 		UE_LOG(Log_Character_Player_Input, Error, TEXT("[CharacterStatusComponent] ActionTag Invalid"));
 		return false;
+	}
+
+	// 현재 Action이 원자적 연출이라면 Window 상태와 무관하게 새 입력 요청을 폐기한다.
+	// 시스템 전환은 RequestAction이 아니라 SwitchAction을 직접 사용하므로 영향을 받지 않는다.
+	if (WindowRules && CurrentActionTag.IsValid())
+	{
+		if (const FActionInputBufferPolicy* Policy =
+			WindowRules->InputBufferPolicies.Find(CurrentActionTag))
+		{
+			if (!Policy->bAllowBufferWhileActive)
+			{
+				return false;
+			}
+		}
 	}
 
 	// 가능하면 즉시 교체 실행

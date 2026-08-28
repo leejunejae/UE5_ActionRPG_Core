@@ -57,6 +57,12 @@ FPlayerAnimSet UPlayerAnimSetDataAsset::ResolvePlayerAnimSet(const EWeaponType& 
 	APPLY_SOFT_OVERRIDE(SpawnMontage)
 #undef APPLY_SOFT_OVERRIDE
 
+	// 항목이 있으면 해당 무기 전용 처형 세트 전체가 공통 세트를 대체한다.
+	if (!Override->CriticalExecutions.IsEmpty())
+	{
+		Resolved.CriticalExecutions = Override->CriticalExecutions;
+	}
+
 #define APPLY_BLEND_OVERRIDE(Field) \
 	if (Override->DodgeExitBlendSettings.Field >= 0.0f) \
 	{ Resolved.DodgeExitBlendSettings.Field = Override->DodgeExitBlendSettings.Field; }

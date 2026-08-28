@@ -13,6 +13,7 @@
 // 구조체, 자료형
 #include "Characters/Enemies/Data/EnemyData.h"
 #include "Combat/Data/CombatData.h"
+#include "Animation/Data/AnimData.h"
 
 #include "Characters/CharacterBase.h"
 #include "EnemyBase.generated.h"
@@ -23,6 +24,7 @@ class UHitReactionComponent;
 class UCharacterStatusComponent;
 class UEnemyBaseAnimInstance;
 class AEnemyBaseAIController;
+class APlayerBase;
 struct FHitReactionRequest;
 
 class UWidgetComponent;
@@ -121,6 +123,9 @@ protected:
 public:
 	/** PlayerController의 LockOnComponent가 호출 — 이 적이 락온되었는지 알림 */
 	void OnLockedOnByPlayer(bool bIsLockedOn);
+
+private:
+	void UpdateHealthBarPlacement(float AdditionalHeight);
 #pragma endregion UI
 
 
@@ -128,10 +133,32 @@ public:
 public:
 	void OnHit_Implementation(const FAttackRequest& AttackInfo) override;
 	bool BreakStance(float HitAngle = 0.0f);
+	bool CanReceiveCriticalExecution(const APlayerBase* Executor) const;
+	bool BeginCriticalExecution(APlayerBase* Executor, UAnimMontage*& OutAttackerMontage);
+	void FinishCriticalExecution(APlayerBase* Executor, bool bCompleted);
+	void BeginCriticalExecutionWindow();
+	void EndCriticalExecutionWindow();
+	bool IsCriticalExecutionDeathPending() const { return bCriticalExecutionDeathPending; }
+	bool IsCriticalExecutionActive() const { return bCriticalExecutionActive; }
 
 private:
 	bool TryExecuteHitReaction(const FHitReactionRequest& ReactionRequest);
 	void HandleStanceBreakEnded();
+	void ResetCriticalExecutionWindow();
+	ECriticalExecutionDirection CalculateCriticalExecutionDirection(const APlayerBase* Executor) const;
+	bool FindCriticalExecutionData(const APlayerBase* Executor,
+		FCriticalExecutionAttackerEntry& OutAttacker,
+		FCriticalExecutionVictimEntry& OutVictim) const;
+
+	bool bCanBeCriticallyExecuted = true;
+	UPROPERTY(Transient)
+	TArray<FCriticalExecutionVictimEntry> CriticalExecutionVictimEntries;
+	bool bCriticalExecutionActive = false;
+	int32 CriticalExecutionWindowCount = 0;
+	bool bCriticalExecutionDeathPending = false;
+	TWeakObjectPtr<APlayerBase> ActiveCriticalExecutor;
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> ActiveCriticalVictimMontage = nullptr;
 
 public:
 	void HandleDeathStarted() override;    // 진입: 입력 차단 + 이전 State 정리

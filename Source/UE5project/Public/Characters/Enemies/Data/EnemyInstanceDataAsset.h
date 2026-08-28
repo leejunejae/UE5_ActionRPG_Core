@@ -38,6 +38,14 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation")
         bool UseDefaultAnim; // 기본(Unarmed)상태의 애니메이션 사용여부
 
+    /** 일반형 적만 활성화한다. 엘리트와 보스는 비활성화한다. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Critical Execution")
+        bool bCanBeCriticallyExecuted = true;
+
+    /** 메시 Bounds 상단에서 체력바까지 추가로 띄울 높이. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "UI", meta = (ClampMin = "0.0"))
+        float HealthBarHeightOffset = 20.0f;
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Setting")
         TMap<ELocomotionGait, FGaitSetting> LocomotionGaitData;
 };

@@ -8,6 +8,7 @@
 
 // 구조체, 자료형
 #include "Characters/Data/BaseCharacterHeader.h"
+#include "Animation/Data/AnimData.h"
 
 // 인터페이스
 #include "Characters/Player/Interfaces/PlayerInterface.h"
@@ -37,6 +38,7 @@ class UPlayerHitReactionComponent;
 class UInteractComponent;
 class ULockOnComponent;
 class URideComponent;
+class AEnemyBase;
 
 class UPlayerConfig;
 class APlayerRide;
@@ -62,6 +64,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 public:
 	virtual void Tick(float DeltaTime) override;
@@ -333,6 +336,7 @@ private:
 	// ---- 입력 → 판단 (RequestAction) ----
 	void AttackInput();
 	void AttackInputEnd();
+	bool TryStartCriticalExecution();
 
 	void JumpInput();
 	void DodgeInput();
@@ -359,7 +363,9 @@ private:
 	void ExitActionRuntime(const FGameplayTag& ActionTag, EActionExitReason ExitReason);
 	void ExitDodgeRuntime(EActionExitReason ExitReason);
 	void ExitParryRuntime(EActionExitReason ExitReason);
+	void ExitCriticalExecutionRuntime(EActionExitReason ExitReason);
 	void OnParryMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+	void OnCriticalExecutionMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	void TryReturnToLocomotion(const FVector2D& MovementInput);
 	void RefreshActionAnimationProfile(EWeaponType WeaponType);
 
@@ -373,9 +379,27 @@ private:
 	float AttackChargeTime = 0.0f;
 	float GuardReentryLockoutRemaining = 0.0f;
 
+	UPROPERTY(Transient)
+	TWeakObjectPtr<AEnemyBase> ActiveCriticalExecutionTarget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> ActiveCriticalExecutionMontage = nullptr;
+
+	/** 현재 장착 무기의 플레이어 애니메이션 프로필에서 해석된 처형 세트. */
+	UPROPERTY(Transient)
+	TArray<FCriticalExecutionAttackerEntry> ConfiguredCriticalExecutions;
+
 public:
 	FORCEINLINE UCombatComponent* GetCombatComponent() const { return CombatComponent; }
 	FORCEINLINE UPlayerAttackComponent* GetAttackComponent() const;
+	bool IsCriticalExecutionActive() const
+	{
+		return ActiveCriticalExecutionTarget.IsValid() || IsValid(ActiveCriticalExecutionMontage);
+	}
+	const TArray<FCriticalExecutionAttackerEntry>& GetConfiguredCriticalExecutions() const
+	{
+		return ConfiguredCriticalExecutions;
+	}
 
 #pragma region HitReaction
 public:

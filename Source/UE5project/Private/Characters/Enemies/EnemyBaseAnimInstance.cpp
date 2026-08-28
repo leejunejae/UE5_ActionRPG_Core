@@ -54,5 +54,14 @@ void UEnemyBaseAnimInstance::InitAnimationData(FAnimDataSet AnimData)
 
 void UEnemyBaseAnimInstance::HandleDeathStarted()
 {
+	if (Enemy && Enemy->IsCriticalExecutionDeathPending())
+	{
+		if (UCharacterStatusComponent* Status = Enemy->GetCharacterStatusComponent())
+		{
+			Status->FinalizeDeath();
+		}
+		return;
+	}
+
 	Montage_Play(DeathMontage);
 }

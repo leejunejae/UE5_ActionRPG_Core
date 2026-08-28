@@ -242,7 +242,8 @@ void UHitReactionComponent::OnHitReactionEnded(UAnimMontage* Montage, bool bInte
 	if (Montage != ActiveHitMontage) return;
 
 	if (AActor* Owner = GetOwner())UE_LOG(Log_Hit, Log, TEXT("[HitReactionComponent] %s stagger response End"), *Owner->GetName());
-	FinishHitReaction(false, true, EActionExitReason::Completed);
+	FinishHitReaction(false, true,
+		bInterrupted ? EActionExitReason::Interrupted : EActionExitReason::Completed);
 }
 
 void UHitReactionComponent::CancelHitReaction(EActionExitReason ExitReason, bool bStopMontage)

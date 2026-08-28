@@ -36,6 +36,8 @@ public:
 	void ChangeMaxHealth(const float Amount);
 	void ChangeMaxPoise(const float Amount);
 	bool ApplyDamage(const float Amount, const EDamageType AttackType);
+	/** 데미지 계산 없이 HP를 0으로 만들고 일반 사망 진입 경로를 실행한다. */
+	void Kill();
 	bool Heal(const float Amount);
 	void ChangePoise(const float Amount, const EStatChangeType PoiseChangeType);
 

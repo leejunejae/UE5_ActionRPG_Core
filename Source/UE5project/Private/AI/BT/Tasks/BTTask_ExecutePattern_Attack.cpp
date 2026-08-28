@@ -3,6 +3,7 @@
 
 #include "AI/BT/Tasks/BTTask_ExecutePattern_Attack.h"
 #include "Characters/CharacterBase.h"
+#include "Characters/Enemies/EnemyBase.h"
 #include "Characters/Enemies/EnemyBaseAIController.h"
 #include "Combat/Components/AttackComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
@@ -32,6 +33,13 @@ EBTNodeResult::Type UBTTask_ExecutePattern_Attack::ExecuteTask(UBehaviorTreeComp
 		UE_LOG(Log_AI, Warning, TEXT("[BTTask_ExecutePattern_Reposition] Owner Pawn Not Valid"));
 		return EBTNodeResult::Failed;
 	}
+	if (const AEnemyBase* Enemy = Cast<AEnemyBase>(ControllingPawn))
+	{
+		if (Enemy->IsCriticalExecutionActive())
+		{
+			return EBTNodeResult::Failed;
+		}
+	}
 
 	UBlackboardComponent* BB = OwnerComp.GetBlackboardComponent();
 	if (!BB) return EBTNodeResult::Failed;
@@ -53,7 +61,12 @@ EBTNodeResult::Type UBTTask_ExecutePattern_Attack::ExecuteTask(UBehaviorTreeComp
 	AttackComp->OnAttackFinished.AddUObject(this, &UBTTask_ExecutePattern_Attack::OnAttackFinished);
 
 	FName PickedAttackPattern = OwnerComp.GetBlackboardComponent()->GetValueAsName(FName(TEXT("CombatPatternID")));
-	AttackComp->ExecuteAttack(PickedAttackPattern);
+	if (!AttackComp->ExecuteAttack(PickedAttackPattern))
+	{
+		AttackComp->OnAttackFinished.RemoveAll(this);
+		OwnerCompRef = nullptr;
+		return EBTNodeResult::Failed;
+	}
 
 	return EBTNodeResult::InProgress;
 }
@@ -63,18 +76,20 @@ void UBTTask_ExecutePattern_Attack::OnAttackFinished(bool bInterrupted)
 	UE_LOG(Log_Attack, Log, TEXT("[UAttackComponent] Attack End Delegate"));
 	if (OwnerCompRef)
 	{
-		FinishLatentTask(*OwnerCompRef, EBTNodeResult::Succeeded);
+		FinishLatentTask(*OwnerCompRef,
+			bInterrupted ? EBTNodeResult::Failed : EBTNodeResult::Succeeded);
 	}
 }
 
 void UBTTask_ExecutePattern_Attack::OnTaskFinished(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory,EBTNodeResult::Type TaskResult)
 {
-	if (!IsValid(OwnerCompRef)) return;
-
-	ACharacterBase* Pawn = Cast<ACharacterBase>(OwnerCompRef->GetAIOwner()->GetPawn());
-
-	if (!IsValid(Pawn)) return;
-	Pawn->GetAttackComponent()->OnAttackFinished.RemoveAll(this);
+	ACharacterBase* Pawn = OwnerComp.GetAIOwner()
+		? Cast<ACharacterBase>(OwnerComp.GetAIOwner()->GetPawn()) : nullptr;
+	if (IsValid(Pawn) && Pawn->GetAttackComponent())
+	{
+		Pawn->GetAttackComponent()->OnAttackFinished.RemoveAll(this);
+	}
+	OwnerCompRef = nullptr;
 
 	Super::OnTaskFinished(OwnerComp, NodeMemory, TaskResult);
 }

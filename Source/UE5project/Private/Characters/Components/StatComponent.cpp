@@ -58,18 +58,31 @@ bool UStatComponent::ApplyDamage(const float Amount, const EDamageType AttackTyp
 
 	Stats.Health.Current = FMath::Clamp(Stats.Health.Current - Delta, 0.0f, Stats.Health.Max);
 
-	BroadcastResourceStat(EResourceStatType::Health, Stats.Health);
-	
 	if (Stats.Health.Current <= 0.0f)
 	{
-		if (UCharacterStatusComponent* StatusComp = GetOwner()->FindComponentByClass<UCharacterStatusComponent>())
-		{
-			StatusComp->EnterDeath();
-		}
+		Kill();
 		return false;
 	}
 
+	BroadcastResourceStat(EResourceStatType::Health, Stats.Health);
+
 	return true;
+}
+
+void UStatComponent::Kill()
+{
+	FCharacterStats& Stats = GetCommonStats();
+	Stats.Health.Current = 0.0f;
+	BroadcastResourceStat(EResourceStatType::Health, Stats.Health);
+
+	if (UCharacterStatusComponent* StatusComp =
+		GetOwner()->FindComponentByClass<UCharacterStatusComponent>())
+	{
+		if (!StatusComp->IsDead())
+		{
+			StatusComp->EnterDeath();
+		}
+	}
 }
 
 bool UStatComponent::Heal(const float Amount)
