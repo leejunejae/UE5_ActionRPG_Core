@@ -437,11 +437,8 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "LockOn")
 	TObjectPtr<ULockOnComponent> LockOnComponent;
 
-	UPROPERTY(EditAnywhere, Category = "LockOn")
-	float LockOnTurnInterpSpeed = 12.f;
-
-	void ApplyLockOnRotation(float DeltaTime);
 	void SetLockOnMovementMode(bool bLockOn);
+	void HandleLockOnTargetChanged(AActor* NewTarget);
 	void OnLockOnToggle();
 	void OnLockOnSwitchLeft();
 	void OnLockOnSwitchRight();

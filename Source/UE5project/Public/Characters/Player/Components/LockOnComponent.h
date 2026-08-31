@@ -10,6 +10,7 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnLockOnTargetChanged, AActor*);
 
 class USphereComponent;
 class APlayerController;
+class UUserWidget;
 
 USTRUCT()
 struct FLockOnCandidateScore
@@ -32,6 +33,7 @@ public:
 
 	bool IsLockedOn() const { return LockedOnTarget.IsValid(); }
 	AActor* GetCurrentTarget() const { return LockedOnTarget.Get(); }
+	FVector GetCurrentTargetPoint() const;
 
 	/** 토글: 켜져있으면 해제, 꺼져있으면 최고의 타겟을 잡음 */
 	bool ToggleLockOn();
@@ -51,6 +53,7 @@ public:
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
 	// ---- Candidate management ----
@@ -67,7 +70,11 @@ private:
 		void OnSphereEndOverlap(UPrimitiveComponent* OverlappedComp, AActor* OtherActor,
 			UPrimitiveComponent* OtherComp, int32 OtherBodyIndex);
 
+	UFUNCTION()
+	void OnLockedTargetDestroyed(AActor* DestroyedActor);
+
 	bool IsValidCandidate(AActor* Actor) const;
+	FVector GetTargetPoint(const AActor* Target) const;
 
 	// ---- Scoring / selection ----
 	bool GetScreenPos(AActor* Target, FVector2D& OutScreen) const;
@@ -82,6 +89,8 @@ private:
 
 	/** LockedOnTarget을 변경하면서 자동으로 델리게이트 브로드캐스트 */
 	void SetLockedOnTarget(AActor* NewTarget);
+	void UpdateLockOnMarker();
+	void ApplyLockOnRotation(float DeltaTime);
 
 private:
 
@@ -93,6 +102,10 @@ private:
 
 	UPROPERTY(EditAnywhere, Category = "Screen")
 		float MaxScreenRadiusNorm = 0.55f;
+
+	/** 캡슐 중심에서 반높이의 이 비율만큼 위를 락온 기준점으로 사용한다. */
+	UPROPERTY(EditAnywhere, Category = "Target", meta = (ClampMin = "-1.0", ClampMax = "1.0"))
+	float TargetHeightRatio = 0.35f;
 
 	UPROPERTY(EditAnywhere, Category = "LOS")
 		float LOSGraceTime = 0.8f;
@@ -115,6 +128,22 @@ private:
 
 	UPROPERTY(VisibleAnywhere, Category = "Target")
 		TWeakObjectPtr<AActor> LockedOnTarget;
+
+	/** 로컬 플레이어 화면에 표시할 락온 마커 위젯 클래스. */
+	UPROPERTY(EditAnywhere, Category = "UI")
+	TSubclassOf<UUserWidget> LockOnMarkerWidgetClass;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UUserWidget> LockOnMarkerWidget = nullptr;
+
+	UPROPERTY(EditAnywhere, Category = "UI")
+	FVector2D LockOnMarkerScreenOffset = FVector2D::ZeroVector;
+
+	UPROPERTY(EditAnywhere, Category = "Camera", meta = (ClampMin = "0.0"))
+	float CameraTurnInterpSpeed = 12.f;
+
+	UPROPERTY(EditAnywhere, Category = "Rotation", meta = (ClampMin = "0.0"))
+	float CharacterTurnInterpSpeed = 15.f;
 
 	float TimeSinceLOSLost = 0.f;
 	float TimeSinceOffscreen = 0.f;

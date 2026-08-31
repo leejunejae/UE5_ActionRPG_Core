@@ -179,7 +179,6 @@ void APlayerBase::Tick(float DeltaTime)
 	}
 
 	GuardReentryLockoutRemaining = FMath::Max(0.f, GuardReentryLockoutRemaining - DeltaTime);
-
 	if (bForcedRotatingInputDirection)
 	{
 		FRotator CurrentRot = GetActorRotation();
@@ -199,14 +198,6 @@ void APlayerBase::Tick(float DeltaTime)
 	if (LockOnComponent && LockOnComponent->IsLockedOn())
 	{
 		LockOnComponent->TickLockOn(DeltaTime);
-
-		if (!LockOnComponent->IsLockedOn())
-		{
-			SetLockOnMovementMode(false);
-			return;
-		}
-
-		ApplyLockOnRotation(DeltaTime);
 	}
 
 	if (GetStatComponent())
@@ -358,6 +349,7 @@ void APlayerBase::PostInitializeComponents()
 	InteractComponent->OnArrivedInteractionPoint.BindUObject(this, &APlayerBase::HandleArrivedInteractionPoint);
 	InteractComponent->OnInteractionMoveCancelled.BindUObject(this, &APlayerBase::HandleInteractionMoveCancelled);
 	EquipmentComponent->OnWeaponChangedDelegate.AddUObject(this, &APlayerBase::RefreshActionAnimationProfile);
+	LockOnComponent->OnLockOnTargetChanged.AddUObject(this, &APlayerBase::HandleLockOnTargetChanged);
 
 	if (GetCharacterStatusComponent())
 	{
@@ -1141,6 +1133,21 @@ float APlayerBase::GetDirection()
 
 void APlayerBase::SetRotationInputDirection_Implementation()
 {
+	// 락온 중 공격 방향은 이동 입력이 아니라 현재 전투 대상을 우선한다.
+	// 횡이동 입력으로 인해 공격 보정과 락온 회전이 서로 경쟁하는 것을 방지한다.
+	if (AActor* LockOnTarget = LockOnComponent ? LockOnComponent->GetCurrentTarget() : nullptr)
+	{
+		const FVector ToTarget = LockOnTarget->GetActorLocation() - GetActorLocation();
+		if (!ToTarget.IsNearlyZero())
+		{
+			InputRotation = ToTarget.Rotation();
+			InputRotation.Pitch = 0.0f;
+			InputRotation.Roll = 0.0f;
+			bForcedRotatingInputDirection = true;
+			return;
+		}
+	}
+
 	FVector LastMovementInput = GetLastMovementInputVector();
 	if (!LastMovementInput.IsNearlyZero())
 	{
@@ -1438,6 +1445,10 @@ void APlayerBase::ExitParryRuntime(EActionExitReason ExitReason)
 void APlayerBase::HandleDeathStarted()
 {
 	Super::HandleDeathStarted();
+	if (LockOnComponent)
+	{
+		LockOnComponent->ClearLockOn();
+	}
 
 	if (GetAttackComponent())
 	{
@@ -1608,30 +1619,18 @@ void APlayerBase::ReceiveParried(AActor* ParryInstigator)
 /* ============================================================
  *  LockOn
  * ============================================================ */
-void APlayerBase::ApplyLockOnRotation(float DeltaTime)
-{
-	AActor* Target = LockOnComponent ? LockOnComponent->GetCurrentTarget() : nullptr;
-	APlayerController* PC = Cast<APlayerController>(GetController());
-	if (!Target || !PC) return;
-
-	const FVector MyLoc = GetActorLocation();
-	const FVector TLoc = Target->GetActorLocation();
-
-	FRotator Desired = (TLoc - MyLoc).Rotation();
-	Desired.Pitch = 0.f;
-	Desired.Roll = 0.f;
-
-	FRotator Current = PC->GetControlRotation();
-	FRotator NewRot = FMath::RInterpTo(Current, Desired, DeltaTime, LockOnTurnInterpSpeed);
-
-	PC->SetControlRotation(NewRot);
-}
-
 void APlayerBase::SetLockOnMovementMode(bool bLockOn)
 {
-	bUseControllerRotationYaw = bLockOn;
+	// 카메라의 수동 오프셋과 캐릭터 몸 회전을 분리한다. 락온 중 몸 회전은
+	// LockOnComponent가 타깃 방향으로 직접 갱신한다.
+	bUseControllerRotationYaw = false;
 	GetCharacterMovement()->bOrientRotationToMovement = !bLockOn;
 	Jog();
+}
+
+void APlayerBase::HandleLockOnTargetChanged(AActor* NewTarget)
+{
+	SetLockOnMovementMode(IsValid(NewTarget));
 }
 
 void APlayerBase::OnLockOnToggle()
@@ -1640,8 +1639,7 @@ void APlayerBase::OnLockOnToggle()
 	if (LockOnComponent)
 	{
 		UE_LOG(Log_LockOn, Warning, TEXT("[APlayerBase] %s Access LockOn Allowed"), *GetName());
-		const bool bLocked = LockOnComponent->ToggleLockOn();
-		SetLockOnMovementMode(bLocked);
+		LockOnComponent->ToggleLockOn();
 	}
 }
 

@@ -3,10 +3,13 @@
 
 #include "Characters/Player/Components/LockOnComponent.h"
 #include "GameFramework/Character.h"
-#include "Characters/Enemies/EnemyBase.h" 
+#include "Characters/Enemies/EnemyBase.h"
+#include "Characters/Components/CharacterStatusComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/SphereComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Blueprint/UserWidget.h"
 
 // Sets default values for this component's properties
 ULockOnComponent::ULockOnComponent()
@@ -32,17 +35,54 @@ void ULockOnComponent::BeginPlay()
 	CandidateSphere = NewObject<USphereComponent>(Owner, TEXT("LockOnCandidateSphere"));
 	if (!CandidateSphere) return;
 
-	CandidateSphere->RegisterComponent();
 	CandidateSphere->AttachToComponent(Owner->GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
 	CandidateSphere->SetSphereRadius(LockOnRadius);
-
 	CandidateSphere->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 	CandidateSphere->SetCollisionObjectType(ECC_WorldDynamic);
 	CandidateSphere->SetCollisionResponseToAllChannels(ECR_Ignore);
 	CandidateSphere->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Overlap);
+	CandidateSphere->SetGenerateOverlapEvents(true);
 
 	CandidateSphere->OnComponentBeginOverlap.AddDynamic(this, &ULockOnComponent::OnSphereBeginOverlap);
 	CandidateSphere->OnComponentEndOverlap.AddDynamic(this, &ULockOnComponent::OnSphereEndOverlap);
+	CandidateSphere->RegisterComponent();
+	CandidateSphere->UpdateOverlaps();
+
+	// 컴포넌트 등록 시점에 이미 범위 안에 있던 대상도 후보에 포함한다.
+	TArray<AActor*> InitialOverlaps;
+	CandidateSphere->GetOverlappingActors(InitialOverlaps, AEnemyBase::StaticClass());
+	for (AActor* OverlapActor : InitialOverlaps)
+	{
+		if (IsValidCandidate(OverlapActor))
+		{
+			Candidates.Add(OverlapActor);
+		}
+	}
+
+	if (ACharacter* OwnerCharacter = Cast<ACharacter>(Owner))
+	{
+		if (APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController());
+			PC && PC->IsLocalController() && LockOnMarkerWidgetClass)
+		{
+			LockOnMarkerWidget = CreateWidget<UUserWidget>(PC, LockOnMarkerWidgetClass);
+			if (LockOnMarkerWidget)
+			{
+				LockOnMarkerWidget->AddToViewport();
+				LockOnMarkerWidget->SetAlignmentInViewport(FVector2D(0.5f, 0.5f));
+				LockOnMarkerWidget->SetVisibility(ESlateVisibility::Collapsed);
+			}
+		}
+	}
+}
+
+void ULockOnComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (LockOnMarkerWidget)
+	{
+		LockOnMarkerWidget->RemoveFromParent();
+		LockOnMarkerWidget = nullptr;
+	}
+	Super::EndPlay(EndPlayReason);
 }
 
 void ULockOnComponent::OnSphereBeginOverlap(UPrimitiveComponent*, AActor* OtherActor,
@@ -72,13 +112,32 @@ bool ULockOnComponent::IsValidCandidate(AActor* Actor) const
 {
 	if (!Actor || Actor == GetOwner()) return false;
 
-	// 예: 적 판정은 태그/인터페이스로 필터링 추천
-	// if (!Actor->ActorHasTag("Enemy")) return false;
+	const AEnemyBase* Enemy = Cast<AEnemyBase>(Actor);
+	return Enemy && Enemy->GetCharacterStatusComponent() &&
+		!Enemy->GetCharacterStatusComponent()->IsDead();
+}
 
-	APawn* Pawn = Cast<APawn>(Actor);
-	if (!Pawn) return false;
+FVector ULockOnComponent::GetTargetPoint(const AActor* Target) const
+{
+	if (!Target)
+	{
+		return FVector::ZeroVector;
+	}
 
-	return true;
+	FVector TargetPoint = Target->GetActorLocation();
+	if (const ACharacter* TargetCharacter = Cast<ACharacter>(Target))
+	{
+		if (const UCapsuleComponent* Capsule = TargetCharacter->GetCapsuleComponent())
+		{
+			TargetPoint.Z += Capsule->GetScaledCapsuleHalfHeight() * TargetHeightRatio;
+		}
+	}
+	return TargetPoint;
+}
+
+FVector ULockOnComponent::GetCurrentTargetPoint() const
+{
+	return GetTargetPoint(LockedOnTarget.Get());
 }
 
 bool ULockOnComponent::GetScreenPos(AActor* Target, FVector2D& OutScreen) const
@@ -89,7 +148,7 @@ bool ULockOnComponent::GetScreenPos(AActor* Target, FVector2D& OutScreen) const
 	APlayerController* PC = Cast<APlayerController>(OwnerChar->GetController());
 	if (!PC) return false;
 
-	return PC->ProjectWorldLocationToScreen(Target->GetActorLocation(), OutScreen, true);
+	return PC->ProjectWorldLocationToScreen(GetTargetPoint(Target), OutScreen, true);
 }
 
 float ULockOnComponent::ComputeScore(AActor* Target, const FVector2D& ScreenPos) const
@@ -144,7 +203,8 @@ TWeakObjectPtr<AActor> ULockOnComponent::FindBestTarget() const
 	for (const TWeakObjectPtr<AActor>& It : Candidates)
 	{
 		AActor* Target = It.Get();
-		if (!Target) continue;
+		if (!IsValidCandidate(Target)) continue;
+		if (!HasLineOfSight(Target)) continue;
 
 		FVector2D ScreenPos;
 		if (!GetScreenPos(Target, ScreenPos)) continue;
@@ -206,7 +266,7 @@ bool ULockOnComponent::HasLineOfSight(AActor* Target) const
 
 	FHitResult Hit;
 	const bool bHit = OwnerChar->GetWorld()->LineTraceSingleByChannel(
-		Hit, ViewLoc, Target->GetActorLocation(), ECC_Visibility, Params);
+		Hit, ViewLoc, GetTargetPoint(Target), ECC_Visibility, Params);
 
 	// 무엇이든 막히면 LOS false
 	return !bHit;
@@ -217,7 +277,16 @@ void ULockOnComponent::SetLockedOnTarget(AActor* NewTarget)
 	AActor* OldTarget = LockedOnTarget.Get();
 	if (OldTarget == NewTarget) return;
 
+	if (OldTarget)
+	{
+		OldTarget->OnDestroyed.RemoveDynamic(this, &ULockOnComponent::OnLockedTargetDestroyed);
+	}
+
 	LockedOnTarget = NewTarget;
+	if (NewTarget)
+	{
+		NewTarget->OnDestroyed.AddUniqueDynamic(this, &ULockOnComponent::OnLockedTargetDestroyed);
+	}
 
 	// 이전 타겟이 적이면 락온 해제 알림
 	if (AEnemyBase* OldEnemy = Cast<AEnemyBase>(OldTarget))
@@ -232,11 +301,20 @@ void ULockOnComponent::SetLockedOnTarget(AActor* NewTarget)
 	}
 
 	OnLockOnTargetChanged.Broadcast(NewTarget);
+	UpdateLockOnMarker();
+}
+
+void ULockOnComponent::OnLockedTargetDestroyed(AActor* DestroyedActor)
+{
+	if (LockedOnTarget.Get() == DestroyedActor)
+	{
+		ClearLockOn();
+	}
 }
 
 bool ULockOnComponent::IsTargetStillValid(AActor* Target) const
 {
-	if (!Target) return false;
+	if (!IsValidCandidate(Target)) return false;
 
 	AActor* Owner = GetOwner();
 	if (!Owner) return false;
@@ -244,26 +322,6 @@ bool ULockOnComponent::IsTargetStillValid(AActor* Target) const
 	const float Dist = FVector::Dist(Owner->GetActorLocation(), Target->GetActorLocation());
 	if (Dist > BreakRadius)
 		return false;
-
-	// 화면에 투영이 안 되면 offscreen으로 간주
-	FVector2D ScreenPos;
-	if (!GetScreenPos(Target, ScreenPos))
-		return true; // 투영 실패는 플랫폼/상황에 따라 애매하니 즉시 끊지 않음
-
-	ACharacter* OwnerChar = Cast<ACharacter>(Owner);
-	APlayerController* PC = OwnerChar ? Cast<APlayerController>(OwnerChar->GetController()) : nullptr;
-	if (!PC) return false;
-
-	int32 SizeX, SizeY;
-	PC->GetViewportSize(SizeX, SizeY);
-	if (SizeX <= 0 || SizeY <= 0) return true;
-
-	// 약간 여유 포함한 화면 밖 판정
-	const bool bOffscreen =
-		ScreenPos.X < -50.f || ScreenPos.Y < -50.f ||
-		ScreenPos.X > SizeX + 50.f || ScreenPos.Y > SizeY + 50.f;
-
-	// 실제 유예 판단은 TickLockOn에서 누적 시간으로 처리
 	return true;
 }
 
@@ -327,7 +385,81 @@ void ULockOnComponent::TickLockOn(float DeltaTime)
 	if (TimeSinceOffscreen > OffscreenGraceTime)
 	{
 		ClearLockOn();
+		return;
 	}
+
+	UpdateLockOnMarker();
+	ApplyLockOnRotation(DeltaTime);
+}
+
+void ULockOnComponent::ApplyLockOnRotation(float DeltaTime)
+{
+	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	AActor* Target = LockedOnTarget.Get();
+	APlayerController* PC = OwnerCharacter
+		? Cast<APlayerController>(OwnerCharacter->GetController()) : nullptr;
+	if (!OwnerCharacter || !Target || !PC)
+	{
+		return;
+	}
+
+	const FVector OwnerLocation = OwnerCharacter->GetActorLocation();
+	const FVector TargetLocation = GetTargetPoint(Target);
+	FVector ViewLocation;
+	FRotator ViewRotation;
+	PC->GetPlayerViewPoint(ViewLocation, ViewRotation);
+
+	FRotator DesiredCameraRotation = (TargetLocation - ViewLocation).Rotation();
+	const FRotator DesiredCharacterRotation(
+		0.f, (TargetLocation - OwnerLocation).Rotation().Yaw, 0.f);
+	DesiredCameraRotation.Yaw = DesiredCharacterRotation.Yaw;
+	DesiredCameraRotation.Roll = 0.f;
+
+	const FRotator CurrentCameraRotation = PC->GetControlRotation();
+	PC->SetControlRotation(FMath::RInterpTo(
+		CurrentCameraRotation, DesiredCameraRotation,
+		DeltaTime, CameraTurnInterpSpeed));
+
+	OwnerCharacter->SetActorRotation(FMath::RInterpTo(
+		OwnerCharacter->GetActorRotation(), DesiredCharacterRotation,
+		DeltaTime, CharacterTurnInterpSpeed));
+}
+
+void ULockOnComponent::UpdateLockOnMarker()
+{
+	if (!LockOnMarkerWidget)
+	{
+		return;
+	}
+
+	AActor* Target = LockedOnTarget.Get();
+	FVector2D ScreenPos;
+	if (!Target || !GetScreenPos(Target, ScreenPos))
+	{
+		LockOnMarkerWidget->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+
+	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	APlayerController* PC = OwnerCharacter
+		? Cast<APlayerController>(OwnerCharacter->GetController()) : nullptr;
+	int32 SizeX = 0;
+	int32 SizeY = 0;
+	if (!PC)
+	{
+		LockOnMarkerWidget->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+	PC->GetViewportSize(SizeX, SizeY);
+	if (ScreenPos.X < 0.0f || ScreenPos.Y < 0.0f ||
+		ScreenPos.X > SizeX || ScreenPos.Y > SizeY)
+	{
+		LockOnMarkerWidget->SetVisibility(ESlateVisibility::Collapsed);
+		return;
+	}
+
+	LockOnMarkerWidget->SetPositionInViewport(ScreenPos + LockOnMarkerScreenOffset, true);
+	LockOnMarkerWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
 }
 
 TWeakObjectPtr<AActor> ULockOnComponent::FindSwitchTarget(bool bRight) const
@@ -346,10 +478,14 @@ TWeakObjectPtr<AActor> ULockOnComponent::FindSwitchTarget(bool bRight) const
 	for (const TWeakObjectPtr<AActor>& It : Candidates)
 	{
 		AActor* T = It.Get();
-		if (!T || T == Cur) continue;
+		if (!IsValidCandidate(T) || T == Cur) continue;
+		if (!HasLineOfSight(T)) continue;
 
 		FVector2D S;
 		if (!GetScreenPos(T, S)) continue;
+		// 최초 획득과 동일하게 화면 중심 허용 반경 밖의 대상은 전환 후보로
+		// 사용하지 않는다. Project 성공만으로는 화면 안이라는 보장이 없다.
+		if (ComputeScore(T, S) == -FLT_MAX) continue;
 
 		const float Dx = S.X - CurScreen.X;
 
