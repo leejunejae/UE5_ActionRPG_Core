@@ -11,17 +11,33 @@
 #include "Combat/Interfaces/AttackSourceInterface.h"
 #include "Core/Subsystems/GameInstanceSystem/AnimBoneDataSubsystem.h"
 #include "DrawDebugHelpers.h"
+#include "Engine/World.h"
 #include "Materials/MaterialInterface.h"
 #include "NiagaraComponent.h"
 #include "NiagaraDataInterfaceArrayFunctionLibrary.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraSystem.h"
+#include "TimerManager.h"
 #include "Utils/AttackBoneDataRegistry.h"
 #include "Utils/CoreLog.h"
 #include "Utils/WeaponTrajectoryUtility.h"
 
 namespace
 {
+	// 이 Notify는 프로젝트 공용 Niagara Trail 규약만 사용한다.
+	// 애셋별로 변경할 이유가 없는 파라미터 이름은 에디터 설정으로 노출하지 않는다.
+	const FName TrailStartParameter(TEXT("TrailStart"));
+	const FName TrailEndParameter(TEXT("TrailEnd"));
+	const FName TrailMaterialParameter(TEXT("User.TrailMaterial"));
+	const FName TrailStartSamplesParameter(TEXT("User.TrailStartSamples"));
+	const FName TrailEndSamplesParameter(TEXT("User.TrailEndSamples"));
+	const FName TrailSampleCountParameter(TEXT("User.TrailSampleCount"));
+	const FName TrailBatchDurationParameter(TEXT("User.TrailBatchDuration"));
+	const FName TrailLinkOrderSamplesParameter(TEXT("User.TrailLinkOrderSamples"));
+	const FName TrailUSamplesParameter(TEXT("User.TrailUSamples"));
+	const FName TrailIsEndingParameter(TEXT("User.TrailIsEnding"));
+	const FName TrailFadeDurationParameter(TEXT("User.TrailFadeDuration"));
+
 	void NormalizeDistanceWeights(float StartWeight, float EndWeight,
 		float& OutStartWeight, float& OutEndWeight)
 	{
@@ -249,6 +265,44 @@ FWeaponTrailRuntimeState* UANS_TimedWeaponTrail::FindRuntimeState(
 	return CandidateState;
 }
 
+void UANS_TimedWeaponTrail::RemoveRuntimeState(
+	const FWeaponTrailRuntimeKey& RuntimeKey, bool bDestroyEffect)
+{
+	FWeaponTrailRuntimeState* State = RuntimeStates.Find(RuntimeKey);
+	if (!State) return;
+
+	if (UWorld* World = State->World.Get())
+	{
+		World->GetTimerManager().ClearTimer(State->CleanupTimerHandle);
+	}
+	if (bDestroyEffect)
+	{
+		if (UNiagaraComponent* NiagaraComponent = State->EffectComponent.Get())
+		{
+			NiagaraComponent->DestroyComponent();
+		}
+	}
+	RuntimeStates.Remove(RuntimeKey);
+}
+
+void UANS_TimedWeaponTrail::PruneInvalidRuntimeStates()
+{
+	TArray<FWeaponTrailRuntimeKey> InvalidKeys;
+	for (const TPair<FWeaponTrailRuntimeKey, FWeaponTrailRuntimeState>& Pair : RuntimeStates)
+	{
+		if (!Pair.Key.MeshComp.IsValid() || !Pair.Value.World.IsValid() ||
+			!Pair.Value.EffectComponent.IsValid())
+		{
+			InvalidKeys.Add(Pair.Key);
+		}
+	}
+
+	for (const FWeaponTrailRuntimeKey& InvalidKey : InvalidKeys)
+	{
+		RemoveRuntimeState(InvalidKey, true);
+	}
+}
+
 void UANS_TimedWeaponTrail::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, float TotalDuration, const FAnimNotifyEventReference& EventReference)
 {
 	if (!MeshComp) return;
@@ -261,6 +315,10 @@ void UANS_TimedWeaponTrail::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimS
 		return;
 	}
 #endif
+	PruneInvalidRuntimeStates();
+	const FWeaponTrailRuntimeKey RuntimeKey = MakeRuntimeKey(MeshComp, EventReference);
+	// 같은 실행 키가 비정상적으로 남아 있으면 새 Effect로 덮어쓰기 전에 정리한다.
+	RemoveRuntimeState(RuntimeKey, true);
 
 	FWeaponTrailRuntimeState State;
 	State.StartSamples.Reserve(FMath::Max(1, MaxSamplesPerFrame));
@@ -278,6 +336,7 @@ void UANS_TimedWeaponTrail::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimS
 		}
 	}
 	State.EffectComponent = Cast<UNiagaraComponent>(SpawnEffect(MeshComp, Anim));
+	State.World = MeshComp->GetWorld();
 	if (const FAnimNotifyEvent* Notify = EventReference.GetNotify())
 	{
 		State.NotifyStartTime = Notify->GetTriggerTime();
@@ -307,11 +366,31 @@ void UANS_TimedWeaponTrail::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimS
 			*GetNameSafe(Sequence), *WindowName.ToString());
 	}
 
-	RuntimeStates.Add(MakeRuntimeKey(MeshComp, EventReference), MoveTemp(State));
+	RuntimeStates.Add(RuntimeKey, MoveTemp(State));
+	if (FWeaponTrailRuntimeState* AddedState = RuntimeStates.Find(RuntimeKey))
+	{
+		if (UWorld* World = AddedState->World.Get())
+		{
+			// 정상적인 공격 트레일보다 충분히 긴 유예를 두되, NotifyEnd가 유실된 상태는 영구히 남기지 않는다.
+			const float CleanupDelay = FMath::Max(TotalDuration + TrailFadeDuration + 1.0f, 5.0f);
+			TWeakObjectPtr<UANS_TimedWeaponTrail> WeakThis(this);
+			World->GetTimerManager().SetTimer(
+				AddedState->CleanupTimerHandle,
+				[WeakThis, RuntimeKey]()
+				{
+					if (UANS_TimedWeaponTrail* TrailNotify = WeakThis.Get())
+					{
+						TrailNotify->RemoveRuntimeState(RuntimeKey, true);
+					}
+				},
+				CleanupDelay, false);
+		}
+	}
 }
 
 void UANS_TimedWeaponTrail::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, float FrameDeltaTime, const FAnimNotifyEventReference& EventReference)
 {
+	PruneInvalidRuntimeStates();
 	FWeaponTrailRuntimeState* State = FindRuntimeState(MakeRuntimeKey(MeshComp, EventReference));
 	UActorComponent* EquipmentComponent = State ? State->EquipmentComponent.Get() : nullptr;
 
@@ -343,29 +422,59 @@ void UANS_TimedWeaponTrail::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSe
 				float EndDistanceWeight;
 				NormalizeDistanceWeights(TrailStartDistanceWeight, TrailEndDistanceWeight,
 					StartDistanceWeight, EndDistanceWeight);
-				if (State->TotalTrajectoryDistance <= UE_SMALL_NUMBER)
+				if (!State->bHasResolvedTotalTrajectoryDistance)
 				{
 					const FWeaponTrajectoryGeometry Geometry = FWeaponTrajectoryUtility::BuildGeometry(
 						MeshComp, State->TraceComponent.Get(),
 						State->Segment->BoneName, StartSocket, EndSocket);
-					const float TrajectoryStartTime = FMath::Max(
-						State->NotifyStartTime, State->Segment->StartTime);
-					const FWeaponTrailDistanceCacheKey CacheKey = BuildTrajectoryDistanceCacheKey(
-						Geometry, *State->Segment, TrajectoryStartTime, SamplingEndTime,
-						TrajectorySampleInterval, StartDistanceWeight, EndDistanceWeight);
-					if (const float* CachedDistance = TrajectoryDistanceCache.Find(CacheKey))
+					// 장비가 아직 준비되지 않은 일시적인 실패는 완료로 확정하지 않는다.
+					// Geometry가 유효한 경우에는 실제 거리가 0이어도 계산 완료 상태로 기록한다.
+					if (Geometry.IsValid())
 					{
-						State->TotalTrajectoryDistance = *CachedDistance;
-					}
-					else
-					{
-						State->TotalTrajectoryDistance = CalculateTotalTrajectoryDistance(
+						const float TrajectoryStartTime = FMath::Max(
+							State->NotifyStartTime, State->Segment->StartTime);
+						const FWeaponTrailDistanceCacheKey CacheKey = BuildTrajectoryDistanceCacheKey(
 							Geometry, *State->Segment, TrajectoryStartTime, SamplingEndTime,
 							TrajectorySampleInterval, StartDistanceWeight, EndDistanceWeight);
-						if (State->TotalTrajectoryDistance > UE_SMALL_NUMBER)
+						if (FWeaponTrailDistanceCacheEntry* CachedEntry =
+							TrajectoryDistanceCache.Find(CacheKey))
 						{
-							TrajectoryDistanceCache.Add(CacheKey, State->TotalTrajectoryDistance);
+							CachedEntry->LastAccessSerial = ++TrajectoryDistanceCacheAccessSerial;
+							State->TotalTrajectoryDistance = CachedEntry->Distance;
 						}
+						else
+						{
+							State->TotalTrajectoryDistance = CalculateTotalTrajectoryDistance(
+								Geometry, *State->Segment, TrajectoryStartTime, SamplingEndTime,
+								TrajectorySampleInterval, StartDistanceWeight, EndDistanceWeight);
+
+							if (TrajectoryDistanceCache.Num() >= MaxTrajectoryDistanceCacheEntries)
+							{
+								FWeaponTrailDistanceCacheKey OldestKey;
+								uint64 OldestSerial = MAX_uint64;
+								bool bFoundOldestEntry = false;
+								for (const TPair<FWeaponTrailDistanceCacheKey,
+									FWeaponTrailDistanceCacheEntry>& Pair : TrajectoryDistanceCache)
+								{
+									if (Pair.Value.LastAccessSerial < OldestSerial)
+									{
+										OldestKey = Pair.Key;
+										OldestSerial = Pair.Value.LastAccessSerial;
+										bFoundOldestEntry = true;
+									}
+								}
+								if (bFoundOldestEntry)
+								{
+									TrajectoryDistanceCache.Remove(OldestKey);
+								}
+							}
+
+							FWeaponTrailDistanceCacheEntry NewEntry;
+							NewEntry.Distance = State->TotalTrajectoryDistance;
+							NewEntry.LastAccessSerial = ++TrajectoryDistanceCacheAccessSerial;
+							TrajectoryDistanceCache.Add(CacheKey, NewEntry);
+						}
+						State->bHasResolvedTotalTrajectoryDistance = true;
 					}
 				}
 				const float StartTime = FMath::Clamp(
@@ -481,6 +590,13 @@ void UANS_TimedWeaponTrail::NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSeq
 {
 	FWeaponTrailRuntimeKey RuntimeKey = MakeRuntimeKey(MeshComp, EventReference);
 	FWeaponTrailRuntimeState* State = FindRuntimeState(RuntimeKey, &RuntimeKey);
+	if (State)
+	{
+		if (UWorld* World = State->World.Get())
+		{
+			World->GetTimerManager().ClearTimer(State->CleanupTimerHandle);
+		}
+	}
 	if (UNiagaraComponent* NiagaraComponent = State ? State->EffectComponent.Get() : nullptr)
 	{
 		NiagaraComponent->SetVariableFloat(TrailFadeDurationParameter, TrailFadeDuration);
@@ -511,7 +627,7 @@ void UANS_TimedWeaponTrail::NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSeq
 			LastSampleTime - NotifyEndTime, SegmentStartTime, SegmentEndTime);
 	}
 
-	RuntimeStates.Remove(RuntimeKey);
+	RemoveRuntimeState(RuntimeKey, false);
 }
 
 UFXSystemComponent* UANS_TimedWeaponTrail::SpawnEffect(

@@ -15,6 +15,7 @@ class UActorComponent;
 class UFXSystemComponent;
 class UNiagaraComponent;
 class USceneComponent;
+class UWorld;
 struct FBoneTransformSegment;
 
 struct FWeaponTrailRuntimeKey
@@ -82,11 +83,19 @@ struct FWeaponTrailDistanceCacheKey
 	}
 };
 
+struct FWeaponTrailDistanceCacheEntry
+{
+	float Distance = 0.0f;
+	uint64 LastAccessSerial = 0;
+};
+
 struct FWeaponTrailRuntimeState
 {
 	TWeakObjectPtr<UActorComponent> EquipmentComponent;
 	TWeakObjectPtr<USceneComponent> TraceComponent;
 	TWeakObjectPtr<UNiagaraComponent> EffectComponent;
+	TWeakObjectPtr<UWorld> World;
+	FTimerHandle CleanupTimerHandle;
 	const FBoneTransformSegment* Segment = nullptr;
 	TArray<FVector> StartSamples;
 	TArray<FVector> EndSamples;
@@ -100,6 +109,7 @@ struct FWeaponTrailRuntimeState
 	bool bNeedsInitialSample = true;
 	int32 NextLinkOrder = 0;
 	float TotalTrajectoryDistance = 0.0f;
+	bool bHasResolvedTotalTrajectoryDistance = false;
 	float AccumulatedTrajectoryDistance = 0.0f;
 	bool bHasPreviousDistanceSample = false;
 	FVector PreviousDistanceStart = FVector::ZeroVector;
@@ -122,19 +132,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData")
 		bool bSubWeapon = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData")
-		FName TrailStartParameter = TEXT("TrailStart");
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData")
-		FName TrailEndParameter = TEXT("TrailEnd");
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData")
-		FName TrailMaterialParameter = TEXT("User.TrailMaterial");
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Trajectory")
 		FName WindowName = TEXT("Trail");
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Trajectory")
+	// 베이크 시 이 본의 Transform을 FBoneTransformSegment에 저장한다.
+	// 값을 변경한 뒤에는 해당 애니메이션의 본 데이터를 다시 빌드해야 한다.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Trajectory",
+		meta = (ToolTip = "트레일 궤적을 베이크할 기준 본. 변경 후 애니메이션 본 데이터를 다시 빌드해야 합니다."))
 		FName TargetBone = TEXT("Hand_R");
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Trajectory", meta = (ClampMin = "0.001", UIMin = "0.001"))
@@ -154,30 +158,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Trajectory|Distance",
 		meta = (ClampMin = "0.0", UIMin = "0.0"))
 		float TrailEndDistanceWeight = 0.5f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Trajectory")
-		FName TrailStartSamplesParameter = TEXT("User.TrailStartSamples");
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Trajectory")
-		FName TrailEndSamplesParameter = TEXT("User.TrailEndSamples");
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Trajectory")
-		FName TrailSampleCountParameter = TEXT("User.TrailSampleCount");
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Trajectory")
-		FName TrailBatchDurationParameter = TEXT("User.TrailBatchDuration");
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Trajectory")
-		FName TrailLinkOrderSamplesParameter = TEXT("User.TrailLinkOrderSamples");
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Trajectory")
-		FName TrailUSamplesParameter = TEXT("User.TrailUSamples");
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Fade")
-		FName TrailIsEndingParameter = TEXT("User.TrailIsEnding");
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Fade")
-		FName TrailFadeDurationParameter = TEXT("User.TrailFadeDuration");
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "TrailData|Fade", meta = (ClampMin = "0.01", UIMin = "0.01"))
 		float TrailFadeDuration = 0.25f;
@@ -199,8 +179,12 @@ private:
 	FWeaponTrailRuntimeState* FindRuntimeState(
 		const FWeaponTrailRuntimeKey& RequestedKey,
 		FWeaponTrailRuntimeKey* OutResolvedKey = nullptr);
+	void RemoveRuntimeState(const FWeaponTrailRuntimeKey& RuntimeKey, bool bDestroyEffect);
+	void PruneInvalidRuntimeStates();
 
 	TMap<FWeaponTrailRuntimeKey, FWeaponTrailRuntimeState> RuntimeStates;
-	TMap<FWeaponTrailDistanceCacheKey, float> TrajectoryDistanceCache;
+	static constexpr int32 MaxTrajectoryDistanceCacheEntries = 64;
+	TMap<FWeaponTrailDistanceCacheKey, FWeaponTrailDistanceCacheEntry> TrajectoryDistanceCache;
+	uint64 TrajectoryDistanceCacheAccessSerial = 0;
 
 };
