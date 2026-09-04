@@ -16,11 +16,13 @@ class IAttackSourceInterface;
 struct FBoneTransformSegment;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnMultiOneParamDelegate, bool);
+DECLARE_DELEGATE_OneParam(FOnComboAttackRequested, FName);
 
 UENUM(BlueprintType)
 enum class EAttackSessionState : uint8
 {
 	Idle,
+	Preparing,
 	Active
 };
 
@@ -62,6 +64,14 @@ protected:
 public:	
 	void OnMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	virtual const FBaseAttackData* ExecuteAttack(FName AttackName, float Playrate = 1.0f);
+	const FBaseAttackData* GetNextComboAttackData(FName AttackName) const;
+	bool TryHandleComboInput(FName AttackName, float BufferDuration);
+	void ClearBufferedComboInput();
+	uint64 AcquireComboInputWindow();
+	void ReleaseComboInputWindow(uint64 LeaseId);
+	const FBaseAttackData* BeginChargeAttack(FName AttackName, float Playrate = 1.0f);
+	const FBaseAttackData* CommitChargeAttack(const FAttackModifiers& CommittedModifiers);
+	bool EndChargeAttack();
 	const FBaseAttackData* GetNextAttackData(FName AttackName) const;
 	virtual bool PlayAnimation(const FAttackContext& AttackInfo, int32 Index, float Playrate = 1.0f);
 	virtual void ExecuteAttackTrace(float StartTime, float EndTime, bool bDrawDebug = false);
@@ -76,9 +86,13 @@ public:
 
 	FORCEINLINE float GetLastTraceTime() { return LastTraceTime; }
 	FORCEINLINE bool IsAttackActive() const { return AttackSessionState == EAttackSessionState::Active; }
+	FORCEINLINE bool IsChargePreparing() const { return AttackSessionState == EAttackSessionState::Preparing; }
 	FORCEINLINE bool IsAttackTraceActive() const { return bAttackTraceActive; }
+	FName GetActiveMontageSection() const;
+	bool IsActiveMontageSection(FName SectionName) const;
 
 	FOnMultiOneParamDelegate OnAttackFinished;
+	FOnComboAttackRequested OnComboAttackRequested;
 
 protected:
 	TSet<AActor*> HitActorListCurrentAttack;
@@ -97,15 +111,25 @@ protected:
 	bool bHasPreviousTraceRootWorldTransform = false;
 
 private:
+	bool ResolveNextAttack(FName AttackName, FAttackContext& OutContext, int32& OutIndex) const;
+	bool PlayChargePreparation(const FAttackContext& AttackInfo, int32 Index, float Playrate);
 	void FinishAttackSession(bool bInterrupted, bool bStopMontage,
 		EActionExitReason ExitReason = EActionExitReason::Completed);
 	void ResetAttackTrace();
+	void ResetComboInputState(bool bClearBufferedInput);
+	void ConsumeBufferedComboInput();
 
 	UPROPERTY(VisibleAnywhere, Category = "Attack|Runtime")
 	EAttackSessionState AttackSessionState = EAttackSessionState::Idle;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UAnimMontage> ActiveAttackMontage;
+
+	FAttackModifiers ActiveAttackModifiers;
+	TSet<uint64> ActiveComboWindowLeases;
+	uint64 NextComboWindowLeaseId = 1;
+	FName BufferedComboAttackName = NAME_None;
+	float BufferedComboExpireTime = 0.0f;
 
 	bool bAttackTraceActive = false;
 	bool bFinishingAttackSession = false;

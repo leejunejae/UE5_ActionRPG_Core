@@ -858,6 +858,7 @@ bool URideComponent::TransferControlToRide(ARide* Ride, const FVector& InitialVe
 	}
 
 	Controller->SetControlRotation(SourceControlRotation);
+	Ride->ActivateRideInputContext();
 	Ride->RefreshRideCameraComponents();
 	BlendFromLockedCamera(Controller, Ride);
 	Ride->GetCharacterMovement()->Velocity = InitialVelocity;
@@ -903,6 +904,7 @@ bool URideComponent::TransferControlToPlayer(ARide* Ride, bool bRestoreRideOnFai
 	}
 
 	Controller->SetControlRotation(ControlRotation);
+	Player->ActivateGroundInputContext();
 	Player->RefreshPlayerCameraComponents();
 	BlendFromLockedCamera(Controller, Player);
 	return true;

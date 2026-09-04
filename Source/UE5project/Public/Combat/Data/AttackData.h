@@ -44,6 +44,58 @@ public:
 	UPROPERTY() float StanceRating = 0.f;
 };
 
+USTRUCT(BlueprintType)
+struct FAttackModifiers
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0"))
+	float Damage = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0"))
+	float PoiseDamage = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0"))
+	float StanceDamage = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.0"))
+	float StaminaCost = 1.0f;
+
+	static FAttackModifiers Lerp(const FAttackModifiers& Min, const FAttackModifiers& Max, float Alpha)
+	{
+		FAttackModifiers Result;
+		Result.Damage = FMath::Lerp(Min.Damage, Max.Damage, Alpha);
+		Result.PoiseDamage = FMath::Lerp(Min.PoiseDamage, Max.PoiseDamage, Alpha);
+		Result.StanceDamage = FMath::Lerp(Min.StanceDamage, Max.StanceDamage, Alpha);
+		Result.StaminaCost = FMath::Lerp(Min.StaminaCost, Max.StaminaCost, Alpha);
+		return Result;
+	}
+};
+
+USTRUCT(BlueprintType)
+struct FChargeAttackSettings
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sections")
+	FName BeginSectionName = TEXT("Begin");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sections")
+	FName LoopSectionName = TEXT("Loop");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sections")
+	FName EndSectionName = TEXT("End");
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, meta = (ClampMin = "0.01"))
+	float MaxChargeDuration = 1.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FAttackModifiers MinimumModifiers;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FAttackModifiers MaximumModifiers;
+};
+
 /**
  * "대상 무기 데이터 + 이 배율/보정치"면 전투 수치가 얼마인지 계산
  */
@@ -88,17 +140,16 @@ public:
 		float ElementalBuildup = 0.f;
 
 	// ── 배율 ──────────────────────────────────────────────────
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float DamageMultiplier = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Modifiers",
+		meta = (EditCondition = "!bCanCharge", EditConditionHides))
+	FAttackModifiers AttackModifiers;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float PoiseDamageMultiplier = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Charge")
+	bool bCanCharge = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float StanceDamageMultiplier = 1.0f;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite)
-		float StaminaCostMultiplier = 1.0f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Charge",
+		meta = (EditCondition = "bCanCharge", EditConditionHides))
+	FChargeAttackSettings ChargeSettings;
 
 	// ── 판정 플래그 ────────────────────────────────────────────
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
@@ -113,6 +164,14 @@ public:
 	bool operator==(const FName& Other) const
 	{
 		return SectionName == Other;
+	}
+
+	FAttackModifiers ResolveModifiers(float ChargeRatio = 0.0f) const
+	{
+		return bCanCharge
+			? FAttackModifiers::Lerp(ChargeSettings.MinimumModifiers,
+				ChargeSettings.MaximumModifiers, FMath::Clamp(ChargeRatio, 0.0f, 1.0f))
+			: AttackModifiers;
 	}
 };
 

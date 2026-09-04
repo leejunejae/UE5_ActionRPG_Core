@@ -15,6 +15,7 @@
 #include "Combat/Interfaces/HitReactionInterface.h"
 #include "Combat/Interfaces/AttackSourceInterface.h"
 #include "Characters/Interfaces/CharacterTransformInterface.h"
+#include "Combat/Data/AttackData.h"
 #include "PlayerBase.generated.h"
 
 class UInputMappingContext;
@@ -50,6 +51,22 @@ struct FHitReactionRequest;
 struct FAttackRequest;
 
 DECLARE_DELEGATE(FOnSingleDelegate);
+
+UENUM(BlueprintType)
+enum class EChargeAttackPhase : uint8
+{
+	None,
+	Begin,
+	Loop
+};
+
+UENUM(BlueprintType)
+enum class EChargeTransitionRequest : uint8
+{
+	None,
+	Attack,
+	End
+};
 
 UCLASS()
 class UE5PROJECT_API APlayerBase : public ACharacterBase,
@@ -149,13 +166,14 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Input")
 	TObjectPtr<UInputConfigDataAsset> InputConfig;
 
-	FORCEINLINE void ModifierInput() { IsModifierInput = true; }
-	FORCEINLINE void ModifierInputEnd() { IsModifierInput = false; }
+	FORCEINLINE void ModifierInput() { bCombatModifierHeld = true; }
+	FORCEINLINE void ModifierInputEnd() { bCombatModifierHeld = false; }
 
-	bool IsModifierInput = false;
+	bool bCombatModifierHeld = false;
 
 public:
 	FORCEINLINE UInputConfigDataAsset* GetInputConfig() const { return InputConfig; }
+	void ActivateGroundInputContext();
 #pragma endregion Input
 
 	/* ============================================================
@@ -334,12 +352,17 @@ private:
 	TObjectPtr<UCombatComponent> CombatComponent;
 
 	// ---- 입력 → 판단 (RequestAction) ----
-	void AttackInput();
-	void AttackInputEnd();
+	void AttackInputStarted();
+	void AttackInputCompleted();
+	void AttackInputCanceled();
 	bool TryStartCriticalExecution();
 
 	void JumpInput();
 	void DodgeInput();
+	void DodgeSprintInputStarted();
+	void DodgeSprintInputCompleted();
+	void DodgeSprintInputCanceled();
+	void UpdateDodgeSprintInput(float DeltaTime);
 	void BlockInput();
 	void BlockInputEnd();
 	void InteractInput();
@@ -347,16 +370,22 @@ private:
 
 	// ---- 실행 (순수 로직, 판단 없음) ----
 	void ExecuteAttack();
+	void UpdateChargeAttack(float DeltaTime);
+	void RequestChargeTransition(EChargeTransitionRequest Request);
+	void CommitChargeAttack();
+	void EndChargeAttack();
+	void ResetChargeAttackRuntime();
 	void ExecuteJump();
 	void ExecuteDodge();
 	void ExecuteBlock();
 	void ExecuteParry();
-	float GetAttackStaminaCost(FName AttackName) const;
+	float GetAttackStaminaCost(FName AttackName, const FAttackModifiers* Modifiers = nullptr) const;
 	float GetDodgeStaminaCost() const;
 	void ExecuteInteract();
 
 	// ---- 버퍼 소비 콜백 ----
 	void HandleBufferedAction(const FGameplayTag& ActionTag);
+	void HandleComboAttackRequested(FName AttackName);
 	void FinishActionIfCurrent(const FGameplayTag& ExpectedAction);
 	void HandleActionTransition(const FGameplayTag& PreviousAction, const FGameplayTag& NextAction,
 		EActionExitReason ExitReason);
@@ -373,10 +402,20 @@ private:
 	FActionExitBlendSettings DodgeExitBlendSettings;
 	FActionExitBlendSettings ParryExitBlendSettings;
 
-	bool IsAttackInput;
+	bool IsAttackInput = false;
+	bool bAttackButtonHeld = false;
+	FName PendingAttackName = NAME_None;
+	FName ActiveChargeAttackName = NAME_None;
+	FBaseAttackData ActiveChargeAttackData;
+	EChargeAttackPhase ChargeAttackPhase = EChargeAttackPhase::None;
+	EChargeTransitionRequest ChargeTransitionRequest = EChargeTransitionRequest::None;
+	float ChargeElapsed = 0.0f;
+	bool bDodgeSprintInputHeld = false;
+	bool bSprintStartedByHold = false;
+	float DodgeSprintHeldTime = 0.0f;
 
-	FTimerHandle AttackTimerHandle;
-	float AttackChargeTime = 0.0f;
+	UPROPERTY(EditAnywhere, Category = "Input", meta = (ClampMin = "0.05"))
+	float SprintHoldThreshold = 0.25f;
 	float GuardReentryLockoutRemaining = 0.0f;
 
 	UPROPERTY(Transient)

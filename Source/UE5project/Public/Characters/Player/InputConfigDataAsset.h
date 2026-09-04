@@ -17,12 +17,12 @@ class UE5PROJECT_API UInputConfigDataAsset : public UDataAsset
 	GENERATED_BODY()
 	
 public:
-    UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputMappingContext> DefaultContext;
+    UPROPERTY(EditDefaultsOnly, Category = "Context") TObjectPtr<UInputMappingContext> DefaultContext;
+    UPROPERTY(EditDefaultsOnly, Category = "Context") TObjectPtr<UInputMappingContext> RideContext;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> Move;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> Look;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> Dodge;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> Walk;
-    UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> Sprint;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> CheckMove;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> Jump;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> Attack;
@@ -30,6 +30,7 @@ public:
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> Parry;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> Interact;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> SpawnRide;
+    UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> Dismount;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> Modifier;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> LockOn;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> LockOnSwitchLeft;

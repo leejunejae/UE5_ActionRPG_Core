@@ -60,31 +60,9 @@ const FBaseAttackData* UAttackComponent::ExecuteAttack(FName AttackName, float P
 		return nullptr;
 	}
 
-	bool CanPlayAttack = false;
-	int32 CandidateIndex = ComboIndex;
-	FAttackContext CandidateContext = CurAttackContext;
-
-	if (CurAttackContext.AttackName == AttackName)
-	{
-		CanPlayAttack = true;
-		CandidateIndex = CurAttackContext.AttackDetail.IsValidIndex(ComboIndex + 1) ? ComboIndex + 1 : 0;
-	}
-	else
-	{
-		if (CurAttackContextSet->Contexts.IsEmpty()) return nullptr;
-		FAttackContext DataForFind;
-		DataForFind.AttackName = AttackName;
-		const FAttackContext* FoundData = CurAttackContextSet->Contexts.Find(DataForFind);
-		CandidateContext = FoundData ? *FoundData : FAttackContext{};
-
-		if (CandidateContext.Anim && !CandidateContext.AttackDetail.IsEmpty())
-		{
-			CanPlayAttack = true;
-			CandidateIndex = 0;
-		}
-	}
-
-	if (!CanPlayAttack || !CandidateContext.AttackDetail.IsValidIndex(CandidateIndex)) return nullptr;
+	int32 CandidateIndex = INDEX_NONE;
+	FAttackContext CandidateContext;
+	if (!ResolveNextAttack(AttackName, CandidateContext, CandidateIndex)) return nullptr;
 
 	if (!PlayAnimation(CandidateContext, CandidateIndex, Playrate))
 	{
@@ -96,10 +74,197 @@ const FBaseAttackData* UAttackComponent::ExecuteAttack(FName AttackName, float P
 	ComboIndex = CandidateIndex;
 	++AttackSessionId;
 	AttackSessionState = EAttackSessionState::Active;
+	ActiveAttackModifiers = CurAttackContext.AttackDetail[ComboIndex].ResolveModifiers();
 	ResetAttackTrace();
 	HitActorListCurrentAttack.Empty();
 
 	return &CurAttackContext.AttackDetail[ComboIndex]; // 실행한 단계 데이터
+}
+
+const FBaseAttackData* UAttackComponent::GetNextComboAttackData(FName AttackName) const
+{
+	if (AttackSessionState != EAttackSessionState::Active ||
+		CurAttackContext.AttackName != AttackName)
+	{
+		return nullptr;
+	}
+
+	const int32 NextIndex = ComboIndex + 1;
+	return CurAttackContext.AttackDetail.IsValidIndex(NextIndex)
+		? &CurAttackContext.AttackDetail[NextIndex] : nullptr;
+}
+
+bool UAttackComponent::TryHandleComboInput(FName AttackName, float BufferDuration)
+{
+	if (!GetNextComboAttackData(AttackName)) return false;
+
+	if (!ActiveComboWindowLeases.IsEmpty())
+	{
+		BufferedComboAttackName = NAME_None;
+		BufferedComboExpireTime = 0.0f;
+		OnComboAttackRequested.ExecuteIfBound(AttackName);
+		return true;
+	}
+
+	const UWorld* World = GetWorld();
+	BufferedComboAttackName = AttackName;
+	BufferedComboExpireTime = (World ? World->GetTimeSeconds() : 0.0f) + FMath::Max(0.0f, BufferDuration);
+	return true;
+}
+
+void UAttackComponent::ClearBufferedComboInput()
+{
+	BufferedComboAttackName = NAME_None;
+	BufferedComboExpireTime = 0.0f;
+}
+
+uint64 UAttackComponent::AcquireComboInputWindow()
+{
+	if (AttackSessionState != EAttackSessionState::Active ||
+		!CurAttackContext.AttackDetail.IsValidIndex(ComboIndex + 1))
+	{
+		return 0;
+	}
+
+	uint64 LeaseId = NextComboWindowLeaseId++;
+	if (LeaseId == 0)
+	{
+		LeaseId = NextComboWindowLeaseId++;
+	}
+	ActiveComboWindowLeases.Add(LeaseId);
+	ConsumeBufferedComboInput();
+	return LeaseId;
+}
+
+void UAttackComponent::ReleaseComboInputWindow(uint64 LeaseId)
+{
+	if (LeaseId != 0)
+	{
+		ActiveComboWindowLeases.Remove(LeaseId);
+	}
+}
+
+void UAttackComponent::ConsumeBufferedComboInput()
+{
+	if (BufferedComboAttackName.IsNone()) return;
+	const UWorld* World = GetWorld();
+	const bool bExpired = World && World->GetTimeSeconds() > BufferedComboExpireTime;
+	const FName RequestedAttackName = BufferedComboAttackName;
+	BufferedComboAttackName = NAME_None;
+	BufferedComboExpireTime = 0.0f;
+	if (!bExpired && GetNextComboAttackData(RequestedAttackName))
+	{
+		OnComboAttackRequested.ExecuteIfBound(RequestedAttackName);
+	}
+}
+
+void UAttackComponent::ResetComboInputState(bool bClearBufferedInput)
+{
+	ActiveComboWindowLeases.Reset();
+	if (bClearBufferedInput)
+	{
+		BufferedComboAttackName = NAME_None;
+		BufferedComboExpireTime = 0.0f;
+	}
+}
+
+bool UAttackComponent::ResolveNextAttack(FName AttackName, FAttackContext& OutContext, int32& OutIndex) const
+{
+	if (!CurAttackContextSet) return false;
+
+	if (CurAttackContext.AttackName == AttackName)
+	{
+		OutContext = CurAttackContext;
+		OutIndex = CurAttackContext.AttackDetail.IsValidIndex(ComboIndex + 1) ? ComboIndex + 1 : 0;
+	}
+	else
+	{
+		FAttackContext DataForFind;
+		DataForFind.AttackName = AttackName;
+		const FAttackContext* FoundData = CurAttackContextSet->Contexts.Find(DataForFind);
+		if (!FoundData) return false;
+		OutContext = *FoundData;
+		OutIndex = 0;
+	}
+
+	return OutContext.Anim && OutContext.AttackDetail.IsValidIndex(OutIndex);
+}
+
+const FBaseAttackData* UAttackComponent::BeginChargeAttack(FName AttackName, float Playrate)
+{
+	if (AttackSessionState == EAttackSessionState::Preparing) return nullptr;
+
+	FAttackContext CandidateContext;
+	int32 CandidateIndex = INDEX_NONE;
+	if (!ResolveNextAttack(AttackName, CandidateContext, CandidateIndex)) return nullptr;
+	const FBaseAttackData& Detail = CandidateContext.AttackDetail[CandidateIndex];
+	if (!Detail.bCanCharge || !PlayChargePreparation(CandidateContext, CandidateIndex, Playrate)) return nullptr;
+
+	CurAttackContext = CandidateContext;
+	ComboIndex = CandidateIndex;
+	++AttackSessionId;
+	AttackSessionState = EAttackSessionState::Preparing;
+	ResetAttackTrace();
+	HitActorListCurrentAttack.Empty();
+	return &CurAttackContext.AttackDetail[ComboIndex];
+}
+
+const FBaseAttackData* UAttackComponent::CommitChargeAttack(const FAttackModifiers& CommittedModifiers)
+{
+	if (AttackSessionState != EAttackSessionState::Preparing ||
+		!CurAttackContext.AttackDetail.IsValidIndex(ComboIndex) || !ActiveAttackMontage) return nullptr;
+
+	const FBaseAttackData& Detail = CurAttackContext.AttackDetail[ComboIndex];
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	UAnimInstance* Anim = Character && Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr;
+	if (!Anim || Detail.SectionName.IsNone() || !ActiveAttackMontage->IsValidSectionName(Detail.SectionName)) return nullptr;
+
+	Anim->Montage_JumpToSection(Detail.SectionName, ActiveAttackMontage);
+	AttackSessionState = EAttackSessionState::Active;
+	ActiveAttackModifiers = CommittedModifiers;
+	ResetAttackTrace();
+	HitActorListCurrentAttack.Empty();
+	return &Detail;
+}
+
+bool UAttackComponent::EndChargeAttack()
+{
+	if (AttackSessionState != EAttackSessionState::Preparing ||
+		!CurAttackContext.AttackDetail.IsValidIndex(ComboIndex) || !ActiveAttackMontage) return false;
+
+	const FName EndSection = CurAttackContext.AttackDetail[ComboIndex].ChargeSettings.EndSectionName;
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	UAnimInstance* Anim = Character && Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr;
+	if (!Anim || EndSection.IsNone() || !ActiveAttackMontage->IsValidSectionName(EndSection)) return false;
+	Anim->Montage_JumpToSection(EndSection, ActiveAttackMontage);
+	return true;
+}
+
+FName UAttackComponent::GetActiveMontageSection() const
+{
+	const ACharacter* Character = Cast<ACharacter>(GetOwner());
+	UAnimInstance* Anim = Character && Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr;
+	return Anim && ActiveAttackMontage ? Anim->Montage_GetCurrentSection(ActiveAttackMontage) : NAME_None;
+}
+
+bool UAttackComponent::IsActiveMontageSection(FName SectionName) const
+{
+	if (SectionName.IsNone() || !ActiveAttackMontage) return false;
+	const ACharacter* Character = Cast<ACharacter>(GetOwner());
+	UAnimInstance* Anim = Character && Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr;
+	if (!Anim || !Anim->Montage_IsPlaying(ActiveAttackMontage)) return false;
+
+	if (Anim->Montage_GetCurrentSection(ActiveAttackMontage) == SectionName)
+	{
+		return true;
+	}
+
+	// 일부 섹션 전환 프레임에는 CurrentSection 갱신이 늦을 수 있으므로
+	// 실제 재생 위치가 속한 섹션도 함께 검사한다.
+	const float Position = Anim->Montage_GetPosition(ActiveAttackMontage);
+	const int32 PositionSectionIndex = ActiveAttackMontage->GetSectionIndexFromPosition(Position);
+	return PositionSectionIndex != INDEX_NONE &&
+		ActiveAttackMontage->GetSectionName(PositionSectionIndex) == SectionName;
 }
 
 const FBaseAttackData* UAttackComponent::GetNextAttackData(FName AttackName) const
@@ -148,6 +313,7 @@ bool UAttackComponent::PlayAnimation(const FAttackContext& AttackInfo, int32 Ind
 		Anim->Montage_SetEndDelegate(EmptyDelegate, ActiveAttackMontage);
 	}
 	ResetAttackTrace();
+	ResetComboInputState(true);
 
 	const float PlayedDuration = Anim->Montage_Play(AttackInfo.Anim, Playrate);
 	if (PlayedDuration <= 0.0f)
@@ -159,6 +325,43 @@ bool UAttackComponent::PlayAnimation(const FAttackContext& AttackInfo, int32 Ind
 
 	ActiveAttackMontage = AttackInfo.Anim;
 	Anim->Montage_JumpToSection(SectionName, AttackInfo.Anim);
+
+	FOnMontageEnded MontageEndDelegate;
+	MontageEndDelegate.BindUObject(this, &UAttackComponent::OnMontageEnded);
+	Anim->Montage_SetEndDelegate(MontageEndDelegate, AttackInfo.Anim);
+	return true;
+}
+
+bool UAttackComponent::PlayChargePreparation(const FAttackContext& AttackInfo, int32 Index, float Playrate)
+{
+	ACharacter* Character = Cast<ACharacter>(GetOwner());
+	if (!Character || !AttackInfo.Anim || !AttackInfo.AttackDetail.IsValidIndex(Index)) return false;
+	UAnimInstance* Anim = Character->GetMesh() ? Character->GetMesh()->GetAnimInstance() : nullptr;
+	if (!Anim) return false;
+
+	const FChargeAttackSettings& Charge = AttackInfo.AttackDetail[Index].ChargeSettings;
+	if (Charge.BeginSectionName.IsNone() || Charge.LoopSectionName.IsNone() || Charge.EndSectionName.IsNone() ||
+		!AttackInfo.Anim->IsValidSectionName(Charge.BeginSectionName) ||
+		!AttackInfo.Anim->IsValidSectionName(Charge.LoopSectionName) ||
+		!AttackInfo.Anim->IsValidSectionName(Charge.EndSectionName))
+	{
+		UE_LOG(Log_Attack, Warning, TEXT("[AttackComponent] Invalid charge sections in montage '%s'."),
+			*GetNameSafe(AttackInfo.Anim));
+		return false;
+	}
+
+	if (ActiveAttackMontage)
+	{
+		FOnMontageEnded EmptyDelegate;
+		Anim->Montage_SetEndDelegate(EmptyDelegate, ActiveAttackMontage);
+	}
+	ResetAttackTrace();
+	ResetComboInputState(true);
+	if (Anim->Montage_Play(AttackInfo.Anim, Playrate) <= 0.0f) return false;
+	ActiveAttackMontage = AttackInfo.Anim;
+	Anim->Montage_JumpToSection(Charge.BeginSectionName, AttackInfo.Anim);
+	Anim->Montage_SetNextSection(Charge.BeginSectionName, Charge.LoopSectionName, AttackInfo.Anim);
+	Anim->Montage_SetNextSection(Charge.LoopSectionName, Charge.LoopSectionName, AttackInfo.Anim);
 
 	FOnMontageEnded MontageEndDelegate;
 	MontageEndDelegate.BindUObject(this, &UAttackComponent::OnMontageEnded);
@@ -216,11 +419,13 @@ void UAttackComponent::FinishAttackSession(bool bInterrupted, bool bStopMontage,
 	}
 
 	ResetAttackTrace();
+	ResetComboInputState(true);
 	HitActorListCurrentAttack.Empty();
 	CurAttackContext = FAttackContext();
 	ComboIndex = 0;
 	ActiveAttackMontage = nullptr;
 	AttackSessionState = EAttackSessionState::Idle;
+	ActiveAttackModifiers = FAttackModifiers{};
 	OnAttackFinished.Broadcast(bInterrupted);
 }
 
@@ -344,9 +549,9 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 
 					if (HitActor->Implements<UHitReactionInterface>())
 					{
-						float OutDamage = DamageSource.AttackRating * Detail.DamageMultiplier;
-						float OutPoiseDamage = DamageSource.PoiseRating * Detail.PoiseDamageMultiplier;
-						float OutStanceDamage = DamageSource.StanceRating * Detail.StanceDamageMultiplier;
+						float OutDamage = DamageSource.AttackRating * ActiveAttackModifiers.Damage;
+						float OutPoiseDamage = DamageSource.PoiseRating * ActiveAttackModifiers.PoiseDamage;
+						float OutStanceDamage = DamageSource.StanceRating * ActiveAttackModifiers.StanceDamage;
 						EHitDamageLevel OutDamageLevel = Detail.DamageLevel;
 						EDamageType OutAttackType = Detail.DamageType;
 						EElementalType OutElementType = Detail.ElementType;

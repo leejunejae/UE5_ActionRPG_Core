@@ -133,16 +133,21 @@ void APlayerBase::BeginPlay()
 	{
 	}
 
-	APlayerController* PlayerController = Cast<APlayerController>(GetController());
-	if (PlayerController)
-	{
-		if (UEnhancedInputLocalPlayerSubsystem* SubSystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
-		{
-			SubSystem->AddMappingContext(InputConfig->DefaultContext, 0);
-		}
-	}
-	
+	ActivateGroundInputContext();
+
 	InitSpringArmLocation = SpringArm->GetRelativeLocation();
+}
+
+void APlayerBase::ActivateGroundInputContext()
+{
+	APlayerController* PlayerController = Cast<APlayerController>(GetController());
+	if (!PlayerController || !InputConfig) return;
+	if (UEnhancedInputLocalPlayerSubsystem* SubSystem =
+		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
+	{
+		if (InputConfig->RideContext) SubSystem->RemoveMappingContext(InputConfig->RideContext);
+		if (InputConfig->DefaultContext) SubSystem->AddMappingContext(InputConfig->DefaultContext, 0);
+	}
 }
 
 void APlayerBase::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -199,6 +204,9 @@ void APlayerBase::Tick(float DeltaTime)
 	{
 		LockOnComponent->TickLockOn(DeltaTime);
 	}
+
+	UpdateChargeAttack(DeltaTime);
+	UpdateDodgeSprintInput(DeltaTime);
 
 	if (GetStatComponent())
 	{
@@ -306,7 +314,9 @@ void APlayerBase::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 
 		// ★ 변경: 커브 체크 → RequestAction 방식
 		EnhancedInputComponent->BindAction(InputConfig->Jump, ETriggerEvent::Triggered, this, &APlayerBase::JumpInput);
-		EnhancedInputComponent->BindAction(InputConfig->Dodge, ETriggerEvent::Triggered, this, &APlayerBase::DodgeInput);
+		EnhancedInputComponent->BindAction(InputConfig->Dodge, ETriggerEvent::Started, this, &APlayerBase::DodgeSprintInputStarted);
+		EnhancedInputComponent->BindAction(InputConfig->Dodge, ETriggerEvent::Completed, this, &APlayerBase::DodgeSprintInputCompleted);
+		EnhancedInputComponent->BindAction(InputConfig->Dodge, ETriggerEvent::Canceled, this, &APlayerBase::DodgeSprintInputCanceled);
 
 		EnhancedInputComponent->BindAction(InputConfig->Block, ETriggerEvent::Ongoing, this, &APlayerBase::BlockInput);
 		EnhancedInputComponent->BindAction(InputConfig->Block, ETriggerEvent::Triggered, this, &APlayerBase::BlockInputEnd);
@@ -318,20 +328,19 @@ void APlayerBase::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 
 		EnhancedInputComponent->BindAction(InputConfig->Interact, ETriggerEvent::Triggered, this, &APlayerBase::InteractInput);
 
-		EnhancedInputComponent->BindAction(InputConfig->Sprint, ETriggerEvent::Started, this, &APlayerBase::Sprint);
-		EnhancedInputComponent->BindAction(InputConfig->Sprint, ETriggerEvent::Triggered, this, &APlayerBase::Jog);
-
 		EnhancedInputComponent->BindAction(InputConfig->Walk, ETriggerEvent::Started, this, &APlayerBase::Walk);
 		EnhancedInputComponent->BindAction(InputConfig->Walk, ETriggerEvent::Triggered, this, &APlayerBase::Jog);
 
 		EnhancedInputComponent->BindAction(InputConfig->SpawnRide, ETriggerEvent::Started, this, &APlayerBase::SpawnRideInput);
 		EnhancedInputComponent->BindAction(InputConfig->SpawnRide, ETriggerEvent::Completed, this, &APlayerBase::SpawnRideInputCompleted);
 
-		EnhancedInputComponent->BindAction(InputConfig->Attack, ETriggerEvent::Started, this, &APlayerBase::AttackInput);
-		EnhancedInputComponent->BindAction(InputConfig->Attack, ETriggerEvent::Triggered, this, &APlayerBase::AttackInputEnd);
+		EnhancedInputComponent->BindAction(InputConfig->Attack, ETriggerEvent::Started, this, &APlayerBase::AttackInputStarted);
+		EnhancedInputComponent->BindAction(InputConfig->Attack, ETriggerEvent::Completed, this, &APlayerBase::AttackInputCompleted);
+		EnhancedInputComponent->BindAction(InputConfig->Attack, ETriggerEvent::Canceled, this, &APlayerBase::AttackInputCanceled);
 
-		EnhancedInputComponent->BindAction(InputConfig->Modifier, ETriggerEvent::Ongoing, this, &APlayerBase::ModifierInput);
-		EnhancedInputComponent->BindAction(InputConfig->Modifier, ETriggerEvent::Triggered, this, &APlayerBase::ModifierInputEnd);
+		EnhancedInputComponent->BindAction(InputConfig->Modifier, ETriggerEvent::Started, this, &APlayerBase::ModifierInput);
+		EnhancedInputComponent->BindAction(InputConfig->Modifier, ETriggerEvent::Completed, this, &APlayerBase::ModifierInputEnd);
+		EnhancedInputComponent->BindAction(InputConfig->Modifier, ETriggerEvent::Canceled, this, &APlayerBase::ModifierInputEnd);
 
 		EnhancedInputComponent->BindAction(InputConfig->LockOn, ETriggerEvent::Triggered, this, &APlayerBase::OnLockOnToggle);
 		EnhancedInputComponent->BindAction(InputConfig->LockOnSwitchLeft, ETriggerEvent::Triggered, this, &APlayerBase::OnLockOnSwitchLeft);
@@ -357,7 +366,11 @@ void APlayerBase::PostInitializeComponents()
 		GetCharacterStatusComponent()->OnActionConsumed.BindUObject(this, &APlayerBase::HandleBufferedAction);
 		GetCharacterStatusComponent()->OnActionTransition.BindUObject(this, &APlayerBase::HandleActionTransition);
 
-		if(GetAttackComponent()) GetAttackComponent()->OnAttackFinished.AddUObject(this, &APlayerBase::HandleAttackFinished);
+		if (GetAttackComponent())
+		{
+			GetAttackComponent()->OnAttackFinished.AddUObject(this, &APlayerBase::HandleAttackFinished);
+			GetAttackComponent()->OnComboAttackRequested.BindUObject(this, &APlayerBase::HandleComboAttackRequested);
+		}
 		if(GetClimbComponent()) GetClimbComponent()->OnLadderExit.AddUObject(this, &APlayerBase::HandleLadderExit);
 	}
 
@@ -470,11 +483,42 @@ void APlayerBase::EndMoveInput()
 /* ============================================================
  *  Combat Input — 판단부 (RequestAction으로 체크/버퍼)
  * ============================================================ */
-void APlayerBase::AttackInput()
+void APlayerBase::AttackInputStarted()
 {
-	if (TryStartCriticalExecution()) return;
+	bAttackButtonHeld = true;
+	const FName RequestedAttackName = bCombatModifierHeld
+		? FName(TEXT("HeavyAttack")) : FName(TEXT("DefaultCombo"));
+	if (!bCombatModifierHeld && TryStartCriticalExecution())
+	{
+		PendingAttackName = NAME_None;
+		return;
+	}
 
-	if (!GetStatComponent()->CanAffordStamina(GetAttackStaminaCost(FName("DefaultCombo")))) return;
+	if (GetAttackComponent() && GetCharacterStatusComponent() &&
+		GetAttackComponent()->TryHandleComboInput(
+			RequestedAttackName, GetCharacterStatusComponent()->BufferDuration))
+	{
+		GetCharacterStatusComponent()->RemoveBufferedAction(TAG_Action_Attack);
+		PendingAttackName = NAME_None;
+		return;
+	}
+
+	if (GetAttackComponent()) GetAttackComponent()->ClearBufferedComboInput();
+	PendingAttackName = RequestedAttackName;
+
+	const FBaseAttackData* NextAttack = GetAttackComponent()
+		? GetAttackComponent()->GetNextAttackData(PendingAttackName) : nullptr;
+	if (!NextAttack)
+	{
+		PendingAttackName = NAME_None;
+		return;
+	}
+	const FAttackModifiers InitialModifiers = NextAttack->ResolveModifiers(0.0f);
+	if (!GetStatComponent()->CanAffordStamina(GetAttackStaminaCost(PendingAttackName, &InitialModifiers)))
+	{
+		PendingAttackName = NAME_None;
+		return;
+	}
 
 	if (GetCharacterStatusComponent()->RequestAction(TAG_Action_Attack))
 	{
@@ -483,9 +527,46 @@ void APlayerBase::AttackInput()
 	// else: 버퍼에 저장됨 → Window 열리면 HandleBufferedAction → ExecuteAttack
 }
 
-void APlayerBase::AttackInputEnd()
+void APlayerBase::HandleComboAttackRequested(FName AttackName)
 {
+	UPlayerAttackComponent* PlayerAttack = GetAttackComponent();
+	const FBaseAttackData* NextCombo = PlayerAttack
+		? PlayerAttack->GetNextComboAttackData(AttackName) : nullptr;
+	if (!NextCombo || !GetStatComponent()) return;
+
+	const FAttackModifiers InitialModifiers = NextCombo->ResolveModifiers(0.0f);
+	if (!GetStatComponent()->CanAffordStamina(GetAttackStaminaCost(AttackName, &InitialModifiers)))
+	{
+		return;
+	}
+
+	PendingAttackName = AttackName;
+	ExecuteAttack();
+}
+
+void APlayerBase::AttackInputCompleted()
+{
+	bAttackButtonHeld = false;
 	IsAttackInput = false;
+	if (ChargeAttackPhase != EChargeAttackPhase::None)
+	{
+		RequestChargeTransition(EChargeTransitionRequest::Attack);
+	}
+}
+
+void APlayerBase::AttackInputCanceled()
+{
+	bAttackButtonHeld = false;
+	IsAttackInput = false;
+	if (ChargeAttackPhase != EChargeAttackPhase::None)
+	{
+		RequestChargeTransition(EChargeTransitionRequest::End);
+	}
+	else if (PendingAttackName != NAME_None && GetCharacterStatusComponent())
+	{
+		GetCharacterStatusComponent()->RemoveBufferedAction(TAG_Action_Attack);
+		PendingAttackName = NAME_None;
+	}
 }
 
 void APlayerBase::JumpInput()
@@ -516,6 +597,51 @@ void APlayerBase::BlockInput()
 	if (StatusComponent->RequestAction(TAG_Action_Guard))
 	{
 		ExecuteBlock();
+	}
+}
+
+void APlayerBase::DodgeSprintInputStarted()
+{
+	bDodgeSprintInputHeld = true;
+	bSprintStartedByHold = false;
+	DodgeSprintHeldTime = 0.0f;
+}
+
+void APlayerBase::DodgeSprintInputCompleted()
+{
+	const bool bWasSprinting = bSprintStartedByHold;
+	bDodgeSprintInputHeld = false;
+	bSprintStartedByHold = false;
+	DodgeSprintHeldTime = 0.0f;
+	if (bWasSprinting)
+	{
+		Jog();
+	}
+	else
+	{
+		DodgeInput();
+	}
+}
+
+void APlayerBase::DodgeSprintInputCanceled()
+{
+	bDodgeSprintInputHeld = false;
+	DodgeSprintHeldTime = 0.0f;
+	if (bSprintStartedByHold)
+	{
+		Jog();
+	}
+	bSprintStartedByHold = false;
+}
+
+void APlayerBase::UpdateDodgeSprintInput(float DeltaTime)
+{
+	if (!bDodgeSprintInputHeld || bSprintStartedByHold) return;
+	DodgeSprintHeldTime += FMath::Max(0.0f, DeltaTime);
+	if (DodgeSprintHeldTime >= SprintHoldThreshold)
+	{
+		bSprintStartedByHold = true;
+		Sprint();
 	}
 }
 
@@ -681,15 +807,17 @@ void APlayerBase::SpawnRideInputCompleted()
 /* ============================================================
  *  Combat Execute — 실행부 (순수 로직, 판단 없음)
  * ============================================================ */
-float APlayerBase::GetAttackStaminaCost(FName AttackName) const
+float APlayerBase::GetAttackStaminaCost(FName AttackName, const FAttackModifiers* Modifiers) const
 {
 	const UPlayerAttackComponent* PlayerAttack = GetAttackComponent();
 	const FWeaponSetsInfo* Weapon = GetEquipmentComponent()
 		? GetEquipmentComponent()->GetEquipedWeapon() : nullptr;
 	const FBaseAttackData* NextAttack = PlayerAttack
 		? PlayerAttack->GetNextAttackData(AttackName) : nullptr;
+	const FAttackModifiers Resolved = Modifiers ? *Modifiers
+		: (NextAttack ? NextAttack->ResolveModifiers() : FAttackModifiers{});
 	return Weapon && NextAttack
-		? FMath::Max(0.f, Weapon->StaminaCost * NextAttack->StaminaCostMultiplier)
+		? FMath::Max(0.f, Weapon->StaminaCost * Resolved.StaminaCost)
 		: 0.f;
 }
 
@@ -709,8 +837,50 @@ float APlayerBase::GetDodgeStaminaCost() const
 
 void APlayerBase::ExecuteAttack()
 {
-	const FName AttackName("DefaultCombo");
-	const float Cost = GetAttackStaminaCost(AttackName);
+	const FName AttackName = PendingAttackName;
+	PendingAttackName = NAME_None;
+	if (AttackName.IsNone())
+	{
+		FinishActionIfCurrent(TAG_Action_Attack);
+		return;
+	}
+
+	const FBaseAttackData* NextAttack = GetAttackComponent()->GetNextAttackData(AttackName);
+	if (!NextAttack)
+	{
+		FinishActionIfCurrent(TAG_Action_Attack);
+		return;
+	}
+
+	if (NextAttack->bCanCharge)
+	{
+		const FAttackModifiers MinimumModifiers = NextAttack->ResolveModifiers(0.0f);
+		const float MinimumCost = GetAttackStaminaCost(AttackName, &MinimumModifiers);
+		if (!GetStatComponent()->CanAffordStamina(MinimumCost))
+		{
+			FinishActionIfCurrent(TAG_Action_Attack);
+			return;
+		}
+
+		const FBaseAttackData* Prepared = GetAttackComponent()->BeginChargeAttack(AttackName);
+		if (!Prepared)
+		{
+			FinishActionIfCurrent(TAG_Action_Attack);
+			return;
+		}
+
+		IsAttackInput = true;
+		ActiveChargeAttackName = AttackName;
+		ActiveChargeAttackData = *Prepared;
+		ChargeAttackPhase = EChargeAttackPhase::Begin;
+		ChargeTransitionRequest = bAttackButtonHeld
+			? EChargeTransitionRequest::None : EChargeTransitionRequest::Attack;
+		ChargeElapsed = 0.0f;
+		return;
+	}
+
+	const FAttackModifiers AttackModifiers = NextAttack->ResolveModifiers();
+	const float Cost = GetAttackStaminaCost(AttackName, &AttackModifiers);
 	if (!GetStatComponent()->CanAffordStamina(Cost))
 	{
 		IsAttackInput = false;
@@ -728,6 +898,95 @@ void APlayerBase::ExecuteAttack()
 	}
 
 	GetStatComponent()->TrySpendStamina(Cost);
+}
+
+void APlayerBase::UpdateChargeAttack(float DeltaTime)
+{
+	if (ChargeAttackPhase == EChargeAttackPhase::None || !GetAttackComponent()) return;
+	if (!GetAttackComponent()->IsChargePreparing())
+	{
+		// 몽타주가 외부 요인으로 종료되었는데 플레이어 측 차지 상태만 남으면
+		// 이후 입력과 무관하게 차지 중인 것으로 고착될 수 있다.
+		ResetChargeAttackRuntime();
+		return;
+	}
+
+	ChargeElapsed += FMath::Max(0.0f, DeltaTime);
+	const float MaxDuration = FMath::Max(ActiveChargeAttackData.ChargeSettings.MaxChargeDuration, 0.01f);
+	if (ChargeTransitionRequest == EChargeTransitionRequest::None && ChargeElapsed >= MaxDuration)
+	{
+		ChargeTransitionRequest = EChargeTransitionRequest::Attack;
+	}
+
+	if (ChargeAttackPhase == EChargeAttackPhase::Begin)
+	{
+		if (GetAttackComponent()->IsActiveMontageSection(
+			ActiveChargeAttackData.ChargeSettings.LoopSectionName))
+		{
+			ChargeAttackPhase = EChargeAttackPhase::Loop;
+		}
+		else
+		{
+			return;
+		}
+	}
+
+	if (ChargeTransitionRequest == EChargeTransitionRequest::Attack)
+	{
+		CommitChargeAttack();
+	}
+	else if (ChargeTransitionRequest == EChargeTransitionRequest::End)
+	{
+		EndChargeAttack();
+	}
+}
+
+void APlayerBase::RequestChargeTransition(EChargeTransitionRequest Request)
+{
+	if (ChargeAttackPhase == EChargeAttackPhase::None || ChargeTransitionRequest != EChargeTransitionRequest::None)
+	{
+		return;
+	}
+	ChargeTransitionRequest = Request;
+	if (ChargeAttackPhase == EChargeAttackPhase::Loop)
+	{
+		UpdateChargeAttack(0.0f);
+	}
+}
+
+void APlayerBase::CommitChargeAttack()
+{
+	const float MaxDuration = FMath::Max(ActiveChargeAttackData.ChargeSettings.MaxChargeDuration, 0.01f);
+	const float ChargeRatio = FMath::Clamp(ChargeElapsed / MaxDuration, 0.0f, 1.0f);
+	const FAttackModifiers CommittedModifiers = ActiveChargeAttackData.ResolveModifiers(ChargeRatio);
+	const float Cost = GetAttackStaminaCost(ActiveChargeAttackName, &CommittedModifiers);
+	if (!GetStatComponent()->CanAffordStamina(Cost) ||
+		!GetAttackComponent()->CommitChargeAttack(CommittedModifiers))
+	{
+		EndChargeAttack();
+		return;
+	}
+
+	GetStatComponent()->TrySpendStamina(Cost);
+	ResetChargeAttackRuntime();
+}
+
+void APlayerBase::EndChargeAttack()
+{
+	if (!GetAttackComponent()->EndChargeAttack())
+	{
+		GetAttackComponent()->CancelAttack(EActionExitReason::Interrupted, true);
+	}
+	ResetChargeAttackRuntime();
+}
+
+void APlayerBase::ResetChargeAttackRuntime()
+{
+	ActiveChargeAttackName = NAME_None;
+	ActiveChargeAttackData = FBaseAttackData{};
+	ChargeAttackPhase = EChargeAttackPhase::None;
+	ChargeTransitionRequest = EChargeTransitionRequest::None;
+	ChargeElapsed = 0.0f;
 }
 
 void APlayerBase::ExecuteJump()
@@ -944,6 +1203,7 @@ void APlayerBase::ExecuteInteract()
 void APlayerBase::HandleAttackFinished(bool bInterrupted)
 {
 	IsAttackInput = false;
+	ResetChargeAttackRuntime();
 	bForcedRotatingInputDirection = false;
 	FinishActionIfCurrent(TAG_Action_Attack);
 }
@@ -1017,6 +1277,8 @@ void APlayerBase::ExitActionRuntime(const FGameplayTag& ActionTag, EActionExitRe
 	if (ActionTag.MatchesTagExact(TAG_Action_Attack))
 	{
 		IsAttackInput = false;
+		PendingAttackName = NAME_None;
+		ResetChargeAttackRuntime();
 		bForcedRotatingInputDirection = false;
 		if (GetAttackComponent())
 		{
@@ -1456,6 +1718,12 @@ void APlayerBase::HandleDeathStarted()
 	}
 	bForcedRotatingInputDirection = false;
 	IsAttackInput = false;
+	bAttackButtonHeld = false;
+	bDodgeSprintInputHeld = false;
+	bSprintStartedByHold = false;
+	DodgeSprintHeldTime = 0.0f;
+	PendingAttackName = NAME_None;
+	ResetChargeAttackRuntime();
 	IsBlockInput = false;
 	bWantsToGuard = false;
 

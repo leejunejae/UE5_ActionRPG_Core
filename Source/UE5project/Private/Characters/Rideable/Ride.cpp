@@ -34,6 +34,8 @@
 // 컴포넌트
 #include "Characters/Components/RideComponent.h"
 #include "Characters/Rideable/RideProfileDataAsset.h"
+#include "Characters/Player/PlayerBase.h"
+#include "Characters/Player/InputConfigDataAsset.h"
 
 // Sets default values
 ARide::ARide()
@@ -122,8 +124,6 @@ ARide::ARide()
 
 	GetCharacterMovement()->bRunPhysicsWithNoController = true;
 
-	InputSetting();
-
 	GetMesh()->SetAnimationMode(EAnimationMode::AnimationBlueprint);
 	
 	static ConstructorHelpers::FClassFinder<UAnimInstance>HORSE_ANIM(TEXT("/Game/05_Ride/AnimData/RHAB_AnimBlueprint.RHAB_AnimBlueprint_C"));
@@ -135,45 +135,6 @@ ARide::ARide()
 	Tags.Add("Ride");
 }
 
-void ARide::InputSetting()
-{
-	static ConstructorHelpers::FObjectFinder<UInputMappingContext>PR_Context(TEXT("/Game/00_Character/C_Input/R_BasicInput.R_BasicInput"));
-	if (PR_Context.Succeeded())
-	{
-		DefaultContext = PR_Context.Object;
-	}
-
-	static ConstructorHelpers::FObjectFinder<UInputAction>IP_Move(TEXT("/Game/00_Character/C_Input/C_Move.C_Move"));
-	if (IP_Move.Succeeded())
-	{
-		MoveAction = IP_Move.Object;
-	}
-
-	static ConstructorHelpers::FObjectFinder<UInputAction>IP_Look(TEXT("/Game/00_Character/C_Input/C_Look.C_Look"));
-	if (IP_Look.Succeeded())
-	{
-		LookAction = IP_Look.Object;
-	}
-
-	static ConstructorHelpers::FObjectFinder<UInputAction>IP_DisMount(TEXT("/Game/00_Character/C_Input/C_SpawnRide.C_SpawnRide"));
-	if (IP_DisMount.Succeeded())
-	{
-		DisMountAction = IP_DisMount.Object;
-	}
-
-	static ConstructorHelpers::FObjectFinder<UInputAction>IP_Walk(TEXT("/Game/00_Character/C_Input/C_Walk.C_Walk"));
-	if (IP_Walk.Succeeded())
-	{
-		WalkAction = IP_Walk.Object;
-	}
-
-	static ConstructorHelpers::FObjectFinder<UInputAction>IP_Sprint(TEXT("/Game/00_Character/C_Input/C_Sprint.C_Sprint"));
-	if (IP_Sprint.Succeeded())
-	{
-		SprintAction = IP_Sprint.Object;
-	}
-}
-
 // Called when the game starts or when spawned
 void ARide::BeginPlay()
 {
@@ -182,12 +143,19 @@ void ARide::BeginPlay()
 	MaxRideSpeed = FMath::Max(WalkRideSpeed, FMath::Max(RunRideSpeed, SprintRideSpeed));
 	GetCharacterMovement()->MaxWalkSpeed = MaxRideSpeed;
 	
+}
+
+void ARide::ActivateRideInputContext()
+{
 	APlayerController* PlayerController = Cast<APlayerController>(GetController());
-	if (PlayerController && DefaultContext)
+	if (!PlayerController || !InputConfig) return;
+	if (UEnhancedInputLocalPlayerSubsystem* SubSystem =
+		ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
 	{
-		if (UEnhancedInputLocalPlayerSubsystem* SubSystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
+		if (InputConfig->RideContext)
 		{
-			SubSystem->AddMappingContext(DefaultContext, 0);
+			if (InputConfig->DefaultContext) SubSystem->RemoveMappingContext(InputConfig->DefaultContext);
+			SubSystem->AddMappingContext(InputConfig->RideContext, 0);
 		}
 	}
 }
@@ -204,6 +172,7 @@ void ARide::Tick(float DeltaTime)
 	}
 	else
 	{
+		UpdateDodgeSprintInput(DeltaTime);
 		UpdateRideMovement(DeltaTime);
 	}
 
@@ -222,34 +191,36 @@ void ARide::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		if (MoveAction)
+		if (InputConfig && InputConfig->Move)
 		{
-			EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ARide::Move);
-			EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Completed, this, &ARide::StopMove);
-			EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Canceled, this, &ARide::StopMove);
+			EnhancedInputComponent->BindAction(InputConfig->Move, ETriggerEvent::Triggered, this, &ARide::Move);
+			EnhancedInputComponent->BindAction(InputConfig->Move, ETriggerEvent::Completed, this, &ARide::StopMove);
+			EnhancedInputComponent->BindAction(InputConfig->Move, ETriggerEvent::Canceled, this, &ARide::StopMove);
 		}
-		if (LookAction)
+		if (InputConfig && InputConfig->Look)
 		{
-			EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ARide::Look);
+			EnhancedInputComponent->BindAction(InputConfig->Look, ETriggerEvent::Triggered, this, &ARide::Look);
 		}
-		if (DisMountAction)
+		UInputAction* DismountAction = InputConfig
+			? (InputConfig->Dismount ? InputConfig->Dismount.Get() : InputConfig->SpawnRide.Get()) : nullptr;
+		if (DismountAction)
 		{
-			EnhancedInputComponent->BindAction(DisMountAction, ETriggerEvent::Started, this, &ARide::DisMount);
-			EnhancedInputComponent->BindAction(DisMountAction, ETriggerEvent::Completed, this, &ARide::DisMountInputCompleted);
-		}
-
-		if (WalkAction)
-		{
-			EnhancedInputComponent->BindAction(WalkAction, ETriggerEvent::Started, this, &ARide::StartWalk);
-			EnhancedInputComponent->BindAction(WalkAction, ETriggerEvent::Completed, this, &ARide::StopWalk);
-			EnhancedInputComponent->BindAction(WalkAction, ETriggerEvent::Canceled, this, &ARide::StopWalk);
+			EnhancedInputComponent->BindAction(DismountAction, ETriggerEvent::Started, this, &ARide::DisMount);
+			EnhancedInputComponent->BindAction(DismountAction, ETriggerEvent::Completed, this, &ARide::DisMountInputCompleted);
 		}
 
-		if (SprintAction)
+		if (InputConfig && InputConfig->Walk)
 		{
-			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Started, this, &ARide::StartSprint);
-			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Completed, this, &ARide::StopSprint);
-			EnhancedInputComponent->BindAction(SprintAction, ETriggerEvent::Canceled, this, &ARide::StopSprint);
+			EnhancedInputComponent->BindAction(InputConfig->Walk, ETriggerEvent::Started, this, &ARide::StartWalk);
+			EnhancedInputComponent->BindAction(InputConfig->Walk, ETriggerEvent::Completed, this, &ARide::StopWalk);
+			EnhancedInputComponent->BindAction(InputConfig->Walk, ETriggerEvent::Canceled, this, &ARide::StopWalk);
+		}
+
+		if (InputConfig && InputConfig->Dodge)
+		{
+			EnhancedInputComponent->BindAction(InputConfig->Dodge, ETriggerEvent::Started, this, &ARide::DodgeSprintInputStarted);
+			EnhancedInputComponent->BindAction(InputConfig->Dodge, ETriggerEvent::Completed, this, &ARide::DodgeSprintInputCompleted);
+			EnhancedInputComponent->BindAction(InputConfig->Dodge, ETriggerEvent::Canceled, this, &ARide::DodgeSprintInputCanceled);
 		}
 	}
 }
@@ -284,14 +255,34 @@ void ARide::StopWalk(const FInputActionValue& value)
 	bWantsWalk = false;
 }
 
-void ARide::StartSprint(const FInputActionValue& value)
+void ARide::DodgeSprintInputStarted()
 {
-	bWantsSprint = true;
+	bDodgeSprintInputHeld = true;
+	DodgeSprintHeldTime = 0.0f;
 }
 
-void ARide::StopSprint(const FInputActionValue& value)
+void ARide::DodgeSprintInputCompleted()
 {
+	bDodgeSprintInputHeld = false;
+	DodgeSprintHeldTime = 0.0f;
 	bWantsSprint = false;
+}
+
+void ARide::DodgeSprintInputCanceled()
+{
+	bDodgeSprintInputHeld = false;
+	DodgeSprintHeldTime = 0.0f;
+	bWantsSprint = false;
+}
+
+void ARide::UpdateDodgeSprintInput(float DeltaTime)
+{
+	if (!bDodgeSprintInputHeld || bWantsSprint) return;
+	DodgeSprintHeldTime += FMath::Max(0.0f, DeltaTime);
+	if (DodgeSprintHeldTime >= SprintHoldThreshold)
+	{
+		bWantsSprint = true;
+	}
 }
 
 void ARide::UpdateRideMovement(float DeltaTime)
@@ -563,10 +554,17 @@ void ARide::Mount(ACharacter* RiderCharacter, FVector InitVelocity)
 		return;
 
 	Rider = RiderCharacter;
+	if (const APlayerBase* Player = Cast<APlayerBase>(RiderCharacter))
+	{
+		InputConfig = Player->GetInputConfig();
+	}
 	GetCharacterMovement()->Velocity = InitVelocity;
 
 	bDismount = false;
 	bMovingDismount = false;
+	bDodgeSprintInputHeld = false;
+	bWantsSprint = false;
+	DodgeSprintHeldTime = 0.0f;
 }
 
 void ARide::AttachRider()

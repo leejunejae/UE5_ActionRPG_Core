@@ -28,6 +28,7 @@ class URideComponent;
 class UCurveFloat;
 class UAnimMontage;
 class UAnimInstance;
+class UInputConfigDataAsset;
 
 UENUM(BlueprintType)
 enum class HorseDirection : uint8
@@ -59,9 +60,6 @@ public:
 		FGameplayTagContainer RideTags;
 
 private:
-	void InputSetting();
-
-private:
 	float Direction;
 	float TurnRate = 0.0f;
 	bool bBraking = false;
@@ -78,8 +76,10 @@ protected:
 	void Look(const FInputActionValue& value);
 	void StartWalk(const FInputActionValue& value);
 	void StopWalk(const FInputActionValue& value);
-	void StartSprint(const FInputActionValue& value);
-	void StopSprint(const FInputActionValue& value);
+	void DodgeSprintInputStarted();
+	void DodgeSprintInputCompleted();
+	void DodgeSprintInputCanceled();
+	void UpdateDodgeSprintInput(float DeltaTime);
 	void UpdateRideMovement(float DeltaTime);
 	void UpdatePivotTurn(float DeltaTime);
 	bool CanStartPivotTurn(float DotProductDegree) const;
@@ -100,30 +100,20 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = Camera)
 		UCameraComponent* Camera;
 
-	/* �� �Է� */
-	UPROPERTY(EditAnywhere, Category = Input)
-		UInputMappingContext* DefaultContext;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		UInputAction* MoveAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		UInputAction* LookAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		UInputAction* DisMountAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		UInputAction* WalkAction;
-
-	UPROPERTY(EditAnywhere, Category = Input)
-		UInputAction* SprintAction;
+	/* 입력 */
+	UPROPERTY(Transient)
+	TObjectPtr<UInputConfigDataAsset> InputConfig;
 
 
 	FVector2D RideMoveInput = FVector2D::ZeroVector;
 	float CurrentThrottle = 0.0f;
 	bool bWantsWalk = false;
 	bool bWantsSprint = false;
+	bool bDodgeSprintInputHeld = false;
+	float DodgeSprintHeldTime = 0.0f;
+
+	UPROPERTY(EditAnywhere, Category = "Input", meta = (ClampMin = "0.05"))
+	float SprintHoldThreshold = 0.25f;
 
 	/* �� �Է� */
 
@@ -139,7 +129,9 @@ protected:
 	UPROPERTY(VisibleAnywhere, Category = Interact)
 		USceneComponent* RiderMountLocRight;
 
-public:	
+public:
+	void ActivateRideInputContext();
+
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
 
