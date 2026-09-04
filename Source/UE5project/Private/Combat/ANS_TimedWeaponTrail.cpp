@@ -4,6 +4,7 @@
 #include "Combat/ANS_TimedWeaponTrail.h"
 #include "Animation/AnimSequence.h"
 #include "Animation/AnimSequenceBase.h"
+#include "Animation/ActiveMontageInstanceScope.h"
 #include "Characters/CharacterBase.h"
 #include "Characters/Interfaces/EquipmentDataInterface.h"
 #include "Combat/Data/AttackData.h"
@@ -21,6 +22,94 @@
 
 namespace
 {
+	void NormalizeDistanceWeights(float StartWeight, float EndWeight,
+		float& OutStartWeight, float& OutEndWeight)
+	{
+		const float SafeStartWeight = FMath::Max(StartWeight, 0.0f);
+		const float SafeEndWeight = FMath::Max(EndWeight, 0.0f);
+		const float WeightSum = SafeStartWeight + SafeEndWeight;
+		if (WeightSum <= UE_SMALL_NUMBER)
+		{
+			OutStartWeight = 0.5f;
+			OutEndWeight = 0.5f;
+			return;
+		}
+
+		OutStartWeight = SafeStartWeight / WeightSum;
+		OutEndWeight = SafeEndWeight / WeightSum;
+	}
+
+	float GetWeightedTrajectoryDistance(
+		const FVector& PreviousStart, const FVector& PreviousEnd,
+		const FVector& CurrentStart, const FVector& CurrentEnd,
+		float StartWeight, float EndWeight)
+	{
+		return FVector::Distance(PreviousStart, CurrentStart) * StartWeight +
+			FVector::Distance(PreviousEnd, CurrentEnd) * EndWeight;
+	}
+
+	float CalculateTotalTrajectoryDistance(
+		const FWeaponTrajectoryGeometry& Geometry,
+		const FBoneTransformSegment& Segment,
+		float StartTime,
+		float EndTime,
+		float SampleInterval,
+		float StartWeight,
+		float EndWeight)
+	{
+		if (!Geometry.IsValid() || EndTime <= StartTime) return 0.0f;
+
+		const FTransform IdentityRoot = FTransform::Identity;
+		FVector PreviousStart;
+		FVector PreviousEnd;
+		FWeaponTrajectoryUtility::GetSocketWorldPositions(
+			Geometry, Segment.GetTransformAtTime(StartTime), IdentityRoot,
+			PreviousStart, PreviousEnd);
+
+		float TotalDistance = 0.0f;
+		const float SafeInterval = FMath::Max(SampleInterval, 0.001f);
+		for (float SampleTime = StartTime; SampleTime < EndTime;)
+		{
+			const float NextSampleTime = FMath::Min(SampleTime + SafeInterval, EndTime);
+			if (NextSampleTime <= SampleTime) break;
+			FVector CurrentStart;
+			FVector CurrentEnd;
+			FWeaponTrajectoryUtility::GetSocketWorldPositions(
+				Geometry, Segment.GetTransformAtTime(NextSampleTime), IdentityRoot,
+				CurrentStart, CurrentEnd);
+			TotalDistance += GetWeightedTrajectoryDistance(
+				PreviousStart, PreviousEnd, CurrentStart, CurrentEnd,
+				StartWeight, EndWeight);
+			PreviousStart = CurrentStart;
+			PreviousEnd = CurrentEnd;
+			SampleTime = NextSampleTime;
+		}
+
+		return TotalDistance;
+	}
+
+	FWeaponTrailDistanceCacheKey BuildTrajectoryDistanceCacheKey(
+		const FWeaponTrajectoryGeometry& Geometry,
+		const FBoneTransformSegment& Segment,
+		float StartTime,
+		float EndTime,
+		float SampleInterval,
+		float StartWeight,
+		float EndWeight)
+	{
+		FWeaponTrailDistanceCacheKey Key;
+		Key.Segment = &Segment;
+		Key.WeaponRelativeToBone = Geometry.WeaponRelativeToBone;
+		Key.StartSocketInWeapon = Geometry.StartSocketInWeapon;
+		Key.EndSocketInWeapon = Geometry.EndSocketInWeapon;
+		Key.StartTime = StartTime;
+		Key.EndTime = EndTime;
+		Key.SampleInterval = SampleInterval;
+		Key.StartWeight = StartWeight;
+		Key.EndWeight = EndWeight;
+		return Key;
+	}
+
 	UActorComponent* FindEquipmentDataComponent(const USkeletalMeshComponent* MeshComp)
 	{
 		AActor* Owner = MeshComp ? MeshComp->GetOwner() : nullptr;
@@ -38,6 +127,7 @@ namespace
 
 	bool BuildWeaponTrailSamples(
 		USkeletalMeshComponent* MeshComp,
+		USceneComponent* TraceComponent,
 		const FBoneTransformSegment& Segment,
 		float StartTime,
 		float EndTime,
@@ -52,20 +142,16 @@ namespace
 		TArray<float>& OutTrailUSamples,
 		float TrailStartTime,
 		float TrailEndTime,
+		float StartDistanceWeight,
+		float EndDistanceWeight,
+		FWeaponTrailRuntimeState& RuntimeState,
 		const FTransform& PreviousRootWorldTransform,
 		const FTransform& CurrentRootWorldTransform)
 	{
-		ACharacter* Character = MeshComp ? Cast<ACharacter>(MeshComp->GetOwner()) : nullptr;
-		IAttackSourceInterface* AttackSource = Character ? Cast<IAttackSourceInterface>(Character) : nullptr;
-		if (!Character || !AttackSource || EndTime <= StartTime) return false;
-
-		const EAttackSourceType SourceType = bSubWeapon
-			? EAttackSourceType::OffHand : EAttackSourceType::MainHand;
-		const FAttackTraceSource TraceSource = AttackSource->GetAttackTraceSource(SourceType);
-		if (!TraceSource.TraceComponent) return false;
+		if (!MeshComp || !TraceComponent || EndTime <= StartTime) return false;
 
 		const FWeaponTrajectoryGeometry Geometry = FWeaponTrajectoryUtility::BuildGeometry(
-			MeshComp, TraceSource.TraceComponent, Segment.BoneName, StartSocket, EndSocket);
+			MeshComp, TraceComponent, Segment.BoneName, StartSocket, EndSocket);
 		if (!Geometry.IsValid()) return false;
 
 		const float SafeInterval = FMath::Max(SampleInterval, 0.001f);
@@ -77,6 +163,7 @@ namespace
 		OutEndSamples.Reserve(SampleCount);
 		OutTrailUSamples.Reserve(SampleCount);
 		const float TrailDuration = FMath::Max(TrailEndTime - TrailStartTime, UE_SMALL_NUMBER);
+		const FTransform IdentityRoot = FTransform::Identity;
 
 		for (int32 Index = 0; Index < SampleCount; ++Index)
 		{
@@ -94,17 +181,76 @@ namespace
 				SampleStart, SampleEnd);
 			OutStartSamples.Add(SampleStart);
 			OutEndSamples.Add(SampleEnd);
-			OutTrailUSamples.Add(FMath::Clamp(
-				(SampleTime - TrailStartTime) / TrailDuration, 0.0f, 1.0f));
+
+			FVector DistanceStart;
+			FVector DistanceEnd;
+			FWeaponTrajectoryUtility::GetSocketWorldPositions(
+				Geometry, Segment.GetTransformAtTime(SampleTime), IdentityRoot,
+				DistanceStart, DistanceEnd);
+			if (RuntimeState.bHasPreviousDistanceSample)
+			{
+				RuntimeState.AccumulatedTrajectoryDistance += GetWeightedTrajectoryDistance(
+					RuntimeState.PreviousDistanceStart, RuntimeState.PreviousDistanceEnd,
+					DistanceStart, DistanceEnd, StartDistanceWeight, EndDistanceWeight);
+			}
+			RuntimeState.PreviousDistanceStart = DistanceStart;
+			RuntimeState.PreviousDistanceEnd = DistanceEnd;
+			RuntimeState.bHasPreviousDistanceSample = true;
+
+			const float TrailU = RuntimeState.TotalTrajectoryDistance > UE_SMALL_NUMBER
+				? RuntimeState.AccumulatedTrajectoryDistance / RuntimeState.TotalTrajectoryDistance
+				: (SampleTime - TrailStartTime) / TrailDuration;
+			OutTrailUSamples.Add(FMath::Clamp(TrailU, 0.0f, 1.0f));
 		}
 
 		return !OutStartSamples.IsEmpty();
 	}
 }
 
+FWeaponTrailRuntimeKey UANS_TimedWeaponTrail::MakeRuntimeKey(
+	USkeletalMeshComponent* MeshComp,
+	const FAnimNotifyEventReference& EventReference) const
+{
+	FWeaponTrailRuntimeKey Key;
+	Key.MeshComp = MeshComp;
+	Key.NotifyEvent = EventReference.GetNotify();
+	Key.NotifySource = EventReference.GetSourceObject();
+	if (const UE::Anim::FAnimNotifyMontageInstanceContext* MontageContext =
+		EventReference.GetContextData<UE::Anim::FAnimNotifyMontageInstanceContext>())
+	{
+		Key.MontageInstanceId = MontageContext->MontageInstanceID;
+	}
+	return Key;
+}
+
+FWeaponTrailRuntimeState* UANS_TimedWeaponTrail::FindRuntimeState(
+	const FWeaponTrailRuntimeKey& RequestedKey,
+	FWeaponTrailRuntimeKey* OutResolvedKey)
+{
+	if (FWeaponTrailRuntimeState* ExactState = RuntimeStates.Find(RequestedKey))
+	{
+		if (OutResolvedKey) *OutResolvedKey = RequestedKey;
+		return ExactState;
+	}
+
+	// NotifyBegin/Tick/End 사이에 Montage context가 제공되지 않는 프레임이 있을 수 있다.
+	// 동일 메시에서 후보가 하나뿐일 때만 fallback하여 다른 중첩 Trail을 잘못 선택하지 않는다.
+	FWeaponTrailRuntimeKey CandidateKey;
+	FWeaponTrailRuntimeState* CandidateState = nullptr;
+	for (TPair<FWeaponTrailRuntimeKey, FWeaponTrailRuntimeState>& Pair : RuntimeStates)
+	{
+		if (Pair.Key.MeshComp != RequestedKey.MeshComp) continue;
+		if (CandidateState) return nullptr;
+		CandidateKey = Pair.Key;
+		CandidateState = &Pair.Value;
+	}
+
+	if (CandidateState && OutResolvedKey) *OutResolvedKey = CandidateKey;
+	return CandidateState;
+}
+
 void UANS_TimedWeaponTrail::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, float TotalDuration, const FAnimNotifyEventReference& EventReference)
 {
-	Super::NotifyBegin(MeshComp, Anim, TotalDuration, EventReference);
 	if (!MeshComp) return;
 
 #if WITH_EDITOR
@@ -117,6 +263,21 @@ void UANS_TimedWeaponTrail::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimS
 #endif
 
 	FWeaponTrailRuntimeState State;
+	State.StartSamples.Reserve(FMath::Max(1, MaxSamplesPerFrame));
+	State.EndSamples.Reserve(FMath::Max(1, MaxSamplesPerFrame));
+	State.TrailUSamples.Reserve(FMath::Max(1, MaxSamplesPerFrame));
+	State.LinkOrderSamples.Reserve(FMath::Max(1, MaxSamplesPerFrame));
+	State.EquipmentComponent = FindEquipmentDataComponent(MeshComp);
+	if (ACharacter* OwnerCharacter = Cast<ACharacter>(MeshComp->GetOwner()))
+	{
+		if (IAttackSourceInterface* AttackSource = Cast<IAttackSourceInterface>(OwnerCharacter))
+		{
+			const FAttackTraceSource TraceSource = AttackSource->GetAttackTraceSource(bSubWeapon
+				? EAttackSourceType::OffHand : EAttackSourceType::MainHand);
+			State.TraceComponent = TraceSource.TraceComponent;
+		}
+	}
+	State.EffectComponent = Cast<UNiagaraComponent>(SpawnEffect(MeshComp, Anim));
 	if (const FAnimNotifyEvent* Notify = EventReference.GetNotify())
 	{
 		State.NotifyStartTime = Notify->GetTriggerTime();
@@ -146,27 +307,26 @@ void UANS_TimedWeaponTrail::NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimS
 			*GetNameSafe(Sequence), *WindowName.ToString());
 	}
 
-	RuntimeStates.Add(MeshComp, State);
+	RuntimeStates.Add(MakeRuntimeKey(MeshComp, EventReference), MoveTemp(State));
 }
 
 void UANS_TimedWeaponTrail::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, float FrameDeltaTime, const FAnimNotifyEventReference& EventReference)
 {
-	UActorComponent* EquipmentComponent = FindEquipmentDataComponent(MeshComp);
+	FWeaponTrailRuntimeState* State = FindRuntimeState(MakeRuntimeKey(MeshComp, EventReference));
+	UActorComponent* EquipmentComponent = State ? State->EquipmentComponent.Get() : nullptr;
 
-	if (EquipmentComponent)
+	if (EquipmentComponent && State)
 	{
-		if(UFXSystemComponent* TargetFX = GetSpawnedEffect(MeshComp))
+		if(UNiagaraComponent* NiagaraComponent = State->EffectComponent.Get())
 		{
 			const FName StartSocket = IEquipmentDataInterface::Execute_GetWeaponTrailStartSocket(EquipmentComponent, bSubWeapon);
 			const FName EndSocket = IEquipmentDataInterface::Execute_GetWeaponTrailEndSocket(EquipmentComponent, bSubWeapon);
 			const FVector TrailStart = IEquipmentDataInterface::Execute_GetWeaponSocketLocation(EquipmentComponent, StartSocket, bSubWeapon);
 			const FVector TrailEnd = IEquipmentDataInterface::Execute_GetWeaponSocketLocation(EquipmentComponent, EndSocket, bSubWeapon);
 
-			TargetFX->SetVectorParameter(TrailStartParameter, TrailStart);
-			TargetFX->SetVectorParameter(TrailEndParameter, TrailEnd);
+			NiagaraComponent->SetVectorParameter(TrailStartParameter, TrailStart);
+			NiagaraComponent->SetVectorParameter(TrailEndParameter, TrailEnd);
 
-			UNiagaraComponent* NiagaraComponent = Cast<UNiagaraComponent>(TargetFX);
-			FWeaponTrailRuntimeState* State = RuntimeStates.Find(MeshComp);
 			if (NiagaraComponent && State && State->Segment)
 			{
 				const FTransform CurrentRootWorldTransform = MeshComp->GetBoneTransform(0);
@@ -179,27 +339,58 @@ void UANS_TimedWeaponTrail::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSe
 					: State->Segment->EndTime;
 				const float SamplingEndTime = FMath::Min(
 					NotifyEndTime, State->Segment->EndTime);
+				float StartDistanceWeight;
+				float EndDistanceWeight;
+				NormalizeDistanceWeights(TrailStartDistanceWeight, TrailEndDistanceWeight,
+					StartDistanceWeight, EndDistanceWeight);
+				if (State->TotalTrajectoryDistance <= UE_SMALL_NUMBER)
+				{
+					const FWeaponTrajectoryGeometry Geometry = FWeaponTrajectoryUtility::BuildGeometry(
+						MeshComp, State->TraceComponent.Get(),
+						State->Segment->BoneName, StartSocket, EndSocket);
+					const float TrajectoryStartTime = FMath::Max(
+						State->NotifyStartTime, State->Segment->StartTime);
+					const FWeaponTrailDistanceCacheKey CacheKey = BuildTrajectoryDistanceCacheKey(
+						Geometry, *State->Segment, TrajectoryStartTime, SamplingEndTime,
+						TrajectorySampleInterval, StartDistanceWeight, EndDistanceWeight);
+					if (const float* CachedDistance = TrajectoryDistanceCache.Find(CacheKey))
+					{
+						State->TotalTrajectoryDistance = *CachedDistance;
+					}
+					else
+					{
+						State->TotalTrajectoryDistance = CalculateTotalTrajectoryDistance(
+							Geometry, *State->Segment, TrajectoryStartTime, SamplingEndTime,
+							TrajectorySampleInterval, StartDistanceWeight, EndDistanceWeight);
+						if (State->TotalTrajectoryDistance > UE_SMALL_NUMBER)
+						{
+							TrajectoryDistanceCache.Add(CacheKey, State->TotalTrajectoryDistance);
+						}
+					}
+				}
 				const float StartTime = FMath::Clamp(
 					State->LastSampleTime, State->Segment->StartTime, SamplingEndTime);
 				const float EndTime = FMath::Clamp(
 					StartTime + FrameDeltaTime,
 					State->Segment->StartTime, SamplingEndTime);
-				TArray<FVector> StartSamples;
-				TArray<FVector> EndSamples;
-				TArray<float> TrailUSamples;
+				State->StartSamples.Reset();
+				State->EndSamples.Reset();
+				State->TrailUSamples.Reset();
+				State->LinkOrderSamples.Reset();
 				if (EndTime > StartTime && BuildWeaponTrailSamples(
-					MeshComp, *State->Segment, StartTime, EndTime,
+					MeshComp, State->TraceComponent.Get(), *State->Segment, StartTime, EndTime,
 					TrajectorySampleInterval, MaxSamplesPerFrame, State->bNeedsInitialSample, bSubWeapon,
-					StartSocket, EndSocket, StartSamples, EndSamples, TrailUSamples,
+					StartSocket, EndSocket, State->StartSamples, State->EndSamples, State->TrailUSamples,
 					FMath::Max(State->NotifyStartTime, State->Segment->StartTime), SamplingEndTime,
+					StartDistanceWeight, EndDistanceWeight, *State,
 					PreviousRootWorldTransform, CurrentRootWorldTransform))
 				{
 					if (bDebugDrawTrajectory && MeshComp->GetWorld())
 					{
-						for (int32 Index = 0; Index < StartSamples.Num(); ++Index)
+						for (int32 Index = 0; Index < State->StartSamples.Num(); ++Index)
 						{
-							const FVector& SampleStart = StartSamples[Index];
-							const FVector& SampleEnd = EndSamples[Index];
+							const FVector& SampleStart = State->StartSamples[Index];
+							const FVector& SampleEnd = State->EndSamples[Index];
 							const FVector SampleCenter = (SampleStart + SampleEnd) * 0.5f;
 							DrawDebugLine(MeshComp->GetWorld(), SampleStart, SampleEnd,
 								FColor::Yellow, false, DebugDrawDuration, 0, 0.75f);
@@ -220,25 +411,23 @@ void UANS_TimedWeaponTrail::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSe
 						}
 					}
 
-					TArray<float> LinkOrderSamples;
-					LinkOrderSamples.Reserve(StartSamples.Num());
-					for (int32 Index = 0; Index < StartSamples.Num(); ++Index)
+					for (int32 Index = 0; Index < State->StartSamples.Num(); ++Index)
 					{
-						LinkOrderSamples.Add(static_cast<float>(State->NextLinkOrder + Index));
+						State->LinkOrderSamples.Add(static_cast<float>(State->NextLinkOrder + Index));
 					}
 
 					UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayPosition(
-						NiagaraComponent, TrailStartSamplesParameter, StartSamples);
+						NiagaraComponent, TrailStartSamplesParameter, State->StartSamples);
 					UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayPosition(
-						NiagaraComponent, TrailEndSamplesParameter, EndSamples);
+						NiagaraComponent, TrailEndSamplesParameter, State->EndSamples);
 					UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayFloat(
-						NiagaraComponent, TrailLinkOrderSamplesParameter, LinkOrderSamples);
+						NiagaraComponent, TrailLinkOrderSamplesParameter, State->LinkOrderSamples);
 					UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayFloat(
-						NiagaraComponent, TrailUSamplesParameter, TrailUSamples);
+						NiagaraComponent, TrailUSamplesParameter, State->TrailUSamples);
 					NiagaraComponent->SetVariableFloat(
 						TrailBatchDurationParameter, EndTime - StartTime);
-					NiagaraComponent->SetVariableInt(TrailSampleCountParameter, StartSamples.Num());
-					State->NextLinkOrder += StartSamples.Num();
+					NiagaraComponent->SetVariableInt(TrailSampleCountParameter, State->StartSamples.Num());
+					State->NextLinkOrder += State->StartSamples.Num();
 					State->bNeedsInitialSample = false;
 				}
 				State->LastSampleTime = EndTime;
@@ -256,24 +445,27 @@ void UANS_TimedWeaponTrail::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSe
 						: NextSampleTime;
 				}
 
-				const TArray<FVector> StartSamples { TrailStart };
-				const TArray<FVector> EndSamples { TrailEnd };
-				const TArray<float> LinkOrderSamples {
-					State ? static_cast<float>(State->NextLinkOrder) : 0.0f };
+				State->StartSamples.Reset();
+				State->EndSamples.Reset();
+				State->TrailUSamples.Reset();
+				State->LinkOrderSamples.Reset();
+				State->StartSamples.Add(TrailStart);
+				State->EndSamples.Add(TrailEnd);
+				State->LinkOrderSamples.Add(static_cast<float>(State->NextLinkOrder));
 				const float TrailDuration = State
 					? FMath::Max(State->NotifyEndTime - State->NotifyStartTime, UE_SMALL_NUMBER)
 					: 1.0f;
-				const TArray<float> TrailUSamples { State
+				State->TrailUSamples.Add(State
 					? FMath::Clamp((State->LastSampleTime - State->NotifyStartTime) / TrailDuration, 0.0f, 1.0f)
-					: 0.0f };
+					: 0.0f);
 				UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayPosition(
-					NiagaraComponent, TrailStartSamplesParameter, StartSamples);
+					NiagaraComponent, TrailStartSamplesParameter, State->StartSamples);
 				UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayPosition(
-					NiagaraComponent, TrailEndSamplesParameter, EndSamples);
+					NiagaraComponent, TrailEndSamplesParameter, State->EndSamples);
 				UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayFloat(
-					NiagaraComponent, TrailLinkOrderSamplesParameter, LinkOrderSamples);
+					NiagaraComponent, TrailLinkOrderSamplesParameter, State->LinkOrderSamples);
 				UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayFloat(
-					NiagaraComponent, TrailUSamplesParameter, TrailUSamples);
+					NiagaraComponent, TrailUSamplesParameter, State->TrailUSamples);
 				NiagaraComponent->SetVariableFloat(TrailBatchDurationParameter, 0.0f);
 				NiagaraComponent->SetVariableInt(TrailSampleCountParameter, 1);
 				if (State)
@@ -287,21 +479,31 @@ void UANS_TimedWeaponTrail::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSe
 
 void UANS_TimedWeaponTrail::NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, const FAnimNotifyEventReference& EventReference)
 {
-	if (UNiagaraComponent* NiagaraComponent = Cast<UNiagaraComponent>(GetSpawnedEffect(MeshComp)))
+	FWeaponTrailRuntimeKey RuntimeKey = MakeRuntimeKey(MeshComp, EventReference);
+	FWeaponTrailRuntimeState* State = FindRuntimeState(RuntimeKey, &RuntimeKey);
+	if (UNiagaraComponent* NiagaraComponent = State ? State->EffectComponent.Get() : nullptr)
 	{
 		NiagaraComponent->SetVariableFloat(TrailFadeDurationParameter, TrailFadeDuration);
 		NiagaraComponent->SetVariableBool(TrailIsEndingParameter, true);
+		if (bDestroyAtEnd)
+		{
+			NiagaraComponent->DestroyComponent();
+		}
+		else
+		{
+			NiagaraComponent->Deactivate();
+		}
 	}
 
 	if (bDebugDrawTrajectory)
 	{
-		const FWeaponTrailRuntimeState* State = RuntimeStates.Find(MeshComp);
+		const FWeaponTrailRuntimeState* DebugState = State;
 		const FAnimNotifyEvent* Notify = EventReference.GetNotify();
 		const float NotifyStartTime = Notify ? Notify->GetTriggerTime() : -1.0f;
 		const float NotifyEndTime = Notify ? Notify->GetEndTriggerTime() : -1.0f;
-		const float LastSampleTime = State ? State->LastSampleTime : -1.0f;
-		const float SegmentStartTime = State && State->Segment ? State->Segment->StartTime : -1.0f;
-		const float SegmentEndTime = State && State->Segment ? State->Segment->EndTime : -1.0f;
+		const float LastSampleTime = DebugState ? DebugState->LastSampleTime : -1.0f;
+		const float SegmentStartTime = DebugState && DebugState->Segment ? DebugState->Segment->StartTime : -1.0f;
+		const float SegmentEndTime = DebugState && DebugState->Segment ? DebugState->Segment->EndTime : -1.0f;
 
 		UE_LOG(Log_Anim, Warning,
 			TEXT("[WeaponTrailDebug] Anim=%s Notify=[%.6f, %.6f] LastSample=%.6f Overshoot=%.6f Segment=[%.6f, %.6f]"),
@@ -309,8 +511,7 @@ void UANS_TimedWeaponTrail::NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSeq
 			LastSampleTime - NotifyEndTime, SegmentStartTime, SegmentEndTime);
 	}
 
-	RuntimeStates.Remove(MeshComp);
-	Super::NotifyEnd(MeshComp, Anim, EventReference);
+	RuntimeStates.Remove(RuntimeKey);
 }
 
 UFXSystemComponent* UANS_TimedWeaponTrail::SpawnEffect(
