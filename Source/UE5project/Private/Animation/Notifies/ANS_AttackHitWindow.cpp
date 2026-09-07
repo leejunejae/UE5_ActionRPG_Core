@@ -41,7 +41,7 @@ void UANS_AttackHitWindow::NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSeq
 
     if (UAttackComponent* AttackComp = Character->GetAttackComponent())
     {
-        AttackComp->TickAttackTrace(FrameDeltaTime, bDrawDebug);
+		AttackComp->TickAttackTrace(FrameDeltaTime, bDrawDebug);
     }
 }
 

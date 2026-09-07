@@ -911,13 +911,6 @@ void APlayerBase::UpdateChargeAttack(float DeltaTime)
 		return;
 	}
 
-	ChargeElapsed += FMath::Max(0.0f, DeltaTime);
-	const float MaxDuration = FMath::Max(ActiveChargeAttackData.ChargeSettings.MaxChargeDuration, 0.01f);
-	if (ChargeTransitionRequest == EChargeTransitionRequest::None && ChargeElapsed >= MaxDuration)
-	{
-		ChargeTransitionRequest = EChargeTransitionRequest::Attack;
-	}
-
 	if (ChargeAttackPhase == EChargeAttackPhase::Begin)
 	{
 		if (GetAttackComponent()->IsActiveMontageSection(
@@ -929,6 +922,15 @@ void APlayerBase::UpdateChargeAttack(float DeltaTime)
 		{
 			return;
 		}
+	}
+
+	// Begin은 자세 진입 구간일 뿐 차지 시간이 아니다. Loop에 도달한 뒤부터만
+	// 배율과 자동 방출에 사용되는 시간을 누적한다.
+	ChargeElapsed += FMath::Max(0.0f, DeltaTime);
+	const float MaxDuration = FMath::Max(ActiveChargeAttackData.ChargeSettings.MaxChargeDuration, 0.01f);
+	if (ChargeTransitionRequest == EChargeTransitionRequest::None && ChargeElapsed >= MaxDuration)
+	{
+		ChargeTransitionRequest = EChargeTransitionRequest::Attack;
 	}
 
 	if (ChargeTransitionRequest == EChargeTransitionRequest::Attack)

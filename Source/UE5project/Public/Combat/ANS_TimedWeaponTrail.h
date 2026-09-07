@@ -17,107 +17,7 @@ class UNiagaraComponent;
 class USceneComponent;
 class UWorld;
 struct FBoneTransformSegment;
-
-struct FWeaponTrailRuntimeKey
-{
-	TWeakObjectPtr<USkeletalMeshComponent> MeshComp;
-	const FAnimNotifyEvent* NotifyEvent = nullptr;
-	TWeakObjectPtr<const UObject> NotifySource;
-	int32 MontageInstanceId = INDEX_NONE;
-
-	bool operator==(const FWeaponTrailRuntimeKey& Other) const
-	{
-		return MeshComp == Other.MeshComp &&
-			NotifyEvent == Other.NotifyEvent &&
-			NotifySource == Other.NotifySource &&
-			MontageInstanceId == Other.MontageInstanceId;
-	}
-
-	friend uint32 GetTypeHash(const FWeaponTrailRuntimeKey& Key)
-	{
-		uint32 Hash = GetTypeHash(Key.MeshComp);
-		Hash = HashCombine(Hash, PointerHash(Key.NotifyEvent));
-		Hash = HashCombine(Hash, GetTypeHash(Key.NotifySource));
-		return HashCombine(Hash, GetTypeHash(Key.MontageInstanceId));
-	}
-};
-
-struct FWeaponTrailDistanceCacheKey
-{
-	const FBoneTransformSegment* Segment = nullptr;
-	FTransform WeaponRelativeToBone = FTransform::Identity;
-	FVector StartSocketInWeapon = FVector::ZeroVector;
-	FVector EndSocketInWeapon = FVector::ZeroVector;
-	float StartTime = 0.0f;
-	float EndTime = 0.0f;
-	float SampleInterval = 0.0f;
-	float StartWeight = 0.0f;
-	float EndWeight = 0.0f;
-
-	bool operator==(const FWeaponTrailDistanceCacheKey& Other) const
-	{
-		return Segment == Other.Segment &&
-			WeaponRelativeToBone.GetTranslation() == Other.WeaponRelativeToBone.GetTranslation() &&
-			WeaponRelativeToBone.GetRotation() == Other.WeaponRelativeToBone.GetRotation() &&
-			WeaponRelativeToBone.GetScale3D() == Other.WeaponRelativeToBone.GetScale3D() &&
-			StartSocketInWeapon == Other.StartSocketInWeapon &&
-			EndSocketInWeapon == Other.EndSocketInWeapon &&
-			StartTime == Other.StartTime && EndTime == Other.EndTime &&
-			SampleInterval == Other.SampleInterval &&
-			StartWeight == Other.StartWeight && EndWeight == Other.EndWeight;
-	}
-
-	friend uint32 GetTypeHash(const FWeaponTrailDistanceCacheKey& Key)
-	{
-		uint32 Hash = PointerHash(Key.Segment);
-		Hash = HashCombine(Hash, GetTypeHash(Key.WeaponRelativeToBone.GetTranslation()));
-		Hash = HashCombine(Hash, GetTypeHash(Key.WeaponRelativeToBone.GetRotation()));
-		Hash = HashCombine(Hash, GetTypeHash(Key.WeaponRelativeToBone.GetScale3D()));
-		Hash = HashCombine(Hash, GetTypeHash(Key.StartSocketInWeapon));
-		Hash = HashCombine(Hash, GetTypeHash(Key.EndSocketInWeapon));
-		Hash = HashCombine(Hash, GetTypeHash(Key.StartTime));
-		Hash = HashCombine(Hash, GetTypeHash(Key.EndTime));
-		Hash = HashCombine(Hash, GetTypeHash(Key.SampleInterval));
-		Hash = HashCombine(Hash, GetTypeHash(Key.StartWeight));
-		return HashCombine(Hash, GetTypeHash(Key.EndWeight));
-	}
-};
-
-struct FWeaponTrailDistanceCacheEntry
-{
-	float Distance = 0.0f;
-	uint64 LastAccessSerial = 0;
-};
-
-struct FWeaponTrailRuntimeState
-{
-	TWeakObjectPtr<UActorComponent> EquipmentComponent;
-	TWeakObjectPtr<USceneComponent> TraceComponent;
-	TWeakObjectPtr<UNiagaraComponent> EffectComponent;
-	TWeakObjectPtr<UWorld> World;
-	FTimerHandle CleanupTimerHandle;
-	const FBoneTransformSegment* Segment = nullptr;
-	TArray<FVector> StartSamples;
-	TArray<FVector> EndSamples;
-	TArray<float> TrailUSamples;
-	TArray<float> LinkOrderSamples;
-	float NotifyStartTime = 0.0f;
-	float NotifyEndTime = 0.0f;
-	float LastSampleTime = 0.0f;
-	FTransform PreviousRootWorldTransform = FTransform::Identity;
-	bool bHasPreviousRootWorldTransform = false;
-	bool bNeedsInitialSample = true;
-	int32 NextLinkOrder = 0;
-	float TotalTrajectoryDistance = 0.0f;
-	bool bHasResolvedTotalTrajectoryDistance = false;
-	float AccumulatedTrajectoryDistance = 0.0f;
-	bool bHasPreviousDistanceSample = false;
-	FVector PreviousDistanceStart = FVector::ZeroVector;
-	FVector PreviousDistanceEnd = FVector::ZeroVector;
-	bool bHasPreviousDebugSample = false;
-	FVector PreviousDebugStart = FVector::ZeroVector;
-	FVector PreviousDebugEnd = FVector::ZeroVector;
-};
+class FWeaponTrailRuntimeManager;
 
 UCLASS()
 class UE5PROJECT_API UANS_TimedWeaponTrail : public UAnimNotifyState_TimedNiagaraEffect
@@ -125,6 +25,7 @@ class UE5PROJECT_API UANS_TimedWeaponTrail : public UAnimNotifyState_TimedNiagar
 	GENERATED_BODY()
 	
 public:
+	virtual void BeginDestroy() override;
 	virtual void NotifyBegin(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, float TotalDuration, const FAnimNotifyEventReference& EventReference) override;
 	virtual void NotifyTick(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, float FrameDeltaTime, const FAnimNotifyEventReference& EventReference) override;
 	virtual void NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Anim, const FAnimNotifyEventReference& EventReference) override;
@@ -173,18 +74,8 @@ protected:
 		UAnimSequenceBase* Animation) const override;
 
 private:
-	FWeaponTrailRuntimeKey MakeRuntimeKey(
-		USkeletalMeshComponent* MeshComp,
-		const FAnimNotifyEventReference& EventReference) const;
-	FWeaponTrailRuntimeState* FindRuntimeState(
-		const FWeaponTrailRuntimeKey& RequestedKey,
-		FWeaponTrailRuntimeKey* OutResolvedKey = nullptr);
-	void RemoveRuntimeState(const FWeaponTrailRuntimeKey& RuntimeKey, bool bDestroyEffect);
-	void PruneInvalidRuntimeStates();
-
-	TMap<FWeaponTrailRuntimeKey, FWeaponTrailRuntimeState> RuntimeStates;
-	static constexpr int32 MaxTrajectoryDistanceCacheEntries = 64;
-	TMap<FWeaponTrailDistanceCacheKey, FWeaponTrailDistanceCacheEntry> TrajectoryDistanceCache;
-	uint64 TrajectoryDistanceCacheAccessSerial = 0;
+	friend class FWeaponTrailRuntimeManager;
+	FWeaponTrailRuntimeManager& GetRuntimeManager();
+	FWeaponTrailRuntimeManager* RuntimeManager = nullptr;
 
 };

@@ -24,6 +24,7 @@
 
 #include "Utils/CoreLog.h"
 #include "Utils/WeaponTrajectoryUtility.h"
+#include "Combat/Trajectory/WeaponTraceSolver.h"
 
 
 // Sets default values for this component's properties
@@ -505,32 +506,22 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 	{
 		const float SampleAlpha = static_cast<float>(i) / static_cast<float>(TraceCorrectionCount);
 		const float PrevTime = FMath::Lerp(StartTime, EndTime, SampleAlpha);
-		FTransform SampleRootWorldTransform;
-		SampleRootWorldTransform.Blend(
-			PreviousRootWorldTransform, CurrentRootWorldTransform, SampleAlpha);
-
-		FVector StartLoc;
-		FVector EndLoc;
-		FWeaponTrajectoryUtility::GetSocketWorldPositions(
-			WeaponGeometry, CurrentSeg->GetTransformAtTime(PrevTime),
-			SampleRootWorldTransform, StartLoc, EndLoc);
-
-		const FVector CapsuleAxis = EndLoc - StartLoc;
-		if (CapsuleAxis.IsNearlyZero())
+		FWeaponTraceCapsule Capsule;
+		if (!FWeaponTraceSolver::BuildCapsule(
+			*CurrentSeg, WeaponGeometry,
+			PreviousRootWorldTransform, CurrentRootWorldTransform,
+			PrevTime, SampleAlpha, Radius, Capsule))
 		{
 			continue;
 		}
-		const float CurHalfHeight = FMath::Max(CapsuleAxis.Size() * 0.5f, Radius);
-		const FVector CapsuleCenter = (StartLoc + EndLoc) * 0.5f;
-		const FQuat CapsuleRotation = FRotationMatrix::MakeFromZ(CapsuleAxis.GetSafeNormal()).ToQuat();
-		const FCollisionShape DetectShape = FCollisionShape::MakeCapsule(Radius, CurHalfHeight);
+		const FCollisionShape DetectShape = FCollisionShape::MakeCapsule(Capsule.Radius, Capsule.HalfHeight);
 
 		HitResults.Reset();
 		const bool bHit = World->SweepMultiByChannel(
 			HitResults,
-			CapsuleCenter,
-			CapsuleCenter,
-			CapsuleRotation,
+			Capsule.Center,
+			Capsule.Center,
+			Capsule.Rotation,
 			ECC_GameTraceChannel3,
 			DetectShape,
 			CollisionParams
@@ -596,8 +587,8 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 		
 		if (bDrawDebug)
 		{
-			DrawDebugCapsule(World, CapsuleCenter, CurHalfHeight, Radius,
-				CapsuleRotation, FColor::Red, false, 5.0f);
+			DrawDebugCapsule(World, Capsule.Center, Capsule.HalfHeight, Capsule.Radius,
+				Capsule.Rotation, FColor::Red, false, 5.0f);
 		}
 	}
 
@@ -611,7 +602,10 @@ void UAttackComponent::BeginAttackTrace(FGameplayTag Profile, const UAnimSequenc
 	ResetAttackTrace();
 	if (!IsAttackActive() || !AnimKey) return;
 
-	UAnimBoneDataSubsystem* Subsys = GetWorld()->GetGameInstance()->GetSubsystem<UAnimBoneDataSubsystem>();
+	UWorld* World = GetWorld();
+	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
+	UAnimBoneDataSubsystem* Subsys = GameInstance
+		? GameInstance->GetSubsystem<UAnimBoneDataSubsystem>() : nullptr;
 	if (!Subsys) return;
 
 	CurrentSeg = Subsys->GetAnimBoneData(Profile, AnimKey, WindowName);
