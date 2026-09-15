@@ -2,7 +2,7 @@
 #include "Combat/ANS_TimedWeaponTrail.h"
 #include "Animation/AnimSequence.h"
 #include "Characters/CharacterBase.h"
-#include "Characters/Interfaces/EquipmentDataInterface.h"
+#include "Characters/Interfaces/WeaponRuntimeSourceInterface.h"
 #include "Combat/Data/AttackData.h"
 #include "Combat/Interfaces/AttackSourceInterface.h"
 #include "Core/Subsystems/GameInstanceSystem/AnimBoneDataSubsystem.h"
@@ -65,14 +65,18 @@ static FWeaponTrailDistanceCacheKey BuildTrajectoryDistanceCacheKey(
 	return Key;
 }
 
-static UActorComponent* FindEquipmentDataComponent(const USkeletalMeshComponent* MeshComp)
+static UObject* FindWeaponRuntimeSource(const USkeletalMeshComponent* MeshComp)
 {
 	AActor* Owner = MeshComp ? MeshComp->GetOwner() : nullptr;
 	if (!Owner) return nullptr;
+	if (Owner->GetClass()->ImplementsInterface(UWeaponRuntimeSourceInterface::StaticClass()))
+	{
+		return Owner;
+	}
 
 	for (UActorComponent* Component : Owner->GetComponents())
 	{
-		if (Component && Component->GetClass()->ImplementsInterface(UEquipmentDataInterface::StaticClass()))
+		if (Component && Component->GetClass()->ImplementsInterface(UWeaponRuntimeSourceInterface::StaticClass()))
 		{
 			return Component;
 		}
@@ -80,33 +84,33 @@ static UActorComponent* FindEquipmentDataComponent(const USkeletalMeshComponent*
 	return nullptr;
 }
 
-UActorComponent* FWeaponTrailRuntimeManager::FindEquipmentComponent(const USkeletalMeshComponent* MeshComp)
+UObject* FWeaponTrailRuntimeManager::FindWeaponSource(const USkeletalMeshComponent* MeshComp)
 {
-	return FindEquipmentDataComponent(MeshComp);
+	return FindWeaponRuntimeSource(MeshComp);
 }
 
 UNiagaraSystem* FWeaponTrailRuntimeManager::ResolveTrailSystem(
-	UActorComponent* EquipmentComponent, bool bSubWeapon)
+	UObject* WeaponSource, bool bSubWeapon)
 {
-	return EquipmentComponent
-		? IEquipmentDataInterface::Execute_GetWeaponTrailSystem(EquipmentComponent, bSubWeapon)
+	return WeaponSource
+		? IWeaponRuntimeSourceInterface::Execute_GetWeaponTrailSystem(WeaponSource, bSubWeapon)
 		: nullptr;
 }
 
 UNiagaraComponent* FWeaponTrailRuntimeManager::SpawnWeaponEffect(
 	USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation,
-	UActorComponent* EquipmentComponent, UNiagaraSystem* TrailSystem,
+	UObject* WeaponSource, UNiagaraSystem* TrailSystem,
 	bool bSubWeapon, bool bDestroyAtEnd,
 	bool bApplyRateScaleAsTimeDilation, float FadeDuration)
 {
-	if (!MeshComp || !EquipmentComponent || !TrailSystem) return nullptr;
+	if (!MeshComp || !WeaponSource || !TrailSystem) return nullptr;
 	UNiagaraComponent* Effect = UNiagaraFunctionLibrary::SpawnSystemAttached(
 		TrailSystem, MeshComp, NAME_None, FVector::ZeroVector, FRotator::ZeroRotator,
 		EAttachLocation::KeepRelativeOffset, !bDestroyAtEnd, false);
 	if (!Effect) return nullptr;
 
 	if (UMaterialInterface* Material =
-		IEquipmentDataInterface::Execute_GetWeaponTrailMaterial(EquipmentComponent, bSubWeapon))
+		IWeaponRuntimeSourceInterface::Execute_GetWeaponTrailMaterial(WeaponSource, bSubWeapon))
 	{
 		Effect->SetVariableMaterial(TrailMaterialParameter, Material);
 	}
@@ -115,10 +119,10 @@ UNiagaraComponent* FWeaponTrailRuntimeManager::SpawnWeaponEffect(
 		Effect->SetCustomTimeDilation(Animation->RateScale);
 	}
 
-	const FName StartSocket = IEquipmentDataInterface::Execute_GetWeaponTrailStartSocket(EquipmentComponent, bSubWeapon);
-	const FName EndSocket = IEquipmentDataInterface::Execute_GetWeaponTrailEndSocket(EquipmentComponent, bSubWeapon);
-	const FVector InitialStart = IEquipmentDataInterface::Execute_GetWeaponSocketLocation(EquipmentComponent, StartSocket, bSubWeapon);
-	const FVector InitialEnd = IEquipmentDataInterface::Execute_GetWeaponSocketLocation(EquipmentComponent, EndSocket, bSubWeapon);
+	const FName StartSocket = IWeaponRuntimeSourceInterface::Execute_GetWeaponTrailStartSocket(WeaponSource, bSubWeapon);
+	const FName EndSocket = IWeaponRuntimeSourceInterface::Execute_GetWeaponTrailEndSocket(WeaponSource, bSubWeapon);
+	const FVector InitialStart = IWeaponRuntimeSourceInterface::Execute_GetWeaponSocketLocation(WeaponSource, StartSocket, bSubWeapon);
+	const FVector InitialEnd = IWeaponRuntimeSourceInterface::Execute_GetWeaponSocketLocation(WeaponSource, EndSocket, bSubWeapon);
 	Effect->SetVectorParameter(TrailStartParameter, InitialStart);
 	Effect->SetVectorParameter(TrailEndParameter, InitialEnd);
 	UNiagaraDataInterfaceArrayFunctionLibrary::SetNiagaraArrayPosition(Effect, TrailStartSamplesParameter, { InitialStart });
@@ -237,7 +241,7 @@ void FWeaponTrailRuntimeManager::Begin(UANS_TimedWeaponTrail& Notify, USkeletalM
 	State.EndSamples.Reserve(FMath::Max(1, Notify.MaxSamplesPerFrame));
 	State.TrailUSamples.Reserve(FMath::Max(1, Notify.MaxSamplesPerFrame));
 	State.LinkOrderSamples.Reserve(FMath::Max(1, Notify.MaxSamplesPerFrame));
-	State.EquipmentComponent = FindEquipmentDataComponent(MeshComp);
+	State.WeaponSource = FindWeaponRuntimeSource(MeshComp);
 	if (ACharacter* OwnerCharacter = Cast<ACharacter>(MeshComp->GetOwner()))
 	{
 		if (IAttackSourceInterface* AttackSource = Cast<IAttackSourceInterface>(OwnerCharacter))
@@ -307,16 +311,16 @@ void FWeaponTrailRuntimeManager::Tick(UANS_TimedWeaponTrail& Notify, USkeletalMe
 {
 	PruneInvalid();
 	FWeaponTrailRuntime* State = Find(MakeKey(MeshComp, EventReference));
-	UActorComponent* EquipmentComponent = State ? State->EquipmentComponent.Get() : nullptr;
+	UObject* WeaponSource = State ? State->WeaponSource.Get() : nullptr;
 
-	if (EquipmentComponent && State)
+	if (WeaponSource && State)
 	{
 		if(UNiagaraComponent* NiagaraComponent = State->EffectComponent.Get())
 		{
-			const FName StartSocket = IEquipmentDataInterface::Execute_GetWeaponTrailStartSocket(EquipmentComponent, Notify.bSubWeapon);
-			const FName EndSocket = IEquipmentDataInterface::Execute_GetWeaponTrailEndSocket(EquipmentComponent, Notify.bSubWeapon);
-			const FVector TrailStart = IEquipmentDataInterface::Execute_GetWeaponSocketLocation(EquipmentComponent, StartSocket, Notify.bSubWeapon);
-			const FVector TrailEnd = IEquipmentDataInterface::Execute_GetWeaponSocketLocation(EquipmentComponent, EndSocket, Notify.bSubWeapon);
+			const FName StartSocket = IWeaponRuntimeSourceInterface::Execute_GetWeaponTrailStartSocket(WeaponSource, Notify.bSubWeapon);
+			const FName EndSocket = IWeaponRuntimeSourceInterface::Execute_GetWeaponTrailEndSocket(WeaponSource, Notify.bSubWeapon);
+			const FVector TrailStart = IWeaponRuntimeSourceInterface::Execute_GetWeaponSocketLocation(WeaponSource, StartSocket, Notify.bSubWeapon);
+			const FVector TrailEnd = IWeaponRuntimeSourceInterface::Execute_GetWeaponSocketLocation(WeaponSource, EndSocket, Notify.bSubWeapon);
 
 			NiagaraComponent->SetVectorParameter(TrailStartParameter, TrailStart);
 			NiagaraComponent->SetVectorParameter(TrailEndParameter, TrailEnd);

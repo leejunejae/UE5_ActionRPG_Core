@@ -125,7 +125,7 @@ void APlayerBase::BeginPlay()
 	Super::BeginPlay();
 
 	ApplyConfig();
-	RefreshActionAnimationProfile(EWeaponType::None);
+	RefreshActionAnimationProfile(TAG_CombatStyle_Unarmed);
 
 	CharacterBaseAnim = Cast<UPlayerBaseAnimInstance>(GetMesh()->GetAnimInstance());
 
@@ -1108,7 +1108,7 @@ void APlayerBase::TryReturnToLocomotion(const FVector2D& MovementInput)
 	FinishActionIfCurrent(CurrentAction);
 }
 
-void APlayerBase::RefreshActionAnimationProfile(EWeaponType WeaponType)
+void APlayerBase::RefreshActionAnimationProfile(FGameplayTag CombatStyle)
 {
 	UWorld* World = GetWorld();
 	UGameInstance* GameInstance = World ? World->GetGameInstance() : nullptr;
@@ -1125,7 +1125,7 @@ void APlayerBase::RefreshActionAnimationProfile(EWeaponType WeaponType)
 		return;
 	}
 
-	const FPlayerAnimSet AnimSet = Registry->ResolvePlayerAnimSet(WeaponType);
+	const FPlayerAnimSet AnimSet = Registry->ResolvePlayerAnimSet(CombatStyle);
 	ConfiguredDodgeMontage = AnimSet.DodgeMontage.LoadSynchronous();
 	ConfiguredParryMontage = AnimSet.ParryMontage.LoadSynchronous();
 	ConfiguredCriticalExecutions = AnimSet.CriticalExecutions;
@@ -1597,9 +1597,13 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 	case ECombatReaction::GuardHit:
 	case ECombatReaction::GuardHitHeavy:
 	{
-		float PerformanceRatio = GetStatComponent()->GetWeaponPerformanceRatio(EquipmentComponent->GetEquipedWeapon()->RequiredAttributes.ToCharacterStats());
-		float GuardBoost = EquipmentComponent->GetEquipedWeapon()->GuardBoost;
-		float GuardNegation = EquipmentComponent->GetEquipedWeapon()->GuardNegation;
+		const FWeaponSetsInfo* GuardEquipment = EquipmentComponent->GetEquippedOffHandWeapon()
+			? EquipmentComponent->GetEquippedOffHandWeapon()
+			: EquipmentComponent->GetEquipedWeapon();
+		if (!GuardEquipment) return;
+		float PerformanceRatio = GetStatComponent()->GetWeaponPerformanceRatio(GuardEquipment->RequiredAttributes.ToCharacterStats());
+		float GuardBoost = GuardEquipment->GuardBoost;
+		float GuardNegation = GuardEquipment->GuardNegation;
 		if (PerformanceRatio < 1.0f)
 		{
 			GuardBoost *= 0.8f;
@@ -1854,10 +1858,10 @@ FAttackTraceSource APlayerBase::GetAttackTraceSource(EAttackSourceType AttackSou
 	return EquipmentComponent->GetAttackTraceSource(AttackSourceType);
 }
 
-FAttackDamageSource APlayerBase::GetAttackDamageSource() const
+FAttackDamageSource APlayerBase::GetAttackDamageSource(EAttackSourceType AttackSourceType) const
 {
 	if (!EquipmentComponent) return FAttackDamageSource();
-	return EquipmentComponent->GetAttackDamageSource();
+	return EquipmentComponent->GetAttackDamageSource(AttackSourceType);
 }
 
 void APlayerBase::ReceiveParried(AActor* ParryInstigator)

@@ -12,3 +12,9 @@ UHitReactionDataAsset* UPlayerHitReactionDataAsset::FindHitReactionDA(const EWea
         UE_LOG(LogTemp, Error, TEXT("Not HitReaction DA"));
     return nullptr;
 }
+
+UHitReactionDataAsset* UPlayerHitReactionDataAsset::FindHitReactionDA(FGameplayTag CombatStyle, bool bLogNotFound) const
+{
+    if (const TObjectPtr<UHitReactionDataAsset>* Found = CombatStyleHitReactionMap.Find(CombatStyle)) return *Found;
+    return FindHitReactionDA(GetLegacyWeaponTypeForCombatStyle(CombatStyle), bLogNotFound);
+}

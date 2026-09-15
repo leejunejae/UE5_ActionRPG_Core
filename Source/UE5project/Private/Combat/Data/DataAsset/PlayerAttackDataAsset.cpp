@@ -25,3 +25,9 @@ const FAttackContextSet* UPlayerAttackDataAsset::FindPlayerAttackContext(const E
 
 	return nullptr;
 }
+
+const FAttackContextSet* UPlayerAttackDataAsset::FindPlayerAttackContext(FGameplayTag CombatStyle, bool bLogNotFound) const
+{
+	if (const FAttackContextSet* Found = CombatStyleAttackContextMap.Find(CombatStyle)) return Found;
+	return FindPlayerAttackContext(GetLegacyWeaponTypeForCombatStyle(CombatStyle), bLogNotFound);
+}

@@ -206,7 +206,7 @@ public:
 	UStaticMeshComponent* GetMainWeaponMesh() const override;
 
 	virtual FAttackTraceSource GetAttackTraceSource(EAttackSourceType AttackSourceType) const override;
-	virtual FAttackDamageSource GetAttackDamageSource() const override;
+	virtual FAttackDamageSource GetAttackDamageSource(EAttackSourceType AttackSourceType = EAttackSourceType::MainHand) const override;
 	virtual void ReceiveParried(AActor* ParryInstigator) override;
 #pragma endregion Inventory & Equip
 
@@ -396,7 +396,7 @@ private:
 	void OnParryMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	void OnCriticalExecutionMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	void TryReturnToLocomotion(const FVector2D& MovementInput);
-	void RefreshActionAnimationProfile(EWeaponType WeaponType);
+	void RefreshActionAnimationProfile(FGameplayTag CombatStyle);
 
 	float DodgeLocomotionBlendOutTime = 0.15f;
 	FActionExitBlendSettings DodgeExitBlendSettings;

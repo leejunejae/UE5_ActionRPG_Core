@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "UObject/NoExportTypes.h"
 #include "Engine/DataTable.h"
+#include "GameplayTagContainer.h"
 #include "Characters/Data/CharacterStatData.h"
 #include "WeaponData.generated.h"
 
@@ -20,6 +21,64 @@ enum class EWeaponType : uint8
 	SpearAndShield UMETA(DisplayName = "SpearAndShield"),
 	Knuckles UMETA(DisplayName = "Knuckles"),
 };
+
+/** 물리적인 무기 계열. 장착 조합이나 사용 애니메이션을 나타내지 않는다. */
+UENUM(BlueprintType)
+enum class EWeaponCategory : uint8
+{
+	None UMETA(DisplayName = "None"),
+	Sword UMETA(DisplayName = "Sword"),
+	Dagger UMETA(DisplayName = "Dagger"),
+	GreatSword UMETA(DisplayName = "Great Sword"),
+	Spear UMETA(DisplayName = "Spear"),
+	Axe UMETA(DisplayName = "Axe"),
+	GreatAxe UMETA(DisplayName = "Great Axe"),
+	Mace UMETA(DisplayName = "Mace"),
+	Hammer UMETA(DisplayName = "Hammer"),
+	Bow UMETA(DisplayName = "Bow"),
+	Crossbow UMETA(DisplayName = "Crossbow"),
+	Staff UMETA(DisplayName = "Staff"),
+	Shield UMETA(DisplayName = "Shield"),
+	FistWeapon UMETA(DisplayName = "Fist Weapon"),
+	ThrowingWeapon UMETA(DisplayName = "Throwing Weapon"),
+};
+
+/** 무기 자체가 허용하는 파지 방식. */
+UENUM(BlueprintType)
+enum class EWeaponGripType : uint8
+{
+	OneHanded UMETA(DisplayName = "One Handed"),
+	TwoHanded UMETA(DisplayName = "Two Handed"),
+	Versatile UMETA(DisplayName = "Versatile"),
+};
+
+/** 현재 캐릭터가 실제로 사용 중인 파지 상태. */
+UENUM(BlueprintType)
+enum class EWeaponGripMode : uint8
+{
+	OneHanded UMETA(DisplayName = "One Handed"),
+	TwoHanded UMETA(DisplayName = "Two Handed"),
+};
+
+UENUM(BlueprintType)
+enum class EEquipmentHandSlot : uint8
+{
+	MainHand UMETA(DisplayName = "Main Hand"),
+	OffHand UMETA(DisplayName = "Off Hand"),
+	EitherHand UMETA(DisplayName = "Either Hand"),
+};
+
+UENUM(BlueprintType)
+enum class EWeaponTraceShape : uint8
+{
+	Capsule UMETA(DisplayName = "Capsule"),
+	Box UMETA(DisplayName = "Box"),
+};
+
+/** 기존 EWeaponType 기반 콘텐츠를 새 CombatStyle 경로에서 읽기 위한 이행 함수. */
+UE5PROJECT_API EWeaponType GetLegacyWeaponTypeForCombatStyle(FGameplayTag CombatStyle);
+UE5PROJECT_API FGameplayTag GetLegacyCombatStyleForWeaponType(EWeaponType WeaponType);
+UE5PROJECT_API EWeaponCategory GetWeaponCategoryFromLegacyType(EWeaponType WeaponType);
 
 /* ============================================================
  *  특성 보정 등급

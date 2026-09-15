@@ -41,13 +41,13 @@ void UANS_TimedWeaponTrail::NotifyEnd(USkeletalMeshComponent* MeshComp, UAnimSeq
 UFXSystemComponent* UANS_TimedWeaponTrail::SpawnEffect(
 	USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation) const
 {
-	UActorComponent* Equipment = FWeaponTrailRuntimeManager::FindEquipmentComponent(MeshComp);
-	UNiagaraSystem* TrailSystem = FWeaponTrailRuntimeManager::ResolveTrailSystem(Equipment, bSubWeapon);
+	UObject* WeaponSource = FWeaponTrailRuntimeManager::FindWeaponSource(MeshComp);
+	UNiagaraSystem* TrailSystem = FWeaponTrailRuntimeManager::ResolveTrailSystem(WeaponSource, bSubWeapon);
 	if (!TrailSystem)
 	{
 		return Super::SpawnEffect(MeshComp, Animation);
 	}
 	return FWeaponTrailRuntimeManager::SpawnWeaponEffect(
-		MeshComp, Animation, Equipment, TrailSystem, bSubWeapon, bDestroyAtEnd,
+		MeshComp, Animation, WeaponSource, TrailSystem, bSubWeapon, bDestroyAtEnd,
 		bApplyRateScaleAsTimeDilation, TrailFadeDuration);
 }

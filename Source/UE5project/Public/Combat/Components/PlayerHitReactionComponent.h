@@ -18,7 +18,7 @@ class UE5PROJECT_API UPlayerHitReactionComponent : public UHitReactionComponent
 	GENERATED_BODY()
 
 public:
-	void HandleWeaponChange(EWeaponType WeaponType);
+	void HandleWeaponChange(FGameplayTag CombatStyle);
 	FORCEINLINE void SetHitReactionListDA(UPlayerHitReactionDataAsset* InDA) { HitReactionList = InDA; }
 
 protected:

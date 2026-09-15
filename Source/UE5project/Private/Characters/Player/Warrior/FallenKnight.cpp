@@ -29,6 +29,10 @@ void AFallenKnight::BeginPlay()
 	Super::BeginPlay();
 
 	GetEquipmentComponent()->EquipWeapon_Implementation(DefaultWeaponKey);
+	if (DefaultOffHandWeaponKey != NAME_None)
+	{
+		GetEquipmentComponent()->EquipOffHandWeapon(DefaultOffHandWeaponKey);
+	}
 
 	GetEquipmentComponent()->EquipArmor(DefaultLegsKey);
 	GetEquipmentComponent()->EquipArmor(DefaultHeadKey);

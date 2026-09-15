@@ -85,7 +85,7 @@ private:
 	bool bInitAnimSet = false;
 
 protected:
-	void HandleWeaponChange(EWeaponType WeaponData);
+	void HandleWeaponChange(FGameplayTag CombatStyle);
 
 #pragma endregion Animation Data
 

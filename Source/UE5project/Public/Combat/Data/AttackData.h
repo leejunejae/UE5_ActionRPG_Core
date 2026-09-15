@@ -27,7 +27,12 @@ struct FAttackTraceSource
 
 public:
 	UPROPERTY() USceneComponent* TraceComponent = nullptr; // 무기 메시 or 캐릭터 메시
+	UPROPERTY() EWeaponTraceShape Shape = EWeaponTraceShape::Capsule;
+	UPROPERTY() FName StartSocket = TEXT("Start");
+	UPROPERTY() FName EndSocket = TEXT("End");
 	UPROPERTY() float Radius = 0.f;
+	UPROPERTY() FName CenterSocket = TEXT("TraceCenter");
+	UPROPERTY() FVector BoxHalfExtent = FVector::ZeroVector;
 
 	bool IsValid() { return TraceComponent ? true : false; }
 	// 필요하면: 추가 소켓들, 오프셋, 채널, 트레이스 프로파일 등

@@ -26,4 +26,8 @@ public:
 	
 	const FPlayerAnimSet* GetPlayerAnimSet(const EWeaponType& WeaponType) const;
 	FPlayerAnimSet ResolvePlayerAnimSet(const EWeaponType& WeaponType) const;
+	const FPlayerAnimSet* GetPlayerAnimSet(FGameplayTag CombatStyle) const;
+	FPlayerAnimSet ResolvePlayerAnimSet(FGameplayTag CombatStyle) const;
+	FGameplayTag ResolveCombatStyle(EWeaponCategory MainWeaponCategory,
+		EWeaponCategory OffHandWeaponCategory, EWeaponGripMode GripMode) const;
 };

@@ -38,7 +38,7 @@ void UPlayerAttackComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
-void UPlayerAttackComponent::SetCurAttackContextSet(EWeaponType WeaponType)
+void UPlayerAttackComponent::SetCurAttackContextSet(FGameplayTag CombatStyle)
 {
 	// 공격 도중 무기가 바뀌면 이전 무기의 Trace/몽타주가 새 장비로 이어지지 않게 세션을 종료한다.
 	CancelAttack(EActionExitReason::EquipmentChange, true);
@@ -49,7 +49,7 @@ void UPlayerAttackComponent::SetCurAttackContextSet(EWeaponType WeaponType)
 		return;
 	}
 
-	const FAttackContextSet* ContextSet = AttackList->FindPlayerAttackContext(WeaponType, /*bLogNotFound=*/true);
+	const FAttackContextSet* ContextSet = AttackList->FindPlayerAttackContext(CombatStyle, /*bLogNotFound=*/true);
 
 	if(APlayerBase* Player = Cast<APlayerBase>(GetOwner()))
 		UE_LOG(Log_Attack, Log, TEXT("[PlayerAttackComponent] %s "), *Player->GetName());

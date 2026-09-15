@@ -478,9 +478,12 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 		return;
 	}
 
+	const bool bUseBoxTrace = TraceSource.Shape == EWeaponTraceShape::Box;
+	const FName GeometryStartSocket = bUseBoxTrace ? TraceSource.CenterSocket : TraceSource.StartSocket;
+	const FName GeometryEndSocket = bUseBoxTrace ? TraceSource.CenterSocket : TraceSource.EndSocket;
 	const FWeaponTrajectoryGeometry WeaponGeometry = FWeaponTrajectoryUtility::BuildGeometry(
 		Character->GetMesh(), TraceSource.TraceComponent, CurrentSeg->BoneName,
-		TEXT("Start"), TEXT("End"));
+		GeometryStartSocket, GeometryEndSocket);
 	if (!WeaponGeometry.IsValid())
 	{
 		UE_LOG(Log_Attack, Error, TEXT("[UAttackComponent] Weapon trajectory geometry invalid"));
@@ -494,34 +497,57 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 	FAttackDamageSource DamageSource;
 	if (IAttackSourceInterface* AttackSource = Cast<IAttackSourceInterface>(Character))
 	{
-		DamageSource = AttackSource->GetAttackDamageSource();
+		DamageSource = AttackSource->GetAttackDamageSource(
+			CurAttackContext.AttackDetail[ComboIndex].AttackSource);
 	}
 
 	FCollisionQueryParams CollisionParams;
 	CollisionParams.AddIgnoredActor(GetOwner());
-	const float Radius = TraceSource.Radius;
 	TArray<FHitResult> HitResults;
 
 	for (int32 i = 1; i <= TraceCorrectionCount; ++i)
 	{
 		const float SampleAlpha = static_cast<float>(i) / static_cast<float>(TraceCorrectionCount);
 		const float PrevTime = FMath::Lerp(StartTime, EndTime, SampleAlpha);
+		FVector TraceCenter = FVector::ZeroVector;
+		FQuat TraceRotation = FQuat::Identity;
+		FCollisionShape DetectShape;
 		FWeaponTraceCapsule Capsule;
-		if (!FWeaponTraceSolver::BuildCapsule(
-			*CurrentSeg, WeaponGeometry,
-			PreviousRootWorldTransform, CurrentRootWorldTransform,
-			PrevTime, SampleAlpha, Radius, Capsule))
+		FWeaponTraceBox Box;
+
+		if (bUseBoxTrace)
 		{
-			continue;
+			if (!FWeaponTraceSolver::BuildBox(
+				*CurrentSeg, WeaponGeometry,
+				PreviousRootWorldTransform, CurrentRootWorldTransform,
+				PrevTime, SampleAlpha, TraceSource.BoxHalfExtent, Box))
+			{
+				continue;
+			}
+			TraceCenter = Box.Center;
+			TraceRotation = Box.Rotation;
+			DetectShape = FCollisionShape::MakeBox(Box.HalfExtent);
 		}
-		const FCollisionShape DetectShape = FCollisionShape::MakeCapsule(Capsule.Radius, Capsule.HalfHeight);
+		else
+		{
+			if (!FWeaponTraceSolver::BuildCapsule(
+				*CurrentSeg, WeaponGeometry,
+				PreviousRootWorldTransform, CurrentRootWorldTransform,
+				PrevTime, SampleAlpha, TraceSource.Radius, Capsule))
+			{
+				continue;
+			}
+			TraceCenter = Capsule.Center;
+			TraceRotation = Capsule.Rotation;
+			DetectShape = FCollisionShape::MakeCapsule(Capsule.Radius, Capsule.HalfHeight);
+		}
 
 		HitResults.Reset();
 		const bool bHit = World->SweepMultiByChannel(
 			HitResults,
-			Capsule.Center,
-			Capsule.Center,
-			Capsule.Rotation,
+			TraceCenter,
+			TraceCenter,
+			TraceRotation,
 			ECC_GameTraceChannel3,
 			DetectShape,
 			CollisionParams
@@ -587,8 +613,16 @@ void UAttackComponent::ExecuteAttackTrace(float StartTime, float EndTime, bool b
 		
 		if (bDrawDebug)
 		{
-			DrawDebugCapsule(World, Capsule.Center, Capsule.HalfHeight, Capsule.Radius,
-				Capsule.Rotation, FColor::Red, false, 5.0f);
+			if (bUseBoxTrace)
+			{
+				DrawDebugBox(World, Box.Center, Box.HalfExtent, Box.Rotation,
+					FColor::Red, false, 5.0f);
+			}
+			else
+			{
+				DrawDebugCapsule(World, Capsule.Center, Capsule.HalfHeight, Capsule.Radius,
+					Capsule.Rotation, FColor::Red, false, 5.0f);
+			}
 		}
 	}
 

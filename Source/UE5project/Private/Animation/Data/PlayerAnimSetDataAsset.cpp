@@ -3,30 +3,12 @@
 
 #include "Animation/Data/PlayerAnimSetDataAsset.h"
 
-const FPlayerAnimSet* UPlayerAnimSetDataAsset::FindPlayerAnimSet(const EWeaponType& WeaponType, bool bLogNotFound) const
+namespace
 {
-	const FPlayerAnimSet* Found = AnimList.Find(WeaponType);
-	if (Found)
-	{
-		return Found;
-	}
-
-	if (bLogNotFound)
-	{
-		UE_LOG(LogTemp, Error, TEXT("Not SkillInfo"))
-	}
-
-	return nullptr;
-}
-
-FPlayerAnimSet UPlayerAnimSetDataAsset::ResolvePlayerAnimSet(const EWeaponType& WeaponType) const
+FPlayerAnimSet ResolveAnimSetOverride(const FPlayerAnimSet& CommonAnimSet, const FPlayerAnimSet* Override)
 {
 	FPlayerAnimSet Resolved = CommonAnimSet;
-	const FPlayerAnimSet* Override = AnimList.Find(WeaponType);
-	if (!Override)
-	{
-		return Resolved;
-	}
+	if (!Override) return Resolved;
 
 #define APPLY_SOFT_OVERRIDE(Field) if (!Override->Field.IsNull()) { Resolved.Field = Override->Field; }
 	APPLY_SOFT_OVERRIDE(Locomotion_Normal_CycleBS)
@@ -57,15 +39,9 @@ FPlayerAnimSet UPlayerAnimSetDataAsset::ResolvePlayerAnimSet(const EWeaponType& 
 	APPLY_SOFT_OVERRIDE(SpawnMontage)
 #undef APPLY_SOFT_OVERRIDE
 
-	// 항목이 있으면 해당 무기 전용 처형 세트 전체가 공통 세트를 대체한다.
-	if (!Override->CriticalExecutions.IsEmpty())
-	{
-		Resolved.CriticalExecutions = Override->CriticalExecutions;
-	}
+	if (!Override->CriticalExecutions.IsEmpty()) Resolved.CriticalExecutions = Override->CriticalExecutions;
 
-#define APPLY_BLEND_OVERRIDE(Field) \
-	if (Override->DodgeExitBlendSettings.Field >= 0.0f) \
-	{ Resolved.DodgeExitBlendSettings.Field = Override->DodgeExitBlendSettings.Field; }
+#define APPLY_BLEND_OVERRIDE(Field) if (Override->DodgeExitBlendSettings.Field >= 0.0f) { Resolved.DodgeExitBlendSettings.Field = Override->DodgeExitBlendSettings.Field; }
 	APPLY_BLEND_OVERRIDE(Transition)
 	APPLY_BLEND_OVERRIDE(Locomotion)
 	APPLY_BLEND_OVERRIDE(Interrupted)
@@ -73,9 +49,7 @@ FPlayerAnimSet UPlayerAnimSetDataAsset::ResolvePlayerAnimSet(const EWeaponType& 
 	APPLY_BLEND_OVERRIDE(EquipmentChange)
 #undef APPLY_BLEND_OVERRIDE
 
-#define APPLY_PARRY_BLEND_OVERRIDE(Field) \
-	if (Override->ParryExitBlendSettings.Field >= 0.0f) \
-	{ Resolved.ParryExitBlendSettings.Field = Override->ParryExitBlendSettings.Field; }
+#define APPLY_PARRY_BLEND_OVERRIDE(Field) if (Override->ParryExitBlendSettings.Field >= 0.0f) { Resolved.ParryExitBlendSettings.Field = Override->ParryExitBlendSettings.Field; }
 	APPLY_PARRY_BLEND_OVERRIDE(Transition)
 	APPLY_PARRY_BLEND_OVERRIDE(Locomotion)
 	APPLY_PARRY_BLEND_OVERRIDE(Interrupted)
@@ -87,8 +61,71 @@ FPlayerAnimSet UPlayerAnimSetDataAsset::ResolvePlayerAnimSet(const EWeaponType& 
 	{
 		Resolved.DodgeLocomotionBlendOutTime = Override->DodgeLocomotionBlendOutTime;
 	}
-
-	// IK 사용 여부는 무기 자체의 명시적 특성이므로 무기 항목이 있으면 그대로 사용한다.
 	Resolved.bUseWeaponIK = Override->bUseWeaponIK;
 	return Resolved;
+}
+}
+
+const FPlayerAnimSet* UPlayerAnimSetDataAsset::FindPlayerAnimSet(const EWeaponType& WeaponType, bool bLogNotFound) const
+{
+	const FPlayerAnimSet* Found = AnimList.Find(WeaponType);
+	if (Found)
+	{
+		return Found;
+	}
+
+	if (bLogNotFound)
+	{
+		UE_LOG(LogTemp, Error, TEXT("Not SkillInfo"))
+	}
+
+	return nullptr;
+}
+
+FPlayerAnimSet UPlayerAnimSetDataAsset::ResolvePlayerAnimSet(const EWeaponType& WeaponType) const
+{
+	return ResolveAnimSetOverride(CommonAnimSet, AnimList.Find(WeaponType));
+}
+
+const FPlayerAnimSet* UPlayerAnimSetDataAsset::FindPlayerAnimSet(FGameplayTag CombatStyle, bool bLogNotFound) const
+{
+	if (const FPlayerAnimSet* Found = CombatStyleAnimList.Find(CombatStyle)) return Found;
+	return FindPlayerAnimSet(GetLegacyWeaponTypeForCombatStyle(CombatStyle), bLogNotFound);
+}
+
+FPlayerAnimSet UPlayerAnimSetDataAsset::ResolvePlayerAnimSet(FGameplayTag CombatStyle) const
+{
+	const FPlayerAnimSet* Override = CombatStyleAnimList.Find(CombatStyle);
+	if (!Override) Override = AnimList.Find(GetLegacyWeaponTypeForCombatStyle(CombatStyle));
+	return ResolveAnimSetOverride(CommonAnimSet, Override);
+}
+
+FGameplayTag UPlayerAnimSetDataAsset::ResolveCombatStyle(
+	EWeaponCategory MainWeaponCategory,
+	EWeaponCategory OffHandWeaponCategory,
+	EWeaponGripMode GripMode) const
+{
+	// 정확한 주/보조/파지 조합을 가장 먼저 찾는다.
+	for (const FPlayerCombatStyleRule& Rule : CombatStyleRules)
+	{
+		if (Rule.MainWeaponCategory == MainWeaponCategory &&
+			Rule.OffHandWeaponCategory == OffHandWeaponCategory &&
+			Rule.GripMode == GripMode && Rule.CombatStyle.IsValid())
+		{
+			return Rule.CombatStyle;
+		}
+	}
+
+	// 조합이 없으면 같은 주무기와 파지 방식의 단독 규칙으로 폴백한다.
+	for (const FPlayerCombatStyleRule& Rule : CombatStyleRules)
+	{
+		if (Rule.MainWeaponCategory == MainWeaponCategory &&
+			Rule.OffHandWeaponCategory == EWeaponCategory::None &&
+			Rule.GripMode == GripMode && Rule.CombatStyle.IsValid())
+		{
+			return Rule.CombatStyle;
+		}
+	}
+
+	return FGameplayTag();
 }

@@ -30,3 +30,27 @@ bool FWeaponTraceSolver::BuildCapsule(
 	OutCapsule.HalfHeight = FMath::Max(Axis.Size() * 0.5f, Radius);
 	return true;
 }
+
+bool FWeaponTraceSolver::BuildBox(
+	const FBoneTransformSegment& Segment,
+	const FWeaponTrajectoryGeometry& Geometry,
+	const FTransform& PreviousRootWorld,
+	const FTransform& CurrentRootWorld,
+	float SampleTime,
+	float SampleAlpha,
+	const FVector& HalfExtent,
+	FWeaponTraceBox& OutBox)
+{
+	FTransform RootWorld;
+	RootWorld.Blend(PreviousRootWorld, CurrentRootWorld, SampleAlpha);
+	const FTransform SocketWorld = FWeaponTrajectoryUtility::GetReferenceSocketWorldTransform(
+		Geometry, Segment.GetTransformAtTime(SampleTime), RootWorld);
+
+	const FVector ScaledExtent = HalfExtent * SocketWorld.GetScale3D().GetAbs();
+	if (ScaledExtent.GetMin() <= UE_KINDA_SMALL_NUMBER) return false;
+
+	OutBox.Center = SocketWorld.GetLocation();
+	OutBox.Rotation = SocketWorld.GetRotation().GetNormalized();
+	OutBox.HalfExtent = ScaledExtent;
+	return true;
+}

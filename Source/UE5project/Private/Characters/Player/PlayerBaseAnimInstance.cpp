@@ -57,7 +57,7 @@ void UPlayerBaseAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	}
 }
 
-void UPlayerBaseAnimInstance::HandleWeaponChange(EWeaponType WeaponData)
+void UPlayerBaseAnimInstance::HandleWeaponChange(FGameplayTag CombatStyle)
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -70,7 +70,7 @@ void UPlayerBaseAnimInstance::HandleWeaponChange(EWeaponType WeaponData)
 		return;
 	}
 
-	const FPlayerAnimSet TargetAnimSet = PlayerAnimSubsystem->ResolvePlayerAnimSet(WeaponData);
+	const FPlayerAnimSet TargetAnimSet = PlayerAnimSubsystem->ResolvePlayerAnimSet(CombatStyle);
 
 	Locomotion_Normal_CycleBS = TargetAnimSet.Locomotion_Normal_CycleBS.LoadSynchronous();
 	Locomotion_Combat_Forward_BS = TargetAnimSet.Locomotion_Combat_Forward_BS.LoadSynchronous();

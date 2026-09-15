@@ -20,5 +20,10 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
     TMap<EWeaponType, TObjectPtr<UHitReactionDataAsset>> HitReactionMap;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat Style",
+        meta = (Categories = "CombatStyle"))
+    TMap<FGameplayTag, TObjectPtr<UHitReactionDataAsset>> CombatStyleHitReactionMap;
+
     UHitReactionDataAsset* FindHitReactionDA(const EWeaponType& WeaponType, bool bLogNotFound = false) const;
+    UHitReactionDataAsset* FindHitReactionDA(FGameplayTag CombatStyle, bool bLogNotFound = false) const;
 };

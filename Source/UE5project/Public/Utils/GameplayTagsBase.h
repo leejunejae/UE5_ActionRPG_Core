@@ -90,6 +90,23 @@ UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_Weapon_SwordAndShield)
 // Weapon
 // =====================
 
+// =====================
+// Combat Style
+// =====================
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_CombatStyle_Unarmed)
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_CombatStyle_Sword_OneHanded)
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_CombatStyle_Sword_TwoHanded)
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_CombatStyle_Sword_Shield)
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_CombatStyle_Sword_Dagger)
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_CombatStyle_Spear_OneHanded)
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_CombatStyle_Spear_TwoHanded)
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_CombatStyle_Spear_Shield)
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_CombatStyle_GreatSword_TwoHanded)
+UE_DECLARE_GAMEPLAY_TAG_EXTERN(TAG_CombatStyle_Fist)
+// =====================
+// Combat Style
+// =====================
+
 UCLASS()
 class UE5PROJECT_API UGameplayTagsBase : public UObject
 {

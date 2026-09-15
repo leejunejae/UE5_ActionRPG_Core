@@ -30,3 +30,23 @@ FPlayerAnimSet UPlayerAnimRegistrySubsystem::ResolvePlayerAnimSet(const EWeaponT
 {
 	return PlayerAnimAsset ? PlayerAnimAsset->ResolvePlayerAnimSet(WeaponType) : FPlayerAnimSet{};
 }
+
+const FPlayerAnimSet* UPlayerAnimRegistrySubsystem::GetPlayerAnimSet(FGameplayTag CombatStyle) const
+{
+	return PlayerAnimAsset ? PlayerAnimAsset->FindPlayerAnimSet(CombatStyle, true) : nullptr;
+}
+
+FPlayerAnimSet UPlayerAnimRegistrySubsystem::ResolvePlayerAnimSet(FGameplayTag CombatStyle) const
+{
+	return PlayerAnimAsset ? PlayerAnimAsset->ResolvePlayerAnimSet(CombatStyle) : FPlayerAnimSet{};
+}
+
+FGameplayTag UPlayerAnimRegistrySubsystem::ResolveCombatStyle(
+	EWeaponCategory MainWeaponCategory,
+	EWeaponCategory OffHandWeaponCategory,
+	EWeaponGripMode GripMode) const
+{
+	return PlayerAnimAsset
+		? PlayerAnimAsset->ResolveCombatStyle(MainWeaponCategory, OffHandWeaponCategory, GripMode)
+		: FGameplayTag();
+}

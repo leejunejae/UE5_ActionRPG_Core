@@ -10,6 +10,7 @@ struct FWeaponTrajectoryGeometry
 	FTransform WeaponRelativeToBone = FTransform::Identity;
 	FVector StartSocketInWeapon = FVector::ZeroVector;
 	FVector EndSocketInWeapon = FVector::ZeroVector;
+	FTransform ReferenceSocketInWeapon = FTransform::Identity;
 
 	bool IsValid() const { return bValid; }
 
@@ -34,4 +35,9 @@ struct UE5PROJECT_API FWeaponTrajectoryUtility
 		const FTransform& RootWorld,
 		FVector& OutStart,
 		FVector& OutEnd);
+
+	static FTransform GetReferenceSocketWorldTransform(
+		const FWeaponTrajectoryGeometry& Geometry,
+		const FTransform& BoneRelativeToRoot,
+		const FTransform& RootWorld);
 };

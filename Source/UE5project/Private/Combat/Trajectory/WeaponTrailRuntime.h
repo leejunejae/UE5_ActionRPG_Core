@@ -4,7 +4,6 @@
 #include "TimerManager.h"
 #include "Utils/WeaponTrajectoryUtility.h"
 
-class UActorComponent;
 class UNiagaraComponent;
 class UNiagaraSystem;
 class USceneComponent;
@@ -50,7 +49,7 @@ struct FWeaponTrailDistanceCacheEntry
 /** Mutable state for one concrete execution of a weapon-trail notify. */
 struct FWeaponTrailRuntime
 {
-	TWeakObjectPtr<UActorComponent> EquipmentComponent;
+	TWeakObjectPtr<UObject> WeaponSource;
 	TWeakObjectPtr<USceneComponent> TraceComponent;
 	TWeakObjectPtr<UNiagaraComponent> EffectComponent;
 	TWeakObjectPtr<UWorld> World;
@@ -97,11 +96,11 @@ class FWeaponTrailRuntimeManager
 {
 public:
 	~FWeaponTrailRuntimeManager();
-	static UActorComponent* FindEquipmentComponent(const USkeletalMeshComponent* MeshComp);
-	static UNiagaraSystem* ResolveTrailSystem(UActorComponent* EquipmentComponent, bool bSubWeapon);
+	static UObject* FindWeaponSource(const USkeletalMeshComponent* MeshComp);
+	static UNiagaraSystem* ResolveTrailSystem(UObject* WeaponSource, bool bSubWeapon);
 	static UNiagaraComponent* SpawnWeaponEffect(
 		USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation,
-		UActorComponent* EquipmentComponent, UNiagaraSystem* TrailSystem,
+		UObject* WeaponSource, UNiagaraSystem* TrailSystem,
 		bool bSubWeapon, bool bDestroyAtEnd,
 		bool bApplyRateScaleAsTimeDilation, float FadeDuration);
 	void Begin(UANS_TimedWeaponTrail& Notify, USkeletalMeshComponent* MeshComp,

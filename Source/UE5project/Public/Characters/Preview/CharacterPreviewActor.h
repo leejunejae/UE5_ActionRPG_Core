@@ -49,6 +49,6 @@ private:
 
 	void PlayIdleAnimation();
 	void SyncEquipmentFrom(APlayerBase* SourcePlayer);
-	void HandleWeaponChanged(EWeaponType WeaponType);
+	void HandleWeaponChanged(FGameplayTag CombatStyle);
 	void HandleArmorChanged(EArmorSlot Slot);
 };

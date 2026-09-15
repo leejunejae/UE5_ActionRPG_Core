@@ -7,6 +7,7 @@
 
 // 인터페이스
 #include "Characters/Interfaces/EquipmentDataInterface.h"
+#include "Characters/Interfaces/WeaponRuntimeSourceInterface.h"
 
 #include "Items/Weapons/Data/WeaponData.h"
 #include "Items/Armor/Data/ArmorData.h"
@@ -18,13 +19,16 @@ class ACharacter;
 class UArmorDataAsset;
 class UNiagaraSystem;
 class UMaterialInterface;
+class USoundBase;
+class UWeaponDataAsset;
 
-DECLARE_MULTICAST_DELEGATE_OneParam(FOnWeaponChanged, const EWeaponType);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnWeaponChanged, FGameplayTag);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnArmorChanged, const EArmorSlot);
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class UE5PROJECT_API UEquipmentComponent : public UActorComponent,
-	public IEquipmentDataInterface
+	public IEquipmentDataInterface,
+	public IWeaponRuntimeSourceInterface
 {
 	GENERATED_BODY()
 	
@@ -52,6 +56,14 @@ private:
 
 	const FWeaponSetsInfo* EquipedWeapon = nullptr;
 	FName EquipedWeaponKey = NAME_None;   // 키 캐싱
+	const FWeaponSetsInfo* EquippedOffHandWeapon = nullptr;
+	FName EquippedOffHandWeaponKey = NAME_None;
+
+	UPROPERTY(VisibleAnywhere, Category = "Equipment|Weapon")
+	EWeaponGripMode CurrentGripMode = EWeaponGripMode::OneHanded;
+
+	UPROPERTY(VisibleAnywhere, Category = "Equipment|Weapon")
+	FGameplayTag CurrentCombatStyle;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNiagaraSystem> MainWeaponTrailSystem = nullptr;
@@ -65,25 +77,49 @@ private:
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInterface> SubWeaponTrailMaterial = nullptr;
 
+	UPROPERTY(Transient)
+	TMap<FGameplayTag, FLoadedWeaponSoundSet> CachedWeaponSounds;
+
+	UPROPERTY(Transient)
+	TMap<FGameplayTag, FLoadedWeaponSoundSet> CachedOffHandWeaponSounds;
+
 private:
 	void GetCurrentAttackBonuses(float& OutStrengthBonus, float& OutDexterityBonus, float& OutAffinityBonus) const;
+	void CacheWeaponSounds(const UWeaponDataAsset* WeaponDefinition,
+		TMap<FGameplayTag, FLoadedWeaponSoundSet>& OutSounds);
+	void RefreshCombatStyle();
+	FGameplayTag ResolveCombatStyle() const;
 
 public:
 	FORCEINLINE const FWeaponSetsInfo* GetEquipedWeapon() const { return EquipedWeapon; }
 	FORCEINLINE FName GetEquipedWeaponKey() const { return EquipedWeaponKey; }
+	FORCEINLINE const FWeaponSetsInfo* GetEquippedOffHandWeapon() const { return EquippedOffHandWeapon; }
+	FORCEINLINE FName GetEquippedOffHandWeaponKey() const { return EquippedOffHandWeaponKey; }
+	FORCEINLINE EWeaponGripMode GetCurrentGripMode() const { return CurrentGripMode; }
+	FORCEINLINE FGameplayTag GetCurrentCombatStyle() const { return CurrentCombatStyle; }
 
 	FORCEINLINE UStaticMeshComponent* GetMainWeaponComponent() const { return WeaponMesh; }
 	FORCEINLINE UStaticMeshComponent* GetSubEquipComponent() const { return SubEquipMesh; }
 
 	virtual void EquipWeapon_Implementation(FName WeaponKey) override;
-	FVector GetWeaponSocketLocation_Implementation(FName SocketName, bool IsSubWeapon) const;
-	UNiagaraSystem* GetWeaponTrailSystem_Implementation(bool IsSubWeapon) const;
-	UMaterialInterface* GetWeaponTrailMaterial_Implementation(bool IsSubWeapon) const;
-	FName GetWeaponTrailStartSocket_Implementation(bool IsSubWeapon) const;
-	FName GetWeaponTrailEndSocket_Implementation(bool IsSubWeapon) const;
+	UFUNCTION(BlueprintCallable, Category = "Equipment|Weapon")
+	void EquipOffHandWeapon(FName WeaponKey);
+
+	UFUNCTION(BlueprintCallable, Category = "Equipment|Weapon")
+	void UnequipOffHandWeapon();
+
+	/** 전환 애니메이션/입력은 별도 단계에서 연결한다. 양손 파지로 바꾸면 독립 보조 슬롯은 해제한다. */
+	UFUNCTION(BlueprintCallable, Category = "Equipment|Weapon")
+	bool SetGripMode(EWeaponGripMode NewGripMode);
+	virtual FVector GetWeaponSocketLocation_Implementation(FName SocketName, bool IsSubWeapon) const override;
+	virtual UNiagaraSystem* GetWeaponTrailSystem_Implementation(bool IsSubWeapon) const override;
+	virtual UMaterialInterface* GetWeaponTrailMaterial_Implementation(bool IsSubWeapon) const override;
+	virtual FName GetWeaponTrailStartSocket_Implementation(bool IsSubWeapon) const override;
+	virtual FName GetWeaponTrailEndSocket_Implementation(bool IsSubWeapon) const override;
+	virtual USoundBase* GetWeaponSound_Implementation(FGameplayTag WeaponSoundTag, bool IsSubWeapon) const override;
 
 	FAttackTraceSource GetAttackTraceSource(EAttackSourceType AttackSourceType) const;
-	FAttackDamageSource GetAttackDamageSource() const;
+	FAttackDamageSource GetAttackDamageSource(EAttackSourceType AttackSourceType = EAttackSourceType::MainHand) const;
 
 	UFUNCTION(BlueprintCallable, Category = "Equipment")
 	FAttackDamageSource PreviewAttackDamageSource(float OverrideStrengthBonus, float OverrideDexterityBonus, float OverrideAffinityBonus) const;

@@ -18,7 +18,7 @@ void UPlayerHitReactionComponent::BeginPlay()
     WeaponChangeSig.AddUObject(this, &UPlayerHitReactionComponent::HandleWeaponChange);
 }
 
-void UPlayerHitReactionComponent::HandleWeaponChange(EWeaponType WeaponType)
+void UPlayerHitReactionComponent::HandleWeaponChange(FGameplayTag CombatStyle)
 {
     if (!HitReactionList)
     {
@@ -27,5 +27,5 @@ void UPlayerHitReactionComponent::HandleWeaponChange(EWeaponType WeaponType)
     }
 
     // 베이스가 소비하는 활성 DA만 교체 (어택의 CurAttackContextSet 갈아끼기와 동일 위치)
-    SetHitReactionDA(HitReactionList->FindHitReactionDA(WeaponType, /*bLogNotFound=*/true));
+    SetHitReactionDA(HitReactionList->FindHitReactionDA(CombatStyle, /*bLogNotFound=*/true));
 }

@@ -8,9 +8,6 @@
 #include "Items/Weapons/Data/WeaponData.h"
 #include "EquipmentDataInterface.generated.h"
 
-class UNiagaraSystem;
-class UMaterialInterface;
-
 // This class does not need to be modified.
 UINTERFACE(MinimalAPI)
 class UEquipmentDataInterface : public UInterface
@@ -30,21 +27,6 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
 		void EquipWeapon(FName WeaponKey);
 
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
-		FVector GetWeaponSocketLocation(FName SocketName, bool IsSubWeapon = false) const;
-
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
-		UNiagaraSystem* GetWeaponTrailSystem(bool IsSubWeapon = false) const;
-
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
-		UMaterialInterface* GetWeaponTrailMaterial(bool IsSubWeapon = false) const;
-
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
-		FName GetWeaponTrailStartSocket(bool IsSubWeapon = false) const;
-
-	UFUNCTION(BlueprintCallable, BlueprintNativeEvent)
-		FName GetWeaponTrailEndSocket(bool IsSubWeapon = false) const;
-
-	DECLARE_MULTICAST_DELEGATE_OneParam(FOnWeaponSetChanged, const EWeaponType);
+	DECLARE_MULTICAST_DELEGATE_OneParam(FOnWeaponSetChanged, FGameplayTag);
 	virtual FOnWeaponSetChanged& OnWeaponSetChanged() = 0; // 장착/해제 알림
 };

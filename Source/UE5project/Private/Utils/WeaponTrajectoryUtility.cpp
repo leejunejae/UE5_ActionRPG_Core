@@ -42,8 +42,20 @@ FWeaponTrajectoryGeometry FWeaponTrajectoryUtility::BuildGeometry(
 		WeaponComponent->GetSocketTransform(StartSocket, RTS_Component).GetLocation();
 	Result.EndSocketInWeapon =
 		WeaponComponent->GetSocketTransform(EndSocket, RTS_Component).GetLocation();
+	Result.ReferenceSocketInWeapon =
+		WeaponComponent->GetSocketTransform(StartSocket, RTS_Component);
 	Result.bValid = true;
 	return Result;
+}
+
+FTransform FWeaponTrajectoryUtility::GetReferenceSocketWorldTransform(
+	const FWeaponTrajectoryGeometry& Geometry,
+	const FTransform& BoneRelativeToRoot,
+	const FTransform& RootWorld)
+{
+	const FTransform BoneWorld = BoneRelativeToRoot * RootWorld;
+	const FTransform WeaponWorld = Geometry.WeaponRelativeToBone * BoneWorld;
+	return Geometry.ReferenceSocketInWeapon * WeaponWorld;
 }
 
 void FWeaponTrajectoryUtility::GetSocketWorldPositions(

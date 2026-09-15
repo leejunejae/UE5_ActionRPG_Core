@@ -133,10 +133,10 @@ private:
 	void RefreshComparePanel();
 	void RefreshWeaponGridGrouped(class UEquipmentComponent* Equip, class UInventoryComponent* Inventory);
 	void RefreshArmorGridFlat(class UEquipmentComponent* Equip, class UInventoryComponent* Inventory);
-	UUniformGridPanel* BuildGridSection(const TArray<FName>& Keys, FName EquippedKey);
+	UUniformGridPanel* BuildGridSection(const TArray<FName>& Keys, FName EquippedKey, FName SecondaryEquippedKey = NAME_None);
 	UWidget* CreateGridDivider() const;
 
-	void HandleWeaponChanged(EWeaponType WeaponType);
+	void HandleWeaponChanged(FGameplayTag CombatStyle);
 	void HandleArmorChanged(EArmorSlot ArmorSlot);
 	void HandleEntryClicked(FName ItemKey);
 	void HandleEntryDoubleClicked(FName ItemKey);
@@ -153,7 +153,7 @@ private:
 
 	EArmorSlot CategoryToArmorSlot(EEquipmentTabCategory Category) const;
 	FText CategoryToLabel(EEquipmentTabCategory Category) const;
-	FText WeaponTypeToLabel(EWeaponType Type) const;
+	FText WeaponCategoryToLabel(EWeaponCategory Category) const;
 	UTexture2D* GetIconForKey(FName Key) const;
 
 	EEquipmentTabCategory ActiveCategory = EEquipmentTabCategory::Weapon;

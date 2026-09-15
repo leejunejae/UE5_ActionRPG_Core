@@ -4,7 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "GameplayTagContainer.h"
 #include "Items/Weapons/Data/WeaponData.h"
+#include "Items/Weapons/Data/WeaponAudioData.h"
 #include "WeaponDataAsset.generated.h"
 
 class UNiagaraSystem;
@@ -23,9 +25,29 @@ struct FWeaponConfig
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
     FVector WeaponScale = FVector::OneVector;
 
-    // 히트 판정 반경(무기 고유)
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trace")
+    EWeaponTraceShape TraceShape = EWeaponTraceShape::Capsule;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trace|Capsule",
+        meta = (EditCondition = "TraceShape == EWeaponTraceShape::Capsule"))
+    FName TraceStartSocket = TEXT("Start");
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trace|Capsule",
+        meta = (EditCondition = "TraceShape == EWeaponTraceShape::Capsule"))
+    FName TraceEndSocket = TEXT("End");
+
+    // 기존 에셋의 직렬화된 반경 값을 유지한다.
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trace|Capsule",
+        meta = (EditCondition = "TraceShape == EWeaponTraceShape::Capsule", ClampMin = "0.0"))
     float HitBoxRadius = 10.f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trace|Box",
+        meta = (EditCondition = "TraceShape == EWeaponTraceShape::Box"))
+    FName TraceCenterSocket = TEXT("TraceCenter");
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trace|Box",
+        meta = (EditCondition = "TraceShape == EWeaponTraceShape::Box", ClampMin = "0.0"))
+    FVector BoxHalfExtent = FVector(8.0f, 30.0f, 45.0f);
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Trail")
     TSoftObjectPtr<UNiagaraSystem> TrailSystem = nullptr;
@@ -59,19 +81,21 @@ public:
         TObjectPtr<UTexture2D> SlotIcon = nullptr;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
-        TSoftObjectPtr<USoundBase> Sound = nullptr;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
         FWeaponConfig WeaponConfig;
 
-    UPROPERTY(EditAnyWhere, BlueprintReadOnly)
-        bool HasSubWeapon;
+    // 기존 검+방패 묶음 에셋의 로딩 호환용. 새 에셋은 독립 OffHand 장비를 사용한다.
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (DeprecatedProperty, DeprecationMessage = "Use an independent OffHand weapon asset."))
+        bool HasSubWeapon = false;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "HasSubWeapon"))
         TSoftObjectPtr<UStaticMesh> SubMesh = nullptr;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "HasSubWeapon"))
         FWeaponConfig SubConfig;
+
+	// 비어 있으면 WeaponDataSubsystem의 무기 유형 기본 프로필을 사용한다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Audio")
+	TSoftObjectPtr<UWeaponAudioProfile> WeaponAudioProfileOverride = nullptr;
 
 public:
     bool IsValid() const
@@ -95,10 +119,30 @@ public:
         FText Description;
         
     // 유형
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
-        EWeaponType WeaponType; 
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon|Legacy", meta = (DeprecatedProperty, DeprecationMessage = "Use WeaponCategory and CombatStyle."))
+        EWeaponType WeaponType = EWeaponType::None;
+
+    // 물리 무기 계열. 애니메이션 및 장비 조합과 독립적이다.
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon")
+        EWeaponCategory WeaponCategory = EWeaponCategory::None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Equip")
+        EWeaponGripType GripType = EWeaponGripType::OneHanded;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Equip")
+        EEquipmentHandSlot AllowedSlot = EEquipmentHandSlot::MainHand;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Equip", meta = (EditCondition = "GripType != EWeaponGripType::TwoHanded"))
+        bool bCanEquipOffHand = false;
 
     // 리소스
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
         FWeaponInstance WeaponInstance;
+
+    EWeaponCategory GetEffectiveWeaponCategory() const
+    {
+        return WeaponCategory != EWeaponCategory::None
+            ? WeaponCategory
+            : GetWeaponCategoryFromLegacyType(WeaponType);
+    }
 };

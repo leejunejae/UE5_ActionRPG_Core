@@ -3,6 +3,7 @@
 
 #include "Core/Subsystems/GameInstanceSystem/WeaponDataSubsystem.h"
 #include "UObject/ConstructorHelpers.h"
+#include "Items/Weapons/Data/WeaponDataAsset.h"
 
 void UWeaponDataSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -14,6 +15,13 @@ void UWeaponDataSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 		SetsTableRef.LoadSynchronous();
 	}
 	WeaponList = SetsTableRef.Get();
+
+	TSoftObjectPtr<UWeaponAudioProfileSet> AudioProfilesRef(
+		FSoftObjectPath(TEXT("/Game/06_Sound/AttackSound/WeaponSwingSound_DA.WeaponSwingSound_DA")));
+	DefaultWeaponAudioProfiles = AudioProfilesRef.LoadSynchronous();
+	WeaponSoundAttenuation = DefaultWeaponAudioProfiles
+		? DefaultWeaponAudioProfiles->AttenuationSettings.LoadSynchronous()
+		: nullptr;
 }
 
 const FWeaponSetsInfo* UWeaponDataSubsystem::GetWeaponInfo(const FName& WeaponName) const
@@ -24,6 +32,24 @@ const FWeaponSetsInfo* UWeaponDataSubsystem::GetWeaponInfo(const FName& WeaponNa
 	}
 
 	return nullptr;
+}
+
+TSoftObjectPtr<UWeaponAudioProfile> UWeaponDataSubsystem::ResolveWeaponAudioProfile(
+	const UWeaponDataAsset* WeaponData) const
+{
+	if (!WeaponData) return nullptr;
+
+	const TSoftObjectPtr<UWeaponAudioProfile>& Override =
+		WeaponData->WeaponInstance.WeaponAudioProfileOverride;
+	if (!Override.IsNull()) return Override;
+
+	if (!DefaultWeaponAudioProfiles) return nullptr;
+
+	const TSoftObjectPtr<UWeaponAudioProfile> CategoryProfile =
+		DefaultWeaponAudioProfiles->FindProfile(WeaponData->GetEffectiveWeaponCategory());
+	return !CategoryProfile.IsNull()
+		? CategoryProfile
+		: DefaultWeaponAudioProfiles->FindLegacyProfile(WeaponData->WeaponType);
 }
 
 bool UWeaponDataSubsystem::GetWeaponInfoBlueprint(const FName& WeaponName, FWeaponSetsInfo& OutWeaponInfo) const

@@ -9,6 +9,7 @@
 // 인터페이스
 #include "Combat/Interfaces/HitReactionInterface.h"
 #include "Combat/Interfaces/AttackSourceInterface.h"
+#include "Characters/Interfaces/WeaponRuntimeSourceInterface.h"
 
 // 구조체, 자료형
 #include "Characters/Enemies/Data/EnemyData.h"
@@ -25,6 +26,10 @@ class UCharacterStatusComponent;
 class UEnemyBaseAnimInstance;
 class AEnemyBaseAIController;
 class APlayerBase;
+class UWeaponDataAsset;
+class UNiagaraSystem;
+class UMaterialInterface;
+class USoundBase;
 struct FHitReactionRequest;
 
 class UWidgetComponent;
@@ -34,7 +39,8 @@ DECLARE_DELEGATE(FOnSingleDelegate);
 
 UCLASS()
 class UE5PROJECT_API AEnemyBase : public ACharacterBase,
-	public IAttackSourceInterface
+	public IAttackSourceInterface,
+	public IWeaponRuntimeSourceInterface
 {
 	GENERATED_BODY()
 
@@ -78,11 +84,43 @@ public:
 	UPROPERTY(Transient) // 런타임 생성물이니 Save/Serialize 필요 없으면 Transient 권장
 		TObjectPtr<UStaticMeshComponent> SubEquip = nullptr;
 
+	UPROPERTY(Transient)
+		TObjectPtr<UWeaponDataAsset> CurrentWeaponData = nullptr;
+
+	UPROPERTY(Transient)
+		TObjectPtr<UWeaponDataAsset> CurrentOffHandWeaponData = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNiagaraSystem> MainWeaponTrailSystem = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UNiagaraSystem> SubWeaponTrailSystem = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> MainWeaponTrailMaterial = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInterface> SubWeaponTrailMaterial = nullptr;
+
+	UPROPERTY(Transient)
+	TMap<FGameplayTag, FLoadedWeaponSoundSet> CachedWeaponSounds;
+
+	UPROPERTY(Transient)
+	TMap<FGameplayTag, FLoadedWeaponSoundSet> CachedOffHandWeaponSounds;
+
 	UStaticMeshComponent* GetMainWeaponMesh() const override { return MainWeapon; }
 
 	virtual FAttackTraceSource GetAttackTraceSource(EAttackSourceType AttackSourceType) const override;
-	virtual FAttackDamageSource GetAttackDamageSource() const override;
+	virtual FAttackDamageSource GetAttackDamageSource(EAttackSourceType AttackSourceType = EAttackSourceType::MainHand) const override;
 	virtual void ReceiveParried(AActor* ParryInstigator) override;
+
+	virtual FVector GetWeaponSocketLocation_Implementation(FName SocketName, bool bSubWeapon) const override;
+	virtual UNiagaraSystem* GetWeaponTrailSystem_Implementation(bool bSubWeapon) const override;
+	virtual UMaterialInterface* GetWeaponTrailMaterial_Implementation(bool bSubWeapon) const override;
+	virtual FName GetWeaponTrailStartSocket_Implementation(bool bSubWeapon) const override;
+	virtual FName GetWeaponTrailEndSocket_Implementation(bool bSubWeapon) const override;
+	virtual USoundBase* GetWeaponSound_Implementation(
+		FGameplayTag WeaponSoundTag, bool bSubWeapon) const override;
 
 	//void CreateAndAttachEquip(UStaticMesh* MeshAsset, FName SocketName, FTransform Equip, FName CompName);
 #pragma endregion Equip

@@ -32,6 +32,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Visual")
         TObjectPtr<UWeaponDataAsset> WeaponData;
 
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Visual")
+        TObjectPtr<UWeaponDataAsset> OffHandWeaponData;
+
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation")
         FGameplayTag WeaponTag;
 

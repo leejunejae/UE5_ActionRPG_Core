@@ -81,7 +81,7 @@ void ACharacterPreviewActor::BindToPlayer(APlayerBase* Player)
 	SyncEquipmentFrom(Player);
 }
 
-void ACharacterPreviewActor::HandleWeaponChanged(EWeaponType WeaponType)
+void ACharacterPreviewActor::HandleWeaponChanged(FGameplayTag CombatStyle)
 {
 	SyncEquipmentFrom(BoundPlayer.Get());
 }
@@ -98,10 +98,22 @@ void ACharacterPreviewActor::SyncEquipmentFrom(APlayerBase* SourcePlayer)
 	UEquipmentComponent* SourceEquipment = SourcePlayer->GetEquipmentComponent();
 	if (!SourceEquipment) return;
 
+	const FName OffHandKey = SourceEquipment->GetEquippedOffHandWeaponKey();
+	if (OffHandKey == NAME_None)
+	{
+		// 먼저 독립 보조무기 상태만 지운 뒤 주무기를 장착해야 기존 묶음 에셋의 SubMesh가 유지된다.
+		EquipmentComponent->UnequipOffHandWeapon();
+	}
+
 	const FName WeaponKey = SourceEquipment->GetEquipedWeaponKey();
 	if (WeaponKey != NAME_None)
 	{
 		EquipmentComponent->EquipWeapon_Implementation(WeaponKey);
+	}
+
+	if (OffHandKey != NAME_None)
+	{
+		EquipmentComponent->EquipOffHandWeapon(OffHandKey);
 	}
 
 	static const TArray<EArmorSlot> AllSlots = { EArmorSlot::Head, EArmorSlot::Chest, EArmorSlot::Hands, EArmorSlot::Legs };

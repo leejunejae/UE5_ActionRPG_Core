@@ -15,7 +15,7 @@ class UE5PROJECT_API UPlayerAttackComponent : public UAttackComponent
 	GENERATED_BODY()
 	
 public:
-	void SetCurAttackContextSet(EWeaponType WeaponType);
+	void SetCurAttackContextSet(FGameplayTag CombatStyle);
 
 	const FBaseAttackData* ExecuteAttack(FName AttackName, float Playrate = 1.0f) override;
 

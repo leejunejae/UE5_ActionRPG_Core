@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Subsystems/GameInstanceSubsystem.h"
 #include "Items/Weapons/Data/WeaponData.h"
+#include "Items/Weapons/Data/WeaponAudioData.h"
 #include "Engine/DataTable.h"
 #include "WeaponDataSubsystem.generated.h"
 
@@ -18,11 +19,26 @@ class UE5PROJECT_API UWeaponDataSubsystem : public UGameInstanceSubsystem
 private:
 	UPROPERTY(EditDefaultsOnly)
 		TObjectPtr<UDataTable> WeaponList = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UWeaponAudioProfileSet> DefaultWeaponAudioProfiles = nullptr;
+
+	/** DefaultWeaponAudioProfiles에서 시작 시 한 번 로드해 유지하는 공통 감쇠 설정. */
+	UPROPERTY(Transient)
+	TObjectPtr<class USoundAttenuation> WeaponSoundAttenuation = nullptr;
 	
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
 	const FWeaponSetsInfo* GetWeaponInfo(const FName& WeaponName) const;
+
+	TSoftObjectPtr<UWeaponAudioProfile> ResolveWeaponAudioProfile(
+		const class UWeaponDataAsset* WeaponData) const;
+
+	class USoundAttenuation* GetWeaponSoundAttenuation() const
+	{
+		return WeaponSoundAttenuation;
+	}
 
 	UFUNCTION(BlueprintCallable)
 		bool GetWeaponInfoBlueprint(const FName& WeaponName, FWeaponSetsInfo& OutWeaponInfo) const;

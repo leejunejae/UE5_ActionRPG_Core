@@ -135,16 +135,25 @@ FText UEquipmentTabWidget::CategoryToLabel(EEquipmentTabCategory Category) const
 	}
 }
 
-FText UEquipmentTabWidget::WeaponTypeToLabel(EWeaponType Type) const
+FText UEquipmentTabWidget::WeaponCategoryToLabel(EWeaponCategory Category) const
 {
-	switch (Type)
+	switch (Category)
 	{
-	case EWeaponType::SwordAndShield: return FText::FromString(TEXT("한손검 & 방패"));
-	case EWeaponType::LongSword:      return FText::FromString(TEXT("롱소드"));
-	case EWeaponType::GreatSword:     return FText::FromString(TEXT("그레이트소드"));
-	case EWeaponType::SpearAndShield: return FText::FromString(TEXT("창 & 방패"));
-	case EWeaponType::Knuckles:       return FText::FromString(TEXT("너클"));
-	default:                          return FText::FromString(TEXT("맨손"));
+	case EWeaponCategory::Sword:          return FText::FromString(TEXT("검"));
+	case EWeaponCategory::Dagger:         return FText::FromString(TEXT("단검"));
+	case EWeaponCategory::GreatSword:     return FText::FromString(TEXT("대검"));
+	case EWeaponCategory::Spear:          return FText::FromString(TEXT("창"));
+	case EWeaponCategory::Axe:            return FText::FromString(TEXT("도끼"));
+	case EWeaponCategory::GreatAxe:       return FText::FromString(TEXT("대형 도끼"));
+	case EWeaponCategory::Mace:           return FText::FromString(TEXT("둔기"));
+	case EWeaponCategory::Hammer:         return FText::FromString(TEXT("망치"));
+	case EWeaponCategory::Bow:            return FText::FromString(TEXT("활"));
+	case EWeaponCategory::Crossbow:       return FText::FromString(TEXT("석궁"));
+	case EWeaponCategory::Staff:          return FText::FromString(TEXT("지팡이"));
+	case EWeaponCategory::Shield:         return FText::FromString(TEXT("방패"));
+	case EWeaponCategory::FistWeapon:     return FText::FromString(TEXT("격투 무기"));
+	case EWeaponCategory::ThrowingWeapon: return FText::FromString(TEXT("투척 무기"));
+	default:                              return FText::FromString(TEXT("기타"));
 	}
 }
 
@@ -243,6 +252,7 @@ void UEquipmentTabWidget::RefreshWeaponGridGrouped(UEquipmentComponent* Equip, U
 
 	TArray<FName> AllKeys = Inventory->GetOwnedWeaponKeys();
 	const FName EquippedKey = Equip->GetEquipedWeaponKey();
+	const FName OffHandEquippedKey = Equip->GetEquippedOffHandWeaponKey();
 
 	if (SelectedItemKey == NAME_None && AllKeys.Num() > 0)
 	{
@@ -250,26 +260,27 @@ void UEquipmentTabWidget::RefreshWeaponGridGrouped(UEquipmentComponent* Equip, U
 	}
 
 	// 고정 정렬 순서 — 이 순서대로 그룹이 위에서부터 배치됨
-	static const TArray<EWeaponType> TypeOrder = {
-		EWeaponType::SwordAndShield,
-		EWeaponType::LongSword,
-		EWeaponType::GreatSword,
-		EWeaponType::SpearAndShield,
-		EWeaponType::Knuckles
+	static const TArray<EWeaponCategory> TypeOrder = {
+		EWeaponCategory::Sword, EWeaponCategory::Dagger, EWeaponCategory::GreatSword,
+		EWeaponCategory::Spear, EWeaponCategory::Axe, EWeaponCategory::GreatAxe,
+		EWeaponCategory::Mace, EWeaponCategory::Hammer, EWeaponCategory::Bow,
+		EWeaponCategory::Crossbow, EWeaponCategory::Staff, EWeaponCategory::Shield,
+		EWeaponCategory::FistWeapon, EWeaponCategory::ThrowingWeapon,
+		EWeaponCategory::None
 	};
 
-	TMap<EWeaponType, TArray<FName>> Grouped;
+	TMap<EWeaponCategory, TArray<FName>> Grouped;
 	for (const FName& Key : AllKeys)
 	{
 		const FWeaponSetsInfo* Info = WeaponSubsystem->GetWeaponInfo(Key);
 		if (!Info || !Info->WeaponDefenition.LoadSynchronous()) continue;
 
-		Grouped.FindOrAdd(Info->WeaponDefenition.Get()->WeaponType).Add(Key);
+		Grouped.FindOrAdd(Info->WeaponDefenition.Get()->GetEffectiveWeaponCategory()).Add(Key);
 	}
 
 	bool bAnyGroupRendered = false;
 
-	for (const EWeaponType Type : TypeOrder)
+	for (const EWeaponCategory Type : TypeOrder)
 	{
 		TArray<FName>* GroupKeys = Grouped.Find(Type);
 		if (!GroupKeys || GroupKeys->Num() == 0) continue;
@@ -282,13 +293,13 @@ void UEquipmentTabWidget::RefreshWeaponGridGrouped(UEquipmentComponent* Equip, U
 			}
 		}
 
-		Box_ItemGrid->AddChild(BuildGridSection(*GroupKeys, EquippedKey));
+		Box_ItemGrid->AddChild(BuildGridSection(*GroupKeys, EquippedKey, OffHandEquippedKey));
 		bAnyGroupRendered = true;
 	}
 
 	if (!bAnyGroupRendered)
 	{
-		Box_ItemGrid->AddChild(BuildGridSection(TArray<FName>(), EquippedKey));
+		Box_ItemGrid->AddChild(BuildGridSection(TArray<FName>(), EquippedKey, OffHandEquippedKey));
 	}
 }
 
@@ -306,7 +317,8 @@ void UEquipmentTabWidget::RefreshArmorGridFlat(UEquipmentComponent* Equip, UInve
 	Box_ItemGrid->AddChild(BuildGridSection(Keys, EquippedKey));
 }
 
-UUniformGridPanel* UEquipmentTabWidget::BuildGridSection(const TArray<FName>& Keys, FName EquippedKey)
+UUniformGridPanel* UEquipmentTabWidget::BuildGridSection(
+	const TArray<FName>& Keys, FName EquippedKey, FName SecondaryEquippedKey)
 {
 	UUniformGridPanel* Grid = WidgetTree->ConstructWidget<UUniformGridPanel>(UUniformGridPanel::StaticClass());
 	Grid->SetSlotPadding(FMargin(4.f, 4.f));
@@ -324,7 +336,8 @@ UUniformGridPanel* UEquipmentTabWidget::BuildGridSection(const TArray<FName>& Ke
 			const FName Key = Keys[Index];
 			Entry->OnEntryClicked.BindUObject(this, &UEquipmentTabWidget::HandleEntryClicked);
 			Entry->OnEntryDoubleClicked.BindUObject(this, &UEquipmentTabWidget::HandleEntryDoubleClicked);
-			Entry->InitEntry(Key, GetIconForKey(Key), Key == EquippedKey, Key == SelectedItemKey);
+			Entry->InitEntry(Key, GetIconForKey(Key),
+				Key == EquippedKey || Key == SecondaryEquippedKey, Key == SelectedItemKey);
 		}
 		else
 		{
@@ -372,7 +385,18 @@ void UEquipmentTabWidget::EquipItem(FName ItemKey)
 
 	if (ActiveCategory == EEquipmentTabCategory::Weapon)
 	{
-		Equip->EquipWeapon_Implementation(ItemKey);
+		UWorld* World = GetWorld();
+		UWeaponDataSubsystem* WeaponSubsystem = World ? World->GetGameInstance()->GetSubsystem<UWeaponDataSubsystem>() : nullptr;
+		const FWeaponSetsInfo* Weapon = WeaponSubsystem ? WeaponSubsystem->GetWeaponInfo(ItemKey) : nullptr;
+		const UWeaponDataAsset* Definition = Weapon ? Weapon->WeaponDefenition.LoadSynchronous() : nullptr;
+		if (Definition && Definition->AllowedSlot == EEquipmentHandSlot::OffHand)
+		{
+			Equip->EquipOffHandWeapon(ItemKey);
+		}
+		else
+		{
+			Equip->EquipWeapon_Implementation(ItemKey);
+		}
 	}
 	else
 	{
@@ -432,7 +456,7 @@ void UEquipmentTabWidget::RefreshDetailPanel()
 		if (Text_WeaponTypeValue)
 		{
 			Text_WeaponTypeValue->SetVisibility(ESlateVisibility::Visible);
-			Text_WeaponTypeValue->SetText(WeaponTypeToLabel(WeaponAsset->WeaponType));
+			Text_WeaponTypeValue->SetText(WeaponCategoryToLabel(WeaponAsset->GetEffectiveWeaponCategory()));
 		}
 
 		const FAttackDamageSource AtkSource = EvaluateCandidateWeaponDamage(Weapon);
@@ -518,8 +542,21 @@ void UEquipmentTabWidget::RefreshComparePanel()
 	UWorld* World = GetWorld();
 	if (!Equip || !World) return;
 
-	const FName EquippedKey = (ActiveCategory == EEquipmentTabCategory::Weapon)
-		? Equip->GetEquipedWeaponKey()
+	bool bSelectedOffHand = false;
+	if (ActiveCategory == EEquipmentTabCategory::Weapon && SelectedItemKey != NAME_None)
+	{
+		const UWeaponDataSubsystem* WeaponSubsystem =
+			World->GetGameInstance()->GetSubsystem<UWeaponDataSubsystem>();
+		const FWeaponSetsInfo* SelectedWeapon = WeaponSubsystem
+			? WeaponSubsystem->GetWeaponInfo(SelectedItemKey) : nullptr;
+		const UWeaponDataAsset* SelectedDefinition = SelectedWeapon
+			? SelectedWeapon->WeaponDefenition.LoadSynchronous() : nullptr;
+		bSelectedOffHand = SelectedDefinition &&
+			SelectedDefinition->AllowedSlot == EEquipmentHandSlot::OffHand;
+	}
+
+	const FName EquippedKey = ActiveCategory == EEquipmentTabCategory::Weapon
+		? (bSelectedOffHand ? Equip->GetEquippedOffHandWeaponKey() : Equip->GetEquipedWeaponKey())
 		: Equip->GetEquipedArmorKey(CategoryToArmorSlot(ActiveCategory));
 
 	if (SelectedItemKey == NAME_None || SelectedItemKey == EquippedKey)
@@ -539,10 +576,12 @@ void UEquipmentTabWidget::RefreshComparePanel()
 	if (ActiveCategory == EEquipmentTabCategory::Weapon)
 	{
 		UWeaponDataSubsystem* WeaponSubsystem = World->GetGameInstance()->GetSubsystem<UWeaponDataSubsystem>();
-		const FWeaponSetsInfo* CurrentWeapon = Equip->GetEquipedWeapon();
+		const FWeaponSetsInfo* CurrentWeapon = bSelectedOffHand
+			? Equip->GetEquippedOffHandWeapon() : Equip->GetEquipedWeapon();
 		const FWeaponSetsInfo* NewWeapon = WeaponSubsystem ? WeaponSubsystem->GetWeaponInfo(SelectedItemKey) : nullptr;
 
-		const FAttackDamageSource CurrentSource = Equip->GetAttackDamageSource();
+		const FAttackDamageSource CurrentSource = Equip->GetAttackDamageSource(
+			bSelectedOffHand ? EAttackSourceType::OffHand : EAttackSourceType::MainHand);
 		const FAttackDamageSource NewSource = EvaluateCandidateWeaponDamage(NewWeapon);
 
 		AddCompareRow(FText::FromString(TEXT("공격력")), CurrentSource.AttackRating, NewSource.AttackRating);
@@ -569,7 +608,7 @@ void UEquipmentTabWidget::RefreshComparePanel()
 /* ============================================================
  *  장착 변경 델리게이트
  * ============================================================ */
-void UEquipmentTabWidget::HandleWeaponChanged(EWeaponType WeaponType)
+void UEquipmentTabWidget::HandleWeaponChanged(FGameplayTag CombatStyle)
 {
 	if (ActiveCategory == EEquipmentTabCategory::Weapon)
 	{

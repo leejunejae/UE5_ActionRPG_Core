@@ -84,3 +84,20 @@ UE_DEFINE_GAMEPLAY_TAG(TAG_Weapon_SwordAndShield, "Weapon.SwordAndShield")
 // =====================
 // Weapon
 // =====================
+
+// =====================
+// Combat Style
+// =====================
+UE_DEFINE_GAMEPLAY_TAG(TAG_CombatStyle_Unarmed, "CombatStyle.Unarmed")
+UE_DEFINE_GAMEPLAY_TAG(TAG_CombatStyle_Sword_OneHanded, "CombatStyle.Sword.OneHanded")
+UE_DEFINE_GAMEPLAY_TAG(TAG_CombatStyle_Sword_TwoHanded, "CombatStyle.Sword.TwoHanded")
+UE_DEFINE_GAMEPLAY_TAG(TAG_CombatStyle_Sword_Shield, "CombatStyle.Sword.Shield")
+UE_DEFINE_GAMEPLAY_TAG(TAG_CombatStyle_Sword_Dagger, "CombatStyle.Sword.Dagger")
+UE_DEFINE_GAMEPLAY_TAG(TAG_CombatStyle_Spear_OneHanded, "CombatStyle.Spear.OneHanded")
+UE_DEFINE_GAMEPLAY_TAG(TAG_CombatStyle_Spear_TwoHanded, "CombatStyle.Spear.TwoHanded")
+UE_DEFINE_GAMEPLAY_TAG(TAG_CombatStyle_Spear_Shield, "CombatStyle.Spear.Shield")
+UE_DEFINE_GAMEPLAY_TAG(TAG_CombatStyle_GreatSword_TwoHanded, "CombatStyle.GreatSword.TwoHanded")
+UE_DEFINE_GAMEPLAY_TAG(TAG_CombatStyle_Fist, "CombatStyle.Fist")
+// =====================
+// Combat Style
+// =====================
