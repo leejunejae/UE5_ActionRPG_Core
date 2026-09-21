@@ -26,7 +26,8 @@ class APlayerBase;
 UENUM(BlueprintType)
 enum class EEquipmentTabCategory : uint8
 {
-	Weapon,
+	Weapon UMETA(DisplayName = "Main Weapon"),
+	OffHandWeapon UMETA(DisplayName = "Off-Hand Weapon"),
 	Head,
 	Chest,
 	Hands,
@@ -51,6 +52,7 @@ protected:
 
 	// ---- 카테고리 탭 ----
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> Btn_Category_Weapon;
+	UPROPERTY(meta = (BindWidgetOptional)) TObjectPtr<UButton> Btn_Category_OffHandWeapon;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> Btn_Category_Head;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> Btn_Category_Chest;
 	UPROPERTY(meta = (BindWidget)) TObjectPtr<UButton> Btn_Category_Hands;
@@ -119,6 +121,7 @@ protected:
 
 private:
 	UFUNCTION() void OnCategoryWeaponClicked();
+	UFUNCTION() void OnCategoryOffHandWeaponClicked();
 	UFUNCTION() void OnCategoryHeadClicked();
 	UFUNCTION() void OnCategoryChestClicked();
 	UFUNCTION() void OnCategoryHandsClicked();
@@ -131,9 +134,9 @@ private:
 	void RefreshGrid();
 	void RefreshDetailPanel();
 	void RefreshComparePanel();
-	void RefreshWeaponGridGrouped(class UEquipmentComponent* Equip, class UInventoryComponent* Inventory);
+	void RefreshWeaponGridGrouped(class UEquipmentComponent* Equip, class UInventoryComponent* Inventory, bool bOffHand);
 	void RefreshArmorGridFlat(class UEquipmentComponent* Equip, class UInventoryComponent* Inventory);
-	UUniformGridPanel* BuildGridSection(const TArray<FName>& Keys, FName EquippedKey, FName SecondaryEquippedKey = NAME_None);
+	UUniformGridPanel* BuildGridSection(const TArray<FName>& Keys, FName EquippedKey);
 	UWidget* CreateGridDivider() const;
 
 	void HandleWeaponChanged(FGameplayTag CombatStyle);
@@ -145,8 +148,8 @@ private:
 	UInventoryComponent* GetPlayerInventory() const;
 	UPlayerStatComponent* GetPlayerStat() const;
 
-	FAttackDamageSource EvaluateCandidateWeaponDamage(const FWeaponSetsInfo* Candidate) const;
-	FWeaponRequirementBreakdown EvaluateCandidateWeaponRequirement(const FWeaponSetsInfo* Candidate) const;
+	FAttackDamageSource EvaluateCandidateWeaponDamage(const FWeaponStatsRow* Candidate) const;
+	FWeaponRequirementBreakdown EvaluateCandidateWeaponRequirement(const FWeaponStatsRow* Candidate) const;
 
 	void AddCompareRow(const FText& Label, float CurrentValue, float NewValue);
 	void SetDetailSectionsCollapsed();   // 5곳 반복되던 "전부 숨김" 로직 통합

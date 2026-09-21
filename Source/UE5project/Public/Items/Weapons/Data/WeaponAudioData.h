@@ -51,11 +51,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Audio")
 	TMap<EWeaponCategory, TSoftObjectPtr<UWeaponAudioProfile>> CategoryProfiles;
 
-	// 이름을 유지해 기존 에셋의 직렬화 데이터를 보존한다.
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Audio|Legacy",
-		meta = (DeprecatedProperty, DeprecationMessage = "Move entries to CategoryProfiles keyed by EWeaponCategory."))
-	TMap<EWeaponType, TSoftObjectPtr<UWeaponAudioProfile>> DefaultProfiles;
-
 	/** 모든 무기 동작 사운드에 공통으로 적용할 3D 감쇠 설정. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon Audio")
 	TSoftObjectPtr<USoundAttenuation> AttenuationSettings;
@@ -63,12 +58,6 @@ public:
 	TSoftObjectPtr<UWeaponAudioProfile> FindProfile(EWeaponCategory WeaponCategory) const
 	{
 		const TSoftObjectPtr<UWeaponAudioProfile>* Found = CategoryProfiles.Find(WeaponCategory);
-		return Found ? *Found : TSoftObjectPtr<UWeaponAudioProfile>();
-	}
-
-	TSoftObjectPtr<UWeaponAudioProfile> FindLegacyProfile(EWeaponType WeaponType) const
-	{
-		const TSoftObjectPtr<UWeaponAudioProfile>* Found = DefaultProfiles.Find(WeaponType);
 		return Found ? *Found : TSoftObjectPtr<UWeaponAudioProfile>();
 	}
 };

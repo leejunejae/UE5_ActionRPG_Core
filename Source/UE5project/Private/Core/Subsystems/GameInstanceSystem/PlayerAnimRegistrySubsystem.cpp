@@ -16,26 +16,6 @@ void UPlayerAnimRegistrySubsystem::Initialize(FSubsystemCollectionBase& Collecti
 	PlayerAnimAsset = AnimSetRef.Get();
 }
 
-const FPlayerAnimSet* UPlayerAnimRegistrySubsystem::GetPlayerAnimSet(const EWeaponType& WeaponType) const
-{
-	if (PlayerAnimAsset)
-	{
-		return PlayerAnimAsset->FindPlayerAnimSet(WeaponType, true);
-	}
-
-	return nullptr;
-}
-
-FPlayerAnimSet UPlayerAnimRegistrySubsystem::ResolvePlayerAnimSet(const EWeaponType& WeaponType) const
-{
-	return PlayerAnimAsset ? PlayerAnimAsset->ResolvePlayerAnimSet(WeaponType) : FPlayerAnimSet{};
-}
-
-const FPlayerAnimSet* UPlayerAnimRegistrySubsystem::GetPlayerAnimSet(FGameplayTag CombatStyle) const
-{
-	return PlayerAnimAsset ? PlayerAnimAsset->FindPlayerAnimSet(CombatStyle, true) : nullptr;
-}
-
 FPlayerAnimSet UPlayerAnimRegistrySubsystem::ResolvePlayerAnimSet(FGameplayTag CombatStyle) const
 {
 	return PlayerAnimAsset ? PlayerAnimAsset->ResolvePlayerAnimSet(CombatStyle) : FPlayerAnimSet{};
@@ -49,4 +29,12 @@ FGameplayTag UPlayerAnimRegistrySubsystem::ResolveCombatStyle(
 	return PlayerAnimAsset
 		? PlayerAnimAsset->ResolveCombatStyle(MainWeaponCategory, OffHandWeaponCategory, GripMode)
 		: FGameplayTag();
+}
+
+UAnimMontage* UPlayerAnimRegistrySubsystem::ResolveCombatStyleTransition(
+	FGameplayTag FromStyle, FGameplayTag ToStyle) const
+{
+	const FPlayerCombatStyleTransition* Transition = PlayerAnimAsset
+		? PlayerAnimAsset->FindCombatStyleTransition(FromStyle, ToStyle) : nullptr;
+	return Transition ? Transition->Montage.LoadSynchronous() : nullptr;
 }

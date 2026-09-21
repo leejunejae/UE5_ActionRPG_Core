@@ -223,20 +223,17 @@ bool AEnemyBase::ApplyEnemyInfo(const FEnemyInfo* Info)
 			SubWeaponTrailSystem = nullptr;
 			SubWeaponTrailMaterial = nullptr;
 			CurrentOffHandWeaponData = InstanceData->OffHandWeaponData;
-			if (const UWeaponDataAsset* OffHandData = CurrentOffHandWeaponData)
+			if (const UOffHandWeaponDataAsset* OffHandData = CurrentOffHandWeaponData)
 			{
 				SubEquip->SetStaticMesh(OffHandData->WeaponInstance.Mesh.LoadSynchronous());
 				SubEquip->SetRelativeScale3D(OffHandData->WeaponInstance.WeaponConfig.WeaponScale);
 				SubWeaponTrailSystem = OffHandData->WeaponInstance.WeaponConfig.TrailSystem.LoadSynchronous();
 				SubWeaponTrailMaterial = OffHandData->WeaponInstance.WeaponConfig.TrailMaterial.LoadSynchronous();
 			}
-			else if (WeaponDataAsset->WeaponInstance.HasSubWeapon)
+			else
 			{
-				// 기존 묶음 에셋 호환 경로.
-				SubEquip->SetStaticMesh(WeaponDataAsset->WeaponInstance.SubMesh.LoadSynchronous());
-				SubEquip->SetRelativeScale3D(WeaponDataAsset->WeaponInstance.SubConfig.WeaponScale);
-				SubWeaponTrailSystem = WeaponDataAsset->WeaponInstance.SubConfig.TrailSystem.LoadSynchronous();
-				SubWeaponTrailMaterial = WeaponDataAsset->WeaponInstance.SubConfig.TrailMaterial.LoadSynchronous();
+				SubEquip->SetStaticMesh(nullptr);
+				SubEquip->SetRelativeScale3D(FVector::OneVector);
 			}
 
 			const UWeaponDataSubsystem* WeaponSubsystem = GetGameInstance()
@@ -388,14 +385,10 @@ FAttackTraceSource AEnemyBase::GetAttackTraceSource(EAttackSourceType AttackSour
 	}
 	case EAttackSourceType::OffHand:
 	{
-		OutSource.TraceComponent = SubEquip;
 		if (CurrentOffHandWeaponData)
 		{
+			OutSource.TraceComponent = SubEquip;
 			ApplyWeaponConfig(CurrentOffHandWeaponData->WeaponInstance.WeaponConfig);
-		}
-		else if (CurrentWeaponData)
-		{
-			ApplyWeaponConfig(CurrentWeaponData->WeaponInstance.SubConfig);
 		}
 		break;
 	}
@@ -433,33 +426,32 @@ UMaterialInterface* AEnemyBase::GetWeaponTrailMaterial_Implementation(bool bSubW
 
 FName AEnemyBase::GetWeaponTrailStartSocket_Implementation(bool bSubWeapon) const
 {
-	if (!CurrentWeaponData) return TEXT("Start");
 	if (bSubWeapon && CurrentOffHandWeaponData)
 	{
 		return CurrentOffHandWeaponData->WeaponInstance.WeaponConfig.TrailStartSocket;
 	}
-	return bSubWeapon
-		? CurrentWeaponData->WeaponInstance.SubConfig.TrailStartSocket
-		: CurrentWeaponData->WeaponInstance.WeaponConfig.TrailStartSocket;
+	return !bSubWeapon && CurrentWeaponData
+		? CurrentWeaponData->WeaponInstance.WeaponConfig.TrailStartSocket
+		: FName(TEXT("Start"));
 }
 
 FName AEnemyBase::GetWeaponTrailEndSocket_Implementation(bool bSubWeapon) const
 {
-	if (!CurrentWeaponData) return TEXT("End");
 	if (bSubWeapon && CurrentOffHandWeaponData)
 	{
 		return CurrentOffHandWeaponData->WeaponInstance.WeaponConfig.TrailEndSocket;
 	}
-	return bSubWeapon
-		? CurrentWeaponData->WeaponInstance.SubConfig.TrailEndSocket
-		: CurrentWeaponData->WeaponInstance.WeaponConfig.TrailEndSocket;
+	return !bSubWeapon && CurrentWeaponData
+		? CurrentWeaponData->WeaponInstance.WeaponConfig.TrailEndSocket
+		: FName(TEXT("End"));
 }
 
 USoundBase* AEnemyBase::GetWeaponSound_Implementation(
 	FGameplayTag WeaponSoundTag, bool bSubWeapon) const
 {
+	if (bSubWeapon && !CurrentOffHandWeaponData) return nullptr;
 	return WeaponAudioUtility::SelectRandomWeaponSound(
-		bSubWeapon && CurrentOffHandWeaponData ? CachedOffHandWeaponSounds : CachedWeaponSounds,
+		bSubWeapon ? CachedOffHandWeaponSounds : CachedWeaponSounds,
 		WeaponSoundTag);
 }
 

@@ -32,6 +32,8 @@ public:
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> SpawnRide;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> Dismount;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> Modifier;
+    UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> GripSwitch;
+    UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> OffHandSwitch;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> LockOn;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> LockOnSwitchLeft;
     UPROPERTY(EditDefaultsOnly) TObjectPtr<UInputAction> LockOnSwitchRight;

@@ -27,6 +27,7 @@ class UEnemyBaseAnimInstance;
 class AEnemyBaseAIController;
 class APlayerBase;
 class UWeaponDataAsset;
+class UOffHandWeaponDataAsset;
 class UNiagaraSystem;
 class UMaterialInterface;
 class USoundBase;
@@ -88,7 +89,7 @@ public:
 		TObjectPtr<UWeaponDataAsset> CurrentWeaponData = nullptr;
 
 	UPROPERTY(Transient)
-		TObjectPtr<UWeaponDataAsset> CurrentOffHandWeaponData = nullptr;
+		TObjectPtr<UOffHandWeaponDataAsset> CurrentOffHandWeaponData = nullptr;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UNiagaraSystem> MainWeaponTrailSystem = nullptr;

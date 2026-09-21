@@ -16,15 +16,6 @@
 #include "Utils/CoreLog.h"
 #include "Utils/GameplayTagsBase.h"
 
-UEquipmentComponent::UEquipmentComponent()
-{
-}
-
-void UEquipmentComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
-{
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-}
-
 void UEquipmentComponent::BeginPlay()
 {
 	Super::BeginPlay();
@@ -76,17 +67,21 @@ void UEquipmentComponent::EquipWeapon_Implementation(FName WeaponKey)
 		return;
 	}
 
-	if (!FindWeapon->WeaponDefenition.LoadSynchronous())
+	UWeaponDataAsset* LoadedDefinition = FindWeapon->WeaponDefenition.LoadSynchronous();
+	if (!LoadedDefinition)
 	{
 		UE_LOG(Log_Equip_Weapon, Error, TEXT("[EquipmentComponent] Failed to load weapon data: %s"), *WeaponKey.ToString());
 		return;
 	}
 
-	if (!FindWeapon->WeaponDefenition.Get()->WeaponInstance.IsValid() && WeaponKey != FName("Hand_Unarmed_01"))
+	if (!LoadedDefinition->WeaponInstance.IsValid() && WeaponKey != FName("Hand_Unarmed_01"))
 	{
 		UE_LOG(Log_Equip_Weapon, Error, TEXT("[EquipmentComponent] Weapon mesh missing: %s"), *WeaponKey.ToString());
 		return;
 	}
+
+	const EWeaponGripMode PreviousGripMode = CurrentGripMode;
+	const EWeaponPresentationState PreviousOffHandPresentation = OffHandPresentationState;
 
 	WeaponMesh->SetStaticMesh(nullptr);
 	SubEquipMesh->SetStaticMesh(nullptr);
@@ -101,37 +96,92 @@ void UEquipmentComponent::EquipWeapon_Implementation(FName WeaponKey)
 
 	EquipedWeapon = FindWeapon;
 	EquipedWeaponKey = WeaponKey;
-	const UWeaponDataAsset* MainDefinition = EquipedWeapon->WeaponDefenition.Get();
-	CurrentGripMode = MainDefinition->GripType == EWeaponGripType::TwoHanded
-		? EWeaponGripMode::TwoHanded : EWeaponGripMode::OneHanded;
-	if (EquippedOffHandWeapon &&
-		(MainDefinition->GripType == EWeaponGripType::TwoHanded || !MainDefinition->bCanEquipOffHand))
+	EquippedWeaponDefinition = LoadedDefinition;
+	const UWeaponDataAsset* MainDefinition = EquippedWeaponDefinition;
+	switch (MainDefinition->GripType)
+	{
+	case EWeaponGripType::OneHanded:
+		CurrentGripMode = EWeaponGripMode::OneHanded;
+		break;
+	case EWeaponGripType::TwoHanded:
+		CurrentGripMode = EWeaponGripMode::TwoHanded;
+		break;
+	case EWeaponGripType::Versatile:
+		CurrentGripMode = PreviousGripMode;
+		break;
+	default:
+		CurrentGripMode = EWeaponGripMode::OneHanded;
+		break;
+	}
+
+	if (!MainDefinition->bCanEquipOffHand && EquippedOffHandWeapon)
 	{
 		EquippedOffHandWeapon = nullptr;
 		EquippedOffHandWeaponKey = NAME_None;
+		EquippedOffHandWeaponDefinition = nullptr;
 		CachedOffHandWeaponSounds.Reset();
+		SubWeaponTrailSystem = nullptr;
+		SubWeaponTrailMaterial = nullptr;
+		OffHandPresentationState = EWeaponPresentationState::Holstered;
 	}
-	WeaponMesh->SetStaticMesh(EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.Mesh.LoadSynchronous());
-	WeaponMesh->SetRelativeScale3D(MainDefinition->WeaponInstance.WeaponConfig.WeaponScale);
-	MainWeaponTrailSystem = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.WeaponConfig.TrailSystem.LoadSynchronous();
-	MainWeaponTrailMaterial = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance.WeaponConfig.TrailMaterial.LoadSynchronous();
-	CacheWeaponSounds(EquipedWeapon->WeaponDefenition.Get(), CachedWeaponSounds);
-
-	if (EquippedOffHandWeapon && EquippedOffHandWeapon->WeaponDefenition.LoadSynchronous())
+	else if (EquippedOffHandWeapon)
 	{
-		const UWeaponDataAsset* OffHandDefinition = EquippedOffHandWeapon->WeaponDefenition.Get();
+		OffHandPresentationState = CurrentGripMode == EWeaponGripMode::OneHanded
+			? PreviousOffHandPresentation
+			: EWeaponPresentationState::Holstered;
+	}
+	WeaponMesh->SetStaticMesh(MainDefinition->WeaponInstance.Mesh.LoadSynchronous());
+	WeaponMesh->SetRelativeScale3D(MainDefinition->WeaponInstance.WeaponConfig.WeaponScale);
+	MainWeaponTrailSystem = MainDefinition->WeaponInstance.WeaponConfig.TrailSystem.LoadSynchronous();
+	MainWeaponTrailMaterial = MainDefinition->WeaponInstance.WeaponConfig.TrailMaterial.LoadSynchronous();
+	CacheWeaponSounds(MainDefinition, CachedWeaponSounds);
+
+	if (EquippedOffHandWeapon && !EquippedOffHandWeaponDefinition)
+	{
+		EquippedOffHandWeaponDefinition = EquippedOffHandWeapon->WeaponDefinition.LoadSynchronous();
+	}
+	if (const UOffHandWeaponDataAsset* OffHandDefinition = EquippedOffHandWeaponDefinition.Get())
+	{
 		SubEquipMesh->SetStaticMesh(OffHandDefinition->WeaponInstance.Mesh.LoadSynchronous());
 		SubEquipMesh->SetRelativeScale3D(OffHandDefinition->WeaponInstance.WeaponConfig.WeaponScale);
 		SubWeaponTrailSystem = OffHandDefinition->WeaponInstance.WeaponConfig.TrailSystem.LoadSynchronous();
 		SubWeaponTrailMaterial = OffHandDefinition->WeaponInstance.WeaponConfig.TrailMaterial.LoadSynchronous();
 	}
-	else if (MainDefinition->WeaponInstance.HasSubWeapon)
+	RefreshOffHandPresentation();
+
+	RecalcEquipLoad();
+	RefreshCombatStyle();
+}
+
+void UEquipmentComponent::UnequipWeapon()
+{
+	// 보조무기는 주무기 호환성에 종속되므로 주무기와 함께 실제 장착 해제한다.
+	EquippedOffHandWeapon = nullptr;
+	EquippedOffHandWeaponKey = NAME_None;
+	EquippedOffHandWeaponDefinition = nullptr;
+	CachedOffHandWeaponSounds.Reset();
+	SubWeaponTrailSystem = nullptr;
+	SubWeaponTrailMaterial = nullptr;
+	OffHandPresentationState = EWeaponPresentationState::Holstered;
+
+	EquipedWeapon = nullptr;
+	EquipedWeaponKey = NAME_None;
+	EquippedWeaponDefinition = nullptr;
+	CachedWeaponSounds.Reset();
+	MainWeaponTrailSystem = nullptr;
+	MainWeaponTrailMaterial = nullptr;
+	CurrentGripMode = EWeaponGripMode::OneHanded;
+
+	if (WeaponMesh)
 	{
-		// 기존 검+방패 묶음 에셋 호환 경로.
-		SubEquipMesh->SetStaticMesh(MainDefinition->WeaponInstance.SubMesh.LoadSynchronous());
-		SubEquipMesh->SetRelativeScale3D(MainDefinition->WeaponInstance.SubConfig.WeaponScale);
-		SubWeaponTrailSystem = MainDefinition->WeaponInstance.SubConfig.TrailSystem.LoadSynchronous();
-		SubWeaponTrailMaterial = MainDefinition->WeaponInstance.SubConfig.TrailMaterial.LoadSynchronous();
+		WeaponMesh->SetStaticMesh(nullptr);
+		WeaponMesh->SetRelativeScale3D(FVector::OneVector);
+	}
+	if (SubEquipMesh)
+	{
+		SubEquipMesh->SetStaticMesh(nullptr);
+		SubEquipMesh->SetRelativeScale3D(FVector::OneVector);
+		SubEquipMesh->SetVisibility(false, true);
 	}
 
 	RecalcEquipLoad();
@@ -144,41 +194,47 @@ void UEquipmentComponent::EquipOffHandWeapon(FName WeaponKey)
 	if (!SubEquipMesh || !World) return;
 
 	UWeaponDataSubsystem* WeaponSubsystem = World->GetGameInstance()->GetSubsystem<UWeaponDataSubsystem>();
-	const FWeaponSetsInfo* Found = WeaponSubsystem ? WeaponSubsystem->GetWeaponInfo(WeaponKey) : nullptr;
-	UWeaponDataAsset* Definition = Found ? Found->WeaponDefenition.LoadSynchronous() : nullptr;
+	const FOffHandWeaponSetsInfo* Found = WeaponSubsystem ? WeaponSubsystem->GetOffHandWeaponInfo(WeaponKey) : nullptr;
+	UOffHandWeaponDataAsset* Definition = Found ? Found->WeaponDefinition.LoadSynchronous() : nullptr;
 	if (!Definition || !Definition->WeaponInstance.IsValid())
 	{
 		UE_LOG(Log_Equip_Weapon, Error, TEXT("[EquipmentComponent] Invalid off-hand weapon: %s"), *WeaponKey.ToString());
 		return;
 	}
 
-	if (Definition->AllowedSlot == EEquipmentHandSlot::MainHand)
-	{
-		UE_LOG(Log_Equip_Weapon, Warning, TEXT("[EquipmentComponent] %s cannot be equipped in the off hand"), *WeaponKey.ToString());
-		return;
-	}
-
-	const UWeaponDataAsset* MainDefinition = EquipedWeapon && EquipedWeapon->WeaponDefenition.Get()
-		? EquipedWeapon->WeaponDefenition.Get() : nullptr;
+	const UWeaponDataAsset* MainDefinition = EquippedWeaponDefinition;
 	if (!MainDefinition)
 	{
 		UE_LOG(Log_Equip_Weapon, Warning, TEXT("[EquipmentComponent] Equip a main weapon before an off-hand item"));
 		return;
 	}
-	if (MainDefinition->GripType == EWeaponGripType::TwoHanded || !MainDefinition->bCanEquipOffHand)
+	if (!MainDefinition->bCanEquipOffHand)
 	{
 		UE_LOG(Log_Equip_Weapon, Warning, TEXT("[EquipmentComponent] Current main weapon does not allow an off-hand item"));
 		return;
 	}
-
+	const bool bReplacingOffHand = EquippedOffHandWeapon != nullptr;
+	const EWeaponPresentationState PreviousPresentationState = OffHandPresentationState;
 	EquippedOffHandWeapon = Found;
 	EquippedOffHandWeaponKey = WeaponKey;
+	EquippedOffHandWeaponDefinition = Definition;
+	if (bReplacingOffHand)
+	{
+		// 교체는 현재 사용 의도를 바꾸지 않는다. Drawn/Holstered 상태를 그대로 이어받는다.
+		OffHandPresentationState = PreviousPresentationState;
+	}
+	else
+	{
+		// 빈 슬롯에 처음 장착할 때만 현재 파지에서 사용할 수 있으면 즉시 활성화한다.
+		OffHandPresentationState = CanSetOffHandPresentationState(EWeaponPresentationState::Drawn)
+			? EWeaponPresentationState::Drawn : EWeaponPresentationState::Holstered;
+	}
 	SubEquipMesh->SetStaticMesh(Definition->WeaponInstance.Mesh.LoadSynchronous());
 	SubEquipMesh->SetRelativeScale3D(Definition->WeaponInstance.WeaponConfig.WeaponScale);
 	SubWeaponTrailSystem = Definition->WeaponInstance.WeaponConfig.TrailSystem.LoadSynchronous();
 	SubWeaponTrailMaterial = Definition->WeaponInstance.WeaponConfig.TrailMaterial.LoadSynchronous();
 	CacheWeaponSounds(Definition, CachedOffHandWeaponSounds);
-	CurrentGripMode = EWeaponGripMode::OneHanded;
+	RefreshOffHandPresentation();
 	RecalcEquipLoad();
 	RefreshCombatStyle();
 }
@@ -187,81 +243,172 @@ void UEquipmentComponent::UnequipOffHandWeapon()
 {
 	EquippedOffHandWeapon = nullptr;
 	EquippedOffHandWeaponKey = NAME_None;
+	EquippedOffHandWeaponDefinition = nullptr;
 	CachedOffHandWeaponSounds.Reset();
+	OffHandPresentationState = EWeaponPresentationState::Holstered;
 
-	const UWeaponDataAsset* MainDefinition = EquipedWeapon && EquipedWeapon->WeaponDefenition.Get()
-		? EquipedWeapon->WeaponDefenition.Get() : nullptr;
-	if (MainDefinition && MainDefinition->WeaponInstance.HasSubWeapon)
+	if (SubEquipMesh)
 	{
-		// 이행 기간에는 기존 검+방패 묶음 에셋의 보조 메시를 독립 보조무기로 오인해 제거하지 않는다.
-		if (SubEquipMesh) SubEquipMesh->SetStaticMesh(MainDefinition->WeaponInstance.SubMesh.LoadSynchronous());
-		if (SubEquipMesh) SubEquipMesh->SetRelativeScale3D(MainDefinition->WeaponInstance.SubConfig.WeaponScale);
-		SubWeaponTrailSystem = MainDefinition->WeaponInstance.SubConfig.TrailSystem.LoadSynchronous();
-		SubWeaponTrailMaterial = MainDefinition->WeaponInstance.SubConfig.TrailMaterial.LoadSynchronous();
+		SubEquipMesh->SetStaticMesh(nullptr);
+		SubEquipMesh->SetRelativeScale3D(FVector::OneVector);
+		SubEquipMesh->SetVisibility(false, true);
 	}
-	else
-	{
-		if (SubEquipMesh)
-		{
-			SubEquipMesh->SetStaticMesh(nullptr);
-			SubEquipMesh->SetRelativeScale3D(FVector::OneVector);
-		}
-		SubWeaponTrailSystem = nullptr;
-		SubWeaponTrailMaterial = nullptr;
-	}
+	SubWeaponTrailSystem = nullptr;
+	SubWeaponTrailMaterial = nullptr;
 	RecalcEquipLoad();
 	RefreshCombatStyle();
 }
 
-bool UEquipmentComponent::SetGripMode(EWeaponGripMode NewGripMode)
+bool UEquipmentComponent::SetOffHandPresentationState(EWeaponPresentationState NewState)
 {
-	const UWeaponDataAsset* Definition = EquipedWeapon && EquipedWeapon->WeaponDefenition.Get()
-		? EquipedWeapon->WeaponDefenition.Get() : nullptr;
-	if (!Definition) return false;
+	if (!CanSetOffHandPresentationState(NewState)) return false;
+	if (OffHandPresentationState == NewState) return true;
 
-	const bool bAllowed = Definition->GripType == EWeaponGripType::Versatile ||
-		(Definition->GripType == EWeaponGripType::OneHanded && NewGripMode == EWeaponGripMode::OneHanded) ||
-		(Definition->GripType == EWeaponGripType::TwoHanded && NewGripMode == EWeaponGripMode::TwoHanded);
-	if (!bAllowed) return false;
-	if (CurrentGripMode == NewGripMode) return true;
-
-	if (NewGripMode == EWeaponGripMode::TwoHanded && EquippedOffHandWeapon)
-	{
-		// 양손 파지는 독립 보조 슬롯을 실제로 비운다. 메시만 숨겨 두면 이후 한손 파지/무기 교체 시
-		// 이전 보조무기가 사용자 요청 없이 다시 나타나고 장비 무게도 계속 적용된다.
-		EquippedOffHandWeapon = nullptr;
-		EquippedOffHandWeaponKey = NAME_None;
-		CachedOffHandWeaponSounds.Reset();
-		if (SubEquipMesh)
-		{
-			SubEquipMesh->SetStaticMesh(nullptr);
-			SubEquipMesh->SetRelativeScale3D(FVector::OneVector);
-		}
-		SubWeaponTrailSystem = nullptr;
-		SubWeaponTrailMaterial = nullptr;
-		RecalcEquipLoad();
-	}
-
-	CurrentGripMode = NewGripMode;
-	if (SubEquipMesh)
-	{
-		// 기존 HasSubWeapon 묶음 에셋은 독립 슬롯 정보가 없으므로 이행 기간에만 가시성으로 처리한다.
-		SubEquipMesh->SetVisibility(NewGripMode == EWeaponGripMode::OneHanded, true);
-	}
+	OffHandPresentationState = NewState;
+	RefreshOffHandPresentation();
 	RefreshCombatStyle();
 	return true;
 }
 
+bool UEquipmentComponent::ToggleOffHandPresentation()
+{
+	const EWeaponPresentationState TargetState =
+		OffHandPresentationState == EWeaponPresentationState::Drawn
+			? EWeaponPresentationState::Holstered
+			: EWeaponPresentationState::Drawn;
+	return SetOffHandPresentationState(TargetState);
+}
+
+bool UEquipmentComponent::SetGripMode(EWeaponGripMode NewGripMode)
+{
+	if (!CanSetGripMode(NewGripMode)) return false;
+	if (CurrentGripMode == NewGripMode) return true;
+
+	CurrentGripMode = NewGripMode;
+	// 파지 입력은 보조무기를 꺼내지 않는다. 두손 전환만 강제로 보관한다.
+	if (CurrentGripMode == EWeaponGripMode::TwoHanded)
+	{
+		OffHandPresentationState = EWeaponPresentationState::Holstered;
+	}
+	RefreshOffHandPresentation();
+	RefreshCombatStyle();
+	return true;
+}
+
+bool UEquipmentComponent::CanSetGripMode(EWeaponGripMode NewGripMode) const
+{
+	const UWeaponDataAsset* Definition = EquippedWeaponDefinition;
+	if (!Definition) return false;
+	return Definition->GripType == EWeaponGripType::Versatile ||
+		(Definition->GripType == EWeaponGripType::OneHanded && NewGripMode == EWeaponGripMode::OneHanded) ||
+		(Definition->GripType == EWeaponGripType::TwoHanded && NewGripMode == EWeaponGripMode::TwoHanded);
+}
+
+bool UEquipmentComponent::IsOffHandActive() const
+{
+	const UWeaponDataAsset* MainDefinition = EquippedWeaponDefinition;
+	return EquippedOffHandWeapon && MainDefinition &&
+		CurrentGripMode == EWeaponGripMode::OneHanded && MainDefinition->bCanEquipOffHand &&
+		OffHandPresentationState == EWeaponPresentationState::Drawn;
+}
+
+bool UEquipmentComponent::CanSetOffHandPresentationState(EWeaponPresentationState NewState) const
+{
+	return CanSetWeaponUseState(CurrentGripMode, NewState);
+}
+
+bool UEquipmentComponent::CanSetWeaponUseState(EWeaponGripMode NewGripMode,
+	EWeaponPresentationState NewPresentationState) const
+{
+	if (!CanSetGripMode(NewGripMode) || !EquippedOffHandWeapon) return false;
+	if (NewPresentationState == EWeaponPresentationState::Holstered) return true;
+
+	const UWeaponDataAsset* MainDefinition = EquippedWeaponDefinition;
+	return MainDefinition && NewGripMode == EWeaponGripMode::OneHanded &&
+		MainDefinition->bCanEquipOffHand;
+}
+
+bool UEquipmentComponent::SetWeaponUseState(EWeaponGripMode NewGripMode,
+	EWeaponPresentationState NewPresentationState)
+{
+	if (!CanSetWeaponUseState(NewGripMode, NewPresentationState)) return false;
+
+	CurrentGripMode = NewGripMode;
+	OffHandPresentationState = NewGripMode == EWeaponGripMode::TwoHanded
+		? EWeaponPresentationState::Holstered : NewPresentationState;
+	RefreshOffHandPresentation();
+	RefreshCombatStyle();
+	return true;
+}
+
+void UEquipmentComponent::RefreshOffHandPresentation()
+{
+	if (!SubEquipMesh) return;
+
+	const UOffHandWeaponDataAsset* OffHandDefinition = EquippedOffHandWeaponDefinition;
+
+	if (!OffHandDefinition)
+	{
+		OffHandPresentationState = EWeaponPresentationState::Holstered;
+		SubEquipMesh->SetVisibility(false, true);
+		return;
+	}
+
+	if (!CanSetOffHandPresentationState(OffHandPresentationState))
+	{
+		OffHandPresentationState = EWeaponPresentationState::Holstered;
+	}
+	const bool bDrawn = OffHandPresentationState == EWeaponPresentationState::Drawn;
+	const FName TargetSocket = bDrawn
+		? (OffHandDefinition->DrawnSocket.IsNone() ? SubEquipSocket : OffHandDefinition->DrawnSocket)
+		: OffHandDefinition->HolsterSocket;
+
+	if (TargetSocket.IsNone())
+	{
+		SubEquipMesh->SetVisibility(false, true);
+		return;
+	}
+
+	if (ACharacter* Character = Cast<ACharacter>(GetOwner()))
+	{
+		SubEquipMesh->AttachToComponent(Character->GetMesh(),
+			FAttachmentTransformRules::SnapToTargetNotIncludingScale, TargetSocket);
+		SubEquipMesh->SetRelativeLocationAndRotation(
+			bDrawn ? FVector::ZeroVector : OffHandDefinition->HolsterLocationOffset,
+			bDrawn ? FRotator::ZeroRotator : OffHandDefinition->HolsterRotationOffset);
+		SubEquipMesh->SetRelativeScale3D(OffHandDefinition->WeaponInstance.WeaponConfig.WeaponScale);
+	}
+	SubEquipMesh->SetVisibility(true, true);
+}
+
 FGameplayTag UEquipmentComponent::ResolveCombatStyle() const
 {
-	const UWeaponDataAsset* MainDefinition = EquipedWeapon && EquipedWeapon->WeaponDefenition.Get()
-		? EquipedWeapon->WeaponDefenition.Get() : nullptr;
+	return ResolveCombatStyleForState(CurrentGripMode, OffHandPresentationState);
+}
+
+FGameplayTag UEquipmentComponent::ResolveCombatStyleForGripMode(EWeaponGripMode GripMode) const
+{
+	// 파지 입력은 보조무기 활성 상태를 만들지 않는다.
+	return ResolveCombatStyleForState(GripMode, EWeaponPresentationState::Holstered);
+}
+
+FGameplayTag UEquipmentComponent::ResolveCombatStyleForWeaponState(
+	EWeaponGripMode GripMode, EWeaponPresentationState PresentationState) const
+{
+	return ResolveCombatStyleForState(GripMode, PresentationState);
+}
+
+FGameplayTag UEquipmentComponent::ResolveCombatStyleForState(
+	EWeaponGripMode GripMode, EWeaponPresentationState PresentationState) const
+{
+	const UWeaponDataAsset* MainDefinition = EquippedWeaponDefinition;
 	if (!MainDefinition) return TAG_CombatStyle_Unarmed;
 
-	const UWeaponDataAsset* OffHandDefinition = EquippedOffHandWeapon && EquippedOffHandWeapon->WeaponDefenition.Get()
-		? EquippedOffHandWeapon->WeaponDefenition.Get() : nullptr;
+	const UOffHandWeaponDataAsset* OffHandDefinition = EquippedOffHandWeaponDefinition;
 	const EWeaponCategory OffHandCategory =
-		CurrentGripMode == EWeaponGripMode::OneHanded && OffHandDefinition
+		GripMode == EWeaponGripMode::OneHanded &&
+		PresentationState == EWeaponPresentationState::Drawn &&
+		MainDefinition->bCanEquipOffHand && OffHandDefinition
 			? OffHandDefinition->GetEffectiveWeaponCategory()
 			: EWeaponCategory::None;
 
@@ -271,14 +418,18 @@ FGameplayTag UEquipmentComponent::ResolveCombatStyle() const
 	if (Registry)
 	{
 		const FGameplayTag Resolved = Registry->ResolveCombatStyle(
-			MainDefinition->GetEffectiveWeaponCategory(), OffHandCategory, CurrentGripMode);
+			MainDefinition->GetEffectiveWeaponCategory(), OffHandCategory, GripMode);
 		if (Resolved.IsValid())
 		{
 			return Resolved;
 		}
 	}
 
-	return GetLegacyCombatStyleForWeaponType(MainDefinition->WeaponType);
+	UE_LOG(Log_Equip_Weapon, Warning,
+		TEXT("[EquipmentComponent] No CombatStyle rule for main=%d offhand=%d grip=%d"),
+		static_cast<int32>(MainDefinition->GetEffectiveWeaponCategory()),
+		static_cast<int32>(OffHandCategory), static_cast<int32>(GripMode));
+	return TAG_CombatStyle_Unarmed;
 }
 
 void UEquipmentComponent::RefreshCombatStyle()
@@ -296,37 +447,41 @@ FVector UEquipmentComponent::GetWeaponSocketLocation_Implementation(FName Socket
 
 UNiagaraSystem* UEquipmentComponent::GetWeaponTrailSystem_Implementation(bool IsSubWeapon) const
 {
+	if (IsSubWeapon && EquippedOffHandWeapon && !IsOffHandActive()) return nullptr;
 	return IsSubWeapon ? SubWeaponTrailSystem.Get() : MainWeaponTrailSystem.Get();
 }
 
 UMaterialInterface* UEquipmentComponent::GetWeaponTrailMaterial_Implementation(bool IsSubWeapon) const
 {
+	if (IsSubWeapon && EquippedOffHandWeapon && !IsOffHandActive()) return nullptr;
 	return IsSubWeapon ? SubWeaponTrailMaterial.Get() : MainWeaponTrailMaterial.Get();
 }
 
 FName UEquipmentComponent::GetWeaponTrailStartSocket_Implementation(bool IsSubWeapon) const
 {
-	if (!EquipedWeapon || !EquipedWeapon->WeaponDefenition.Get()) return TEXT("Start");
-	if (IsSubWeapon && EquippedOffHandWeapon && EquippedOffHandWeapon->WeaponDefenition.Get())
+	if (!EquippedWeaponDefinition) return TEXT("Start");
+	if (IsSubWeapon && EquippedOffHandWeaponDefinition)
 	{
-		return EquippedOffHandWeapon->WeaponDefenition.Get()->WeaponInstance.WeaponConfig.TrailStartSocket;
+		return EquippedOffHandWeaponDefinition->WeaponInstance.WeaponConfig.TrailStartSocket;
 	}
-	const FWeaponInstance& Instance = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance;
-	return IsSubWeapon ? Instance.SubConfig.TrailStartSocket : Instance.WeaponConfig.TrailStartSocket;
+	return IsSubWeapon
+		? TEXT("Start")
+		: EquippedWeaponDefinition->WeaponInstance.WeaponConfig.TrailStartSocket;
 }
 
 FName UEquipmentComponent::GetWeaponTrailEndSocket_Implementation(bool IsSubWeapon) const
 {
-	if (!EquipedWeapon || !EquipedWeapon->WeaponDefenition.Get()) return TEXT("End");
-	if (IsSubWeapon && EquippedOffHandWeapon && EquippedOffHandWeapon->WeaponDefenition.Get())
+	if (!EquippedWeaponDefinition) return TEXT("End");
+	if (IsSubWeapon && EquippedOffHandWeaponDefinition)
 	{
-		return EquippedOffHandWeapon->WeaponDefenition.Get()->WeaponInstance.WeaponConfig.TrailEndSocket;
+		return EquippedOffHandWeaponDefinition->WeaponInstance.WeaponConfig.TrailEndSocket;
 	}
-	const FWeaponInstance& Instance = EquipedWeapon->WeaponDefenition.Get()->WeaponInstance;
-	return IsSubWeapon ? Instance.SubConfig.TrailEndSocket : Instance.WeaponConfig.TrailEndSocket;
+	return IsSubWeapon
+		? TEXT("End")
+		: EquippedWeaponDefinition->WeaponInstance.WeaponConfig.TrailEndSocket;
 }
 
-void UEquipmentComponent::CacheWeaponSounds(const UWeaponDataAsset* WeaponDefinition,
+void UEquipmentComponent::CacheWeaponSounds(const UWeaponEquipmentDataAsset* WeaponDefinition,
 	TMap<FGameplayTag, FLoadedWeaponSoundSet>& OutSounds)
 {
 	const UWeaponDataSubsystem* WeaponSubsystem = GetWorld() && GetWorld()->GetGameInstance()
@@ -339,8 +494,9 @@ void UEquipmentComponent::CacheWeaponSounds(const UWeaponDataAsset* WeaponDefini
 USoundBase* UEquipmentComponent::GetWeaponSound_Implementation(
 	FGameplayTag WeaponSoundTag, bool IsSubWeapon) const
 {
-	const TMap<FGameplayTag, FLoadedWeaponSoundSet>& Source =
-		IsSubWeapon && EquippedOffHandWeapon ? CachedOffHandWeaponSounds : CachedWeaponSounds;
+	if (IsSubWeapon && (!EquippedOffHandWeapon || !IsOffHandActive())) return nullptr;
+	const TMap<FGameplayTag, FLoadedWeaponSoundSet>& Source = IsSubWeapon
+		? CachedOffHandWeaponSounds : CachedWeaponSounds;
 	return WeaponAudioUtility::SelectRandomWeaponSound(Source, WeaponSoundTag);
 }
 
@@ -360,7 +516,7 @@ FAttackTraceSource UEquipmentComponent::GetAttackTraceSource(EAttackSourceType A
 		OutData.BoxHalfExtent = Config.BoxHalfExtent;
 	};
 
-	const UWeaponDataAsset* MainWeaponData = EquipedWeapon->WeaponDefenition.Get();
+	const UWeaponDataAsset* MainWeaponData = EquippedWeaponDefinition;
 	if (!MainWeaponData) return OutData;
 
 	switch (AttackSourceType)
@@ -371,13 +527,11 @@ FAttackTraceSource UEquipmentComponent::GetAttackTraceSource(EAttackSourceType A
 		break;
 	case EAttackSourceType::OffHand:
 	{
+		if (!EquippedOffHandWeapon || !IsOffHandActive()) break;
+		const UOffHandWeaponDataAsset* OffHandWeaponData = EquippedOffHandWeaponDefinition;
+		if (!OffHandWeaponData) break;
 		OutData.TraceComponent = SubEquipMesh;
-		const UWeaponDataAsset* OffHandWeaponData = EquippedOffHandWeapon
-			? EquippedOffHandWeapon->WeaponDefenition.Get()
-			: nullptr;
-		ApplyWeaponConfig(OffHandWeaponData
-			? OffHandWeaponData->WeaponInstance.WeaponConfig
-			: MainWeaponData->WeaponInstance.SubConfig);
+		ApplyWeaponConfig(OffHandWeaponData->WeaponInstance.WeaponConfig);
 		break;
 	}
 	}
@@ -404,9 +558,26 @@ void UEquipmentComponent::GetCurrentAttackBonuses(float& OutStrengthBonus, float
 
 FAttackDamageSource UEquipmentComponent::GetAttackDamageSource(EAttackSourceType AttackSourceType) const
 {
-	const FWeaponSetsInfo* SourceWeapon =
-		AttackSourceType == EAttackSourceType::OffHand && EquippedOffHandWeapon
-			? EquippedOffHandWeapon : EquipedWeapon;
+	const FWeaponStatsRow* SourceWeapon = nullptr;
+	switch (AttackSourceType)
+	{
+	case EAttackSourceType::MainHand:
+		SourceWeapon = static_cast<const FWeaponStatsRow*>(EquipedWeapon);
+		break;
+
+	case EAttackSourceType::OffHand:
+		if (!EquippedOffHandWeapon || !IsOffHandActive())
+		{
+			return FAttackDamageSource();
+		}
+		SourceWeapon = static_cast<const FWeaponStatsRow*>(EquippedOffHandWeapon);
+		break;
+
+	case EAttackSourceType::Custom:
+	default:
+		return FAttackDamageSource();
+	}
+
 	if (!SourceWeapon) return FAttackDamageSource();
 
 	float PerformanceRatio = 1.0f;

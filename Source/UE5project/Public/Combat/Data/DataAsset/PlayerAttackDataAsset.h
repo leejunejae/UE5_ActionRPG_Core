@@ -18,13 +18,9 @@ class UE5PROJECT_API UPlayerAttackDataAsset : public UPrimaryDataAsset
 	GENERATED_BODY()
 	
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-		TMap<EWeaponType, FAttackContextSet> AttackContextMap;
-
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Combat Style",
 		meta = (Categories = "CombatStyle"))
 		TMap<FGameplayTag, FAttackContextSet> CombatStyleAttackContextMap;
 
-	const FAttackContextSet* FindPlayerAttackContext(const EWeaponType& WeaponType, bool bLogNotFound = false) const;
 	const FAttackContextSet* FindPlayerAttackContext(FGameplayTag CombatStyle, bool bLogNotFound = false) const;
 };

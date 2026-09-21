@@ -32,18 +32,31 @@ struct FPlayerCombatStyleRule
     FGameplayTag CombatStyle;
 };
 
+/** 출발 및 도착 전투 스타일 조합에 대응하는 전환 연출. */
+USTRUCT(BlueprintType)
+struct FPlayerCombatStyleTransition
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (Categories = "CombatStyle"))
+    FGameplayTag FromStyle;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (Categories = "CombatStyle"))
+    FGameplayTag ToStyle;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    TSoftObjectPtr<UAnimMontage> Montage;
+};
+
 UCLASS()
 class UE5PROJECT_API UPlayerAnimSetDataAsset : public UPrimaryDataAsset
 {
 	GENERATED_BODY()
 	
 public:
-    // 무기와 무관한 기본 애니메이션. AnimList의 비어 있지 않은 필드만 이를 덮어쓴다.
+    // 무기와 무관한 기본 애니메이션. CombatStyleAnimList의 비어 있지 않은 필드만 이를 덮어쓴다.
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation|Common")
         FPlayerAnimSet CommonAnimSet;
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-        TMap<EWeaponType, FPlayerAnimSet> AnimList;
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation|Combat Style",
         meta = (Categories = "CombatStyle"))
@@ -52,10 +65,12 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation|Combat Style")
         TArray<FPlayerCombatStyleRule> CombatStyleRules;
 
-   const FPlayerAnimSet* FindPlayerAnimSet(const EWeaponType& WeaponType, bool bLogNotFound = false) const;
-   FPlayerAnimSet ResolvePlayerAnimSet(const EWeaponType& WeaponType) const;
-   const FPlayerAnimSet* FindPlayerAnimSet(FGameplayTag CombatStyle, bool bLogNotFound = false) const;
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation|Combat Style Transition")
+        TArray<FPlayerCombatStyleTransition> CombatStyleTransitions;
+
    FPlayerAnimSet ResolvePlayerAnimSet(FGameplayTag CombatStyle) const;
    FGameplayTag ResolveCombatStyle(EWeaponCategory MainWeaponCategory,
        EWeaponCategory OffHandWeaponCategory, EWeaponGripMode GripMode) const;
+   const FPlayerCombatStyleTransition* FindCombatStyleTransition(
+       FGameplayTag FromStyle, FGameplayTag ToStyle) const;
 };

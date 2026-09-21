@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimNotifies/AnimNotify.h"
-#include "Items/Weapons/Data/WeaponAudioData.h"
+#include "GameplayTagContainer.h"
 #include "AN_PlayWeaponSound.generated.h"
 
 /** 장착 무기 데이터에서 태그로 선택한 단발 사운드를 애니메이션 타이밍에 재생한다. */

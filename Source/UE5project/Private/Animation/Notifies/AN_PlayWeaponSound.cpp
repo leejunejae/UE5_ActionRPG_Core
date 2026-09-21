@@ -11,7 +11,7 @@
 
 namespace
 {
-	UObject* FindWeaponRuntimeSource(const USkeletalMeshComponent* MeshComp)
+	UObject* FindWeaponSoundSource(const USkeletalMeshComponent* MeshComp)
 	{
 		AActor* Owner = MeshComp ? MeshComp->GetOwner() : nullptr;
 		if (!Owner) return nullptr;
@@ -43,15 +43,15 @@ void UAN_PlayWeaponSound::Notify(USkeletalMeshComponent* MeshComp, UAnimSequence
 	UWorld* World = MeshComp ? MeshComp->GetWorld() : nullptr;
 	if (!World || World->GetNetMode() == NM_DedicatedServer) return;
 
-	UObject* WeaponSource = FindWeaponRuntimeSource(MeshComp);
+	UObject* WeaponSource = FindWeaponSoundSource(MeshComp);
 	USoundBase* WeaponSound = WeaponSource
 		? IWeaponRuntimeSourceInterface::Execute_GetWeaponSound(WeaponSource, WeaponSoundTag, bSubWeapon)
 		: nullptr;
 	if (!WeaponSound) return;
 
-	const FName StartSocket = IWeaponRuntimeSourceInterface::Execute_GetWeaponTrailStartSocket(WeaponSource, bSubWeapon);
+	// 사운드 위치는 Trail 설정에 종속시키지 않고 해당 무기 컴포넌트의 원점을 사용한다.
 	const FVector SoundLocation = IWeaponRuntimeSourceInterface::Execute_GetWeaponSocketLocation(
-		WeaponSource, StartSocket, bSubWeapon);
+		WeaponSource, NAME_None, bSubWeapon);
 	const UWeaponDataSubsystem* WeaponSubsystem = World->GetGameInstance()
 		? World->GetGameInstance()->GetSubsystem<UWeaponDataSubsystem>()
 		: nullptr;

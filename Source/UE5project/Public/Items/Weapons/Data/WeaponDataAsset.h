@@ -83,16 +83,6 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
         FWeaponConfig WeaponConfig;
 
-    // 기존 검+방패 묶음 에셋의 로딩 호환용. 새 에셋은 독립 OffHand 장비를 사용한다.
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (DeprecatedProperty, DeprecationMessage = "Use an independent OffHand weapon asset."))
-        bool HasSubWeapon = false;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "HasSubWeapon"))
-        TSoftObjectPtr<UStaticMesh> SubMesh = nullptr;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (EditCondition = "HasSubWeapon"))
-        FWeaponConfig SubConfig;
-
 	// 비어 있으면 WeaponDataSubsystem의 무기 유형 기본 프로필을 사용한다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Audio")
 	TSoftObjectPtr<UWeaponAudioProfile> WeaponAudioProfileOverride = nullptr;
@@ -104,8 +94,9 @@ public:
     }
 };
 
-UCLASS()
-class UE5PROJECT_API UWeaponDataAsset : public UPrimaryDataAsset
+/** 주무기와 보조무기가 공유하는 외형, 트레이스, Trail, 오디오 데이터. */
+UCLASS(Abstract)
+class UE5PROJECT_API UWeaponEquipmentDataAsset : public UPrimaryDataAsset
 {
 	GENERATED_BODY()
 	
@@ -118,22 +109,9 @@ public:
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon")
         FText Description;
         
-    // 유형
-    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon|Legacy", meta = (DeprecatedProperty, DeprecationMessage = "Use WeaponCategory and CombatStyle."))
-        EWeaponType WeaponType = EWeaponType::None;
-
     // 물리 무기 계열. 애니메이션 및 장비 조합과 독립적이다.
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon")
         EWeaponCategory WeaponCategory = EWeaponCategory::None;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Equip")
-        EWeaponGripType GripType = EWeaponGripType::OneHanded;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Equip")
-        EEquipmentHandSlot AllowedSlot = EEquipmentHandSlot::MainHand;
-
-    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Equip", meta = (EditCondition = "GripType != EWeaponGripType::TwoHanded"))
-        bool bCanEquipOffHand = false;
 
     // 리소스
     UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon")
@@ -141,8 +119,41 @@ public:
 
     EWeaponCategory GetEffectiveWeaponCategory() const
     {
-        return WeaponCategory != EWeaponCategory::None
-            ? WeaponCategory
-            : GetWeaponCategoryFromLegacyType(WeaponType);
+        return WeaponCategory;
     }
+};
+
+/** 주무기 전용 정의. */
+UCLASS()
+class UE5PROJECT_API UWeaponDataAsset : public UWeaponEquipmentDataAsset
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Equip")
+    EWeaponGripType GripType = EWeaponGripType::OneHanded;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Equip",
+        meta = (EditCondition = "GripType != EWeaponGripType::TwoHanded"))
+    bool bCanEquipOffHand = false;
+};
+
+/** 보조무기 전용 정의. 모든 보조무기는 별도 행의 공격 스탯을 사용한다. */
+UCLASS()
+class UE5PROJECT_API UOffHandWeaponDataAsset : public UWeaponEquipmentDataAsset
+{
+    GENERATED_BODY()
+
+public:
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Equip")
+    FName DrawnSocket = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Equip")
+    FName HolsterSocket = NAME_None;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Equip")
+    FVector HolsterLocationOffset = FVector::ZeroVector;
+
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Equip")
+    FRotator HolsterRotationOffset = FRotator::ZeroRotator;
 };

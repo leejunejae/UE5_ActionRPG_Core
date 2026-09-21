@@ -45,7 +45,8 @@ class UPlayerConfig;
 class APlayerRide;
 class ARide;
 
-enum class EWeaponType : uint8;
+enum class EWeaponGripMode : uint8;
+enum class EWeaponPresentationState : uint8;
 struct FGameplayTag;
 struct FHitReactionRequest;
 struct FAttackRequest;
@@ -367,6 +368,8 @@ private:
 	void BlockInputEnd();
 	void InteractInput();
 	void ParryInput();
+	void GripSwitchInput();
+	void OffHandSwitchInput();
 
 	// ---- 실행 (순수 로직, 판단 없음) ----
 	void ExecuteAttack();
@@ -379,6 +382,7 @@ private:
 	void ExecuteDodge();
 	void ExecuteBlock();
 	void ExecuteParry();
+	void ExecuteGripSwitch();
 	float GetAttackStaminaCost(FName AttackName, const FAttackModifiers* Modifiers = nullptr) const;
 	float GetDodgeStaminaCost() const;
 	void ExecuteInteract();
@@ -393,14 +397,32 @@ private:
 	void ExitDodgeRuntime(EActionExitReason ExitReason);
 	void ExitParryRuntime(EActionExitReason ExitReason);
 	void ExitCriticalExecutionRuntime(EActionExitReason ExitReason);
+	void ExitGripSwitchRuntime(EActionExitReason ExitReason);
+	void ClearPendingGripSwitch();
 	void OnParryMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	void OnCriticalExecutionMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+	void OnGripSwitchMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	void TryReturnToLocomotion(const FVector2D& MovementInput);
 	void RefreshActionAnimationProfile(FGameplayTag CombatStyle);
+	const FWeaponStatsRow* ResolveGuardEquipment(EGuardSourceType Source) const;
 
 	float DodgeLocomotionBlendOutTime = 0.15f;
 	FActionExitBlendSettings DodgeExitBlendSettings;
 	FActionExitBlendSettings ParryExitBlendSettings;
+	bool bConfiguredGuardAvailable = false;
+	EGuardSourceType ConfiguredGuardSource = EGuardSourceType::MainHand;
+	const FWeaponStatsRow* ActiveGuardEquipment = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> ActiveGripSwitchMontage = nullptr;
+
+	EWeaponGripMode PendingGripMode = EWeaponGripMode::OneHanded;
+	bool bHasPendingGripMode = false;
+	EWeaponPresentationState PendingOffHandPresentationState = EWeaponPresentationState::Holstered;
+	bool bHasPendingOffHandPresentation = false;
+	FName PendingGripWeaponKey = NAME_None;
+	FName PendingOffHandWeaponKey = NAME_None;
+	FGameplayTag PendingGripTargetStyle;
 
 	bool IsAttackInput = false;
 	bool bAttackButtonHeld = false;
@@ -439,6 +461,11 @@ public:
 	{
 		return ConfiguredCriticalExecutions;
 	}
+
+	/** 그립 전환 몽타주의 Commit Weapon Grip Notify에서만 호출한다. */
+	void CommitGripModeTransition(EWeaponGripMode TargetGripMode);
+	/** 보조무기 전환 몽타주의 Commit Off Hand Presentation Notify에서만 호출한다. */
+	void CommitOffHandPresentationTransition(EWeaponPresentationState TargetState);
 
 #pragma region HitReaction
 public:

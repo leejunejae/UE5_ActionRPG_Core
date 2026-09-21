@@ -104,7 +104,7 @@ struct FChargeAttackSettings
 /**
  * "대상 무기 데이터 + 이 배율/보정치"면 전투 수치가 얼마인지 계산
  */
-static FAttackDamageSource CalculateWeaponAttackDamageSource(const FWeaponSetsInfo* Weapon,float PerformanceRatio,float StrengthBonus, float DexterityBonus, float AffinityBonus)
+static FAttackDamageSource CalculateWeaponAttackDamageSource(const FWeaponStatsRow* Weapon,float PerformanceRatio,float StrengthBonus, float DexterityBonus, float AffinityBonus)
 {
 	FAttackDamageSource OutData;
 	if (!Weapon) return OutData;

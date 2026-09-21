@@ -24,10 +24,8 @@ private:
 public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	
-	const FPlayerAnimSet* GetPlayerAnimSet(const EWeaponType& WeaponType) const;
-	FPlayerAnimSet ResolvePlayerAnimSet(const EWeaponType& WeaponType) const;
-	const FPlayerAnimSet* GetPlayerAnimSet(FGameplayTag CombatStyle) const;
 	FPlayerAnimSet ResolvePlayerAnimSet(FGameplayTag CombatStyle) const;
 	FGameplayTag ResolveCombatStyle(EWeaponCategory MainWeaponCategory,
 		EWeaponCategory OffHandWeaponCategory, EWeaponGripMode GripMode) const;
+	UAnimMontage* ResolveCombatStyleTransition(FGameplayTag FromStyle, FGameplayTag ToStyle) const;
 };

@@ -4,13 +4,13 @@
 #include "Items/Weapons/Data/WeaponAudioData.h"
 
 class USoundBase;
-class UWeaponDataAsset;
+class UWeaponEquipmentDataAsset;
 class UWeaponDataSubsystem;
 
 namespace WeaponAudioUtility
 {
 	UE5PROJECT_API void LoadWeaponSounds(
-		const UWeaponDataAsset* WeaponData,
+		const UWeaponEquipmentDataAsset* WeaponData,
 		const UWeaponDataSubsystem* WeaponSubsystem,
 		TMap<FGameplayTag, FLoadedWeaponSoundSet>& OutSounds);
 

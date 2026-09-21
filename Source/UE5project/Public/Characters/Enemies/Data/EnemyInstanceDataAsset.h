@@ -33,7 +33,7 @@ public:
         TObjectPtr<UWeaponDataAsset> WeaponData;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Visual")
-        TObjectPtr<UWeaponDataAsset> OffHandWeaponData;
+        TObjectPtr<UOffHandWeaponDataAsset> OffHandWeaponData;
 
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Animation")
         FGameplayTag WeaponTag;

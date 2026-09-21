@@ -25,6 +25,7 @@ UE_DEFINE_GAMEPLAY_TAG(TAG_Action_Dodge, "Action.Dodge")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Action_Parry, "Action.Parry")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Action_Execution, "Action.Execution")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Action_Mount, "Action.Mount")
+UE_DEFINE_GAMEPLAY_TAG(TAG_Action_GripSwitch, "Action.GripSwitch")
 
 UE_DEFINE_GAMEPLAY_TAG(TAG_Window, "Window")
 
@@ -37,6 +38,7 @@ UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Dodge, "Window.Dodge")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Parry, "Window.Parry")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Execution, "Window.Execution")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Mount, "Window.Mount")
+UE_DEFINE_GAMEPLAY_TAG(TAG_Window_GripSwitch, "Window.GripSwitch")
 UE_DEFINE_GAMEPLAY_TAG(TAG_Window_Locomotion, "Window.Locomotion")
 
 // =====================

@@ -5,7 +5,7 @@
 #include "Sound/SoundBase.h"
 
 void WeaponAudioUtility::LoadWeaponSounds(
-	const UWeaponDataAsset* WeaponData,
+	const UWeaponEquipmentDataAsset* WeaponData,
 	const UWeaponDataSubsystem* WeaponSubsystem,
 	TMap<FGameplayTag, FLoadedWeaponSoundSet>& OutSounds)
 {

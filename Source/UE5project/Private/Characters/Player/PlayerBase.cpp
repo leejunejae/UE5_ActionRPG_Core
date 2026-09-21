@@ -325,6 +325,16 @@ void APlayerBase::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 		{
 			EnhancedInputComponent->BindAction(InputConfig->Parry, ETriggerEvent::Started, this, &APlayerBase::ParryInput);
 		}
+		if (InputConfig->GripSwitch)
+		{
+			EnhancedInputComponent->BindAction(InputConfig->GripSwitch, ETriggerEvent::Started,
+				this, &APlayerBase::GripSwitchInput);
+		}
+		if (InputConfig->OffHandSwitch)
+		{
+			EnhancedInputComponent->BindAction(InputConfig->OffHandSwitch, ETriggerEvent::Started,
+				this, &APlayerBase::OffHandSwitchInput);
+		}
 
 		EnhancedInputComponent->BindAction(InputConfig->Interact, ETriggerEvent::Triggered, this, &APlayerBase::InteractInput);
 
@@ -412,6 +422,10 @@ void APlayerBase::HandleBufferedAction(const FGameplayTag& ActionTag)
 	else if (ActionTag == TAG_Action_Interact)
 	{
 		ExecuteInteract();
+	}
+	else if (ActionTag == TAG_Action_GripSwitch)
+	{
+		ExecuteGripSwitch();
 	}
 }
 
@@ -589,6 +603,11 @@ void APlayerBase::DodgeInput()
 
 void APlayerBase::BlockInput()
 {
+	if (!bConfiguredGuardAvailable || !ResolveGuardEquipment(ConfiguredGuardSource))
+	{
+		bWantsToGuard = false;
+		return;
+	}
 	bWantsToGuard = true;
 	if (GuardReentryLockoutRemaining > 0.f) return;
 	if (IsBlockInput) return;
@@ -774,6 +793,70 @@ void APlayerBase::ParryInput()
 		{
 			ExecuteParry();
 		}
+	}
+}
+
+void APlayerBase::GripSwitchInput()
+{
+	if (!EquipmentComponent || !GetCharacterStatusComponent()) return;
+	if (GetCharacterStatusComponent()->GetCurrentAction().MatchesTagExact(TAG_Action_GripSwitch)) return;
+	const EWeaponGripMode TargetMode = EquipmentComponent->GetCurrentGripMode() == EWeaponGripMode::OneHanded
+		? EWeaponGripMode::TwoHanded : EWeaponGripMode::OneHanded;
+	if (!EquipmentComponent->CanSetGripMode(TargetMode)) return;
+
+	PendingGripMode = TargetMode;
+	bHasPendingGripMode = true;
+	PendingGripWeaponKey = EquipmentComponent->GetEquipedWeaponKey();
+	// Drawn 보조무기를 둔 채 두손 파지로 전환하는 몽타주는 보관과 파지를 서로 다른
+	// Notify에서 커밋할 수 있다.
+	bHasPendingOffHandPresentation = TargetMode == EWeaponGripMode::TwoHanded &&
+		EquipmentComponent->IsOffHandActive();
+	PendingOffHandPresentationState = EWeaponPresentationState::Holstered;
+	PendingOffHandWeaponKey = bHasPendingOffHandPresentation
+		? EquipmentComponent->GetEquippedOffHandWeaponKey() : NAME_None;
+	PendingGripTargetStyle = EquipmentComponent->ResolveCombatStyleForGripMode(TargetMode);
+	if (!PendingGripTargetStyle.IsValid())
+	{
+		ClearPendingGripSwitch();
+		return;
+	}
+	if (GetCharacterStatusComponent()->RequestAction(TAG_Action_GripSwitch))
+	{
+		ExecuteGripSwitch();
+	}
+}
+
+void APlayerBase::OffHandSwitchInput()
+{
+	if (!EquipmentComponent || !GetCharacterStatusComponent() ||
+		!EquipmentComponent->GetEquippedOffHandWeapon()) return;
+	if (GetCharacterStatusComponent()->GetCurrentAction().MatchesTagExact(TAG_Action_GripSwitch)) return;
+
+	const EWeaponPresentationState TargetState =
+		EquipmentComponent->GetOffHandPresentationState() == EWeaponPresentationState::Drawn
+			? EWeaponPresentationState::Holstered
+			: EWeaponPresentationState::Drawn;
+	const EWeaponGripMode TargetGripMode = TargetState == EWeaponPresentationState::Drawn
+		? EWeaponGripMode::OneHanded
+		: EquipmentComponent->GetCurrentGripMode();
+	if (!EquipmentComponent->CanSetWeaponUseState(TargetGripMode, TargetState)) return;
+
+	PendingGripMode = TargetGripMode;
+	PendingOffHandPresentationState = TargetState;
+	bHasPendingOffHandPresentation = true;
+	bHasPendingGripMode = TargetGripMode != EquipmentComponent->GetCurrentGripMode();
+	PendingGripWeaponKey = EquipmentComponent->GetEquipedWeaponKey();
+	PendingOffHandWeaponKey = EquipmentComponent->GetEquippedOffHandWeaponKey();
+	PendingGripTargetStyle = EquipmentComponent->ResolveCombatStyleForWeaponState(TargetGripMode, TargetState);
+	if (!PendingGripTargetStyle.IsValid())
+	{
+		ClearPendingGripSwitch();
+		return;
+	}
+
+	if (GetCharacterStatusComponent()->RequestAction(TAG_Action_GripSwitch))
+	{
+		ExecuteGripSwitch();
 	}
 }
 
@@ -1099,7 +1182,8 @@ void APlayerBase::TryReturnToLocomotion(const FVector2D& MovementInput)
 		!CurrentAction.MatchesTagExact(TAG_Action_Dodge) &&
 		!CurrentAction.MatchesTagExact(TAG_Action_Guard) &&
 		!CurrentAction.MatchesTagExact(TAG_Action_Parry) &&
-		!CurrentAction.MatchesTagExact(TAG_Action_HitReact))
+		!CurrentAction.MatchesTagExact(TAG_Action_HitReact) &&
+		!CurrentAction.MatchesTagExact(TAG_Action_GripSwitch))
 	{
 		return;
 	}
@@ -1122,12 +1206,16 @@ void APlayerBase::RefreshActionAnimationProfile(FGameplayTag CombatStyle)
 		DodgeLocomotionBlendOutTime = 0.15f;
 		DodgeExitBlendSettings = FActionExitBlendSettings{};
 		ParryExitBlendSettings = FActionExitBlendSettings{};
+		bConfiguredGuardAvailable = false;
+		ConfiguredGuardSource = EGuardSourceType::MainHand;
 		return;
 	}
 
 	const FPlayerAnimSet AnimSet = Registry->ResolvePlayerAnimSet(CombatStyle);
 	ConfiguredDodgeMontage = AnimSet.DodgeMontage.LoadSynchronous();
 	ConfiguredParryMontage = AnimSet.ParryMontage.LoadSynchronous();
+	bConfiguredGuardAvailable = AnimSet.Guard.LoadSynchronous() != nullptr;
+	ConfiguredGuardSource = AnimSet.GuardSource;
 	ConfiguredCriticalExecutions = AnimSet.CriticalExecutions;
 	DodgeLocomotionBlendOutTime = AnimSet.DodgeLocomotionBlendOutTime >= 0.0f
 		? AnimSet.DodgeLocomotionBlendOutTime : 0.15f;
@@ -1141,7 +1229,36 @@ void APlayerBase::RefreshActionAnimationProfile(FGameplayTag CombatStyle)
 
 void APlayerBase::ExecuteBlock()
 {
+	const FWeaponStatsRow* GuardEquipment = bConfiguredGuardAvailable
+		? ResolveGuardEquipment(ConfiguredGuardSource)
+		: nullptr;
+	if (!GuardEquipment)
+	{
+		IsBlockInput = false;
+		ActiveGuardEquipment = nullptr;
+		FinishActionIfCurrent(TAG_Action_Guard);
+		return;
+	}
+
+	ActiveGuardEquipment = GuardEquipment;
 	IsBlockInput = true;
+}
+
+const FWeaponStatsRow* APlayerBase::ResolveGuardEquipment(EGuardSourceType Source) const
+{
+	if (!EquipmentComponent) return nullptr;
+
+	switch (Source)
+	{
+	case EGuardSourceType::OffHand:
+		return EquipmentComponent->IsOffHandActive()
+			? static_cast<const FWeaponStatsRow*>(EquipmentComponent->GetEquippedOffHandWeapon())
+			: nullptr;
+
+	case EGuardSourceType::MainHand:
+	default:
+		return static_cast<const FWeaponStatsRow*>(EquipmentComponent->GetEquipedWeapon());
+	}
 }
 
 void APlayerBase::ExecuteParry()
@@ -1162,6 +1279,106 @@ void APlayerBase::ExecuteParry()
 	FOnMontageEnded EndDelegate;
 	EndDelegate.BindUObject(this, &APlayerBase::OnParryMontageEnded);
 	CharacterBaseAnim->Montage_SetEndDelegate(EndDelegate, ParryMontage);
+}
+
+void APlayerBase::ExecuteGripSwitch()
+{
+	const bool bGripRequestMatches = bHasPendingGripMode && !bHasPendingOffHandPresentation && EquipmentComponent &&
+		PendingGripWeaponKey == EquipmentComponent->GetEquipedWeaponKey() &&
+		PendingGripTargetStyle == EquipmentComponent->ResolveCombatStyleForGripMode(PendingGripMode) &&
+		EquipmentComponent->CanSetGripMode(PendingGripMode);
+	const bool bOffHandRequestMatches = bHasPendingOffHandPresentation && EquipmentComponent &&
+		PendingGripWeaponKey == EquipmentComponent->GetEquipedWeaponKey() &&
+		PendingOffHandWeaponKey == EquipmentComponent->GetEquippedOffHandWeaponKey() &&
+		PendingGripTargetStyle == EquipmentComponent->ResolveCombatStyleForWeaponState(
+			PendingGripMode, PendingOffHandPresentationState) &&
+		EquipmentComponent->CanSetWeaponUseState(PendingGripMode, PendingOffHandPresentationState);
+	if (!bGripRequestMatches && !bOffHandRequestMatches)
+	{
+		ClearPendingGripSwitch();
+		FinishActionIfCurrent(TAG_Action_GripSwitch);
+		return;
+	}
+
+	UPlayerAnimRegistrySubsystem* Registry = GetWorld() && GetWorld()->GetGameInstance()
+		? GetWorld()->GetGameInstance()->GetSubsystem<UPlayerAnimRegistrySubsystem>() : nullptr;
+	UAnimMontage* Montage = Registry
+		? Registry->ResolveCombatStyleTransition(
+			EquipmentComponent->GetCurrentCombatStyle(), PendingGripTargetStyle)
+		: nullptr;
+	if (!CharacterBaseAnim || !Montage || CharacterBaseAnim->Montage_Play(Montage) <= 0.0f)
+	{
+		ClearPendingGripSwitch();
+		FinishActionIfCurrent(TAG_Action_GripSwitch);
+		return;
+	}
+
+	ActiveGripSwitchMontage = Montage;
+	FOnMontageEnded EndDelegate;
+	EndDelegate.BindUObject(this, &APlayerBase::OnGripSwitchMontageEnded);
+	CharacterBaseAnim->Montage_SetEndDelegate(EndDelegate, Montage);
+}
+
+void APlayerBase::CommitGripModeTransition(EWeaponGripMode TargetGripMode)
+{
+	const UPlayerStatusComponent* Status = GetCharacterStatusComponent();
+	if (!Status || !Status->GetCurrentAction().MatchesTagExact(TAG_Action_GripSwitch) ||
+		!bHasPendingGripMode || PendingGripMode != TargetGripMode || !ActiveGripSwitchMontage)
+	{
+		return;
+	}
+
+	if (EquipmentComponent && PendingGripWeaponKey == EquipmentComponent->GetEquipedWeaponKey() &&
+		EquipmentComponent->SetGripMode(TargetGripMode))
+	{
+		bHasPendingGripMode = false;
+		// SetGripMode(TwoHanded)는 보조무기 보관도 보장하므로, 보관 Notify가 빠진
+		// 콘텐츠에서도 최종 상태는 일관되게 정리한다.
+		if (TargetGripMode == EWeaponGripMode::TwoHanded &&
+			bHasPendingOffHandPresentation &&
+			PendingOffHandPresentationState == EWeaponPresentationState::Holstered)
+		{
+			bHasPendingOffHandPresentation = false;
+			PendingOffHandWeaponKey = NAME_None;
+		}
+		if (!bHasPendingOffHandPresentation)
+		{
+			PendingGripWeaponKey = NAME_None;
+			PendingGripTargetStyle = FGameplayTag();
+		}
+	}
+}
+
+void APlayerBase::CommitOffHandPresentationTransition(EWeaponPresentationState TargetState)
+{
+	const UPlayerStatusComponent* Status = GetCharacterStatusComponent();
+	if (!Status || !Status->GetCurrentAction().MatchesTagExact(TAG_Action_GripSwitch) ||
+		!bHasPendingOffHandPresentation || PendingOffHandPresentationState != TargetState ||
+		!ActiveGripSwitchMontage)
+	{
+		return;
+	}
+
+	if (EquipmentComponent && PendingGripWeaponKey == EquipmentComponent->GetEquipedWeaponKey() &&
+		PendingOffHandWeaponKey == EquipmentComponent->GetEquippedOffHandWeaponKey() &&
+		EquipmentComponent->SetOffHandPresentationState(TargetState))
+	{
+		bHasPendingOffHandPresentation = false;
+		PendingOffHandWeaponKey = NAME_None;
+		if (!bHasPendingGripMode)
+		{
+			PendingGripWeaponKey = NAME_None;
+			PendingGripTargetStyle = FGameplayTag();
+		}
+	}
+}
+
+void APlayerBase::OnGripSwitchMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	if (Montage != ActiveGripSwitchMontage) return;
+	ActiveGripSwitchMontage = nullptr;
+	ClearPendingGripSwitch();
+	FinishActionIfCurrent(TAG_Action_GripSwitch);
 }
 
 void APlayerBase::ExecuteInteract()
@@ -1299,9 +1516,14 @@ void APlayerBase::ExitActionRuntime(const FGameplayTag& ActionTag, EActionExitRe
 	{
 		ExitCriticalExecutionRuntime(ExitReason);
 	}
+	else if (ActionTag.MatchesTagExact(TAG_Action_GripSwitch))
+	{
+		ExitGripSwitchRuntime(ExitReason);
+	}
 	else if (ActionTag.MatchesTagExact(TAG_Action_Guard))
 	{
 		IsBlockInput = false;
+		ActiveGuardEquipment = nullptr;
 	}
 	else if (ActionTag.MatchesTagExact(TAG_Action_HitReact))
 	{
@@ -1360,6 +1582,30 @@ void APlayerBase::Landed(const FHitResult& Hit)
 	SetSkipJumpStart(false);
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	FinishActionIfCurrent(TAG_Action_Jump);
+}
+
+void APlayerBase::ExitGripSwitchRuntime(EActionExitReason ExitReason)
+{
+	ClearPendingGripSwitch();
+	UAnimMontage* Montage = ActiveGripSwitchMontage.Get();
+	ActiveGripSwitchMontage = nullptr;
+	if (!CharacterBaseAnim || !Montage) return;
+
+	FOnMontageEnded EmptyDelegate;
+	CharacterBaseAnim->Montage_SetEndDelegate(EmptyDelegate, Montage);
+	if (CharacterBaseAnim->Montage_IsPlaying(Montage))
+	{
+		CharacterBaseAnim->Montage_StopWithBlendOut(Montage->GetBlendOutArgs(), Montage);
+	}
+}
+
+void APlayerBase::ClearPendingGripSwitch()
+{
+	bHasPendingGripMode = false;
+	bHasPendingOffHandPresentation = false;
+	PendingGripWeaponKey = NAME_None;
+	PendingOffHandWeaponKey = NAME_None;
+	PendingGripTargetStyle = FGameplayTag();
 }
 
 /* ============================================================
@@ -1597,9 +1843,7 @@ void APlayerBase::OnHit_Implementation(const FAttackRequest& AttackInfo)
 	case ECombatReaction::GuardHit:
 	case ECombatReaction::GuardHitHeavy:
 	{
-		const FWeaponSetsInfo* GuardEquipment = EquipmentComponent->GetEquippedOffHandWeapon()
-			? EquipmentComponent->GetEquippedOffHandWeapon()
-			: EquipmentComponent->GetEquipedWeapon();
+		const FWeaponStatsRow* GuardEquipment = ActiveGuardEquipment;
 		if (!GuardEquipment) return;
 		float PerformanceRatio = GetStatComponent()->GetWeaponPerformanceRatio(GuardEquipment->RequiredAttributes.ToCharacterStats());
 		float GuardBoost = GuardEquipment->GuardBoost;

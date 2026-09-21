@@ -21,6 +21,8 @@ class UNiagaraSystem;
 class UMaterialInterface;
 class USoundBase;
 class UWeaponDataAsset;
+class UWeaponEquipmentDataAsset;
+class UOffHandWeaponDataAsset;
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnWeaponChanged, FGameplayTag);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnArmorChanged, const EArmorSlot);
@@ -33,10 +35,6 @@ class UE5PROJECT_API UEquipmentComponent : public UActorComponent,
 	GENERATED_BODY()
 	
 public:
-	UEquipmentComponent();
-
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
-
 protected:
 	virtual void BeginPlay() override;
 
@@ -56,11 +54,21 @@ private:
 
 	const FWeaponSetsInfo* EquipedWeapon = nullptr;
 	FName EquipedWeaponKey = NAME_None;   // 키 캐싱
-	const FWeaponSetsInfo* EquippedOffHandWeapon = nullptr;
+	const FOffHandWeaponSetsInfo* EquippedOffHandWeapon = nullptr;
 	FName EquippedOffHandWeaponKey = NAME_None;
+
+	/** 장착 중에는 soft reference로 로드한 정의 에셋을 강하게 유지한다. */
+	UPROPERTY(Transient)
+	TObjectPtr<UWeaponDataAsset> EquippedWeaponDefinition = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UOffHandWeaponDataAsset> EquippedOffHandWeaponDefinition = nullptr;
 
 	UPROPERTY(VisibleAnywhere, Category = "Equipment|Weapon")
 	EWeaponGripMode CurrentGripMode = EWeaponGripMode::OneHanded;
+
+	UPROPERTY(VisibleAnywhere, Category = "Equipment|Weapon")
+	EWeaponPresentationState OffHandPresentationState = EWeaponPresentationState::Holstered;
 
 	UPROPERTY(VisibleAnywhere, Category = "Equipment|Weapon")
 	FGameplayTag CurrentCombatStyle;
@@ -85,32 +93,56 @@ private:
 
 private:
 	void GetCurrentAttackBonuses(float& OutStrengthBonus, float& OutDexterityBonus, float& OutAffinityBonus) const;
-	void CacheWeaponSounds(const UWeaponDataAsset* WeaponDefinition,
+	void CacheWeaponSounds(const UWeaponEquipmentDataAsset* WeaponDefinition,
 		TMap<FGameplayTag, FLoadedWeaponSoundSet>& OutSounds);
+	void RefreshOffHandPresentation();
 	void RefreshCombatStyle();
 	FGameplayTag ResolveCombatStyle() const;
+	FGameplayTag ResolveCombatStyleForState(EWeaponGripMode GripMode,
+		EWeaponPresentationState PresentationState) const;
 
 public:
 	FORCEINLINE const FWeaponSetsInfo* GetEquipedWeapon() const { return EquipedWeapon; }
 	FORCEINLINE FName GetEquipedWeaponKey() const { return EquipedWeaponKey; }
-	FORCEINLINE const FWeaponSetsInfo* GetEquippedOffHandWeapon() const { return EquippedOffHandWeapon; }
+	FORCEINLINE const FOffHandWeaponSetsInfo* GetEquippedOffHandWeapon() const { return EquippedOffHandWeapon; }
 	FORCEINLINE FName GetEquippedOffHandWeaponKey() const { return EquippedOffHandWeaponKey; }
 	FORCEINLINE EWeaponGripMode GetCurrentGripMode() const { return CurrentGripMode; }
+	FORCEINLINE EWeaponPresentationState GetOffHandPresentationState() const { return OffHandPresentationState; }
+	bool IsOffHandActive() const;
+	bool CanSetOffHandPresentationState(EWeaponPresentationState NewState) const;
+	bool CanSetWeaponUseState(EWeaponGripMode NewGripMode,
+		EWeaponPresentationState NewPresentationState) const;
 	FORCEINLINE FGameplayTag GetCurrentCombatStyle() const { return CurrentCombatStyle; }
+	FGameplayTag ResolveCombatStyleForGripMode(EWeaponGripMode GripMode) const;
+	FGameplayTag ResolveCombatStyleForWeaponState(EWeaponGripMode GripMode,
+		EWeaponPresentationState PresentationState) const;
 
 	FORCEINLINE UStaticMeshComponent* GetMainWeaponComponent() const { return WeaponMesh; }
 	FORCEINLINE UStaticMeshComponent* GetSubEquipComponent() const { return SubEquipMesh; }
 
 	virtual void EquipWeapon_Implementation(FName WeaponKey) override;
 	UFUNCTION(BlueprintCallable, Category = "Equipment|Weapon")
+	void UnequipWeapon();
+	UFUNCTION(BlueprintCallable, Category = "Equipment|Weapon")
 	void EquipOffHandWeapon(FName WeaponKey);
 
 	UFUNCTION(BlueprintCallable, Category = "Equipment|Weapon")
 	void UnequipOffHandWeapon();
 
-	/** 전환 애니메이션/입력은 별도 단계에서 연결한다. 양손 파지로 바꾸면 독립 보조 슬롯은 해제한다. */
+	/** 장착 슬롯은 유지한 채 보조무기를 손과 보관 소켓 사이에서 전환한다. */
+	UFUNCTION(BlueprintCallable, Category = "Equipment|Weapon")
+	bool SetOffHandPresentationState(EWeaponPresentationState NewState);
+	UFUNCTION(BlueprintCallable, Category = "Equipment|Weapon")
+	bool ToggleOffHandPresentation();
+	UFUNCTION(BlueprintCallable, Category = "Equipment|Weapon")
+	bool SetWeaponUseState(EWeaponGripMode NewGripMode,
+		EWeaponPresentationState NewPresentationState);
+
+	/** 파지 상태만 바꾸며 독립 보조 슬롯은 유지하고 활성/보관 표현만 갱신한다. */
 	UFUNCTION(BlueprintCallable, Category = "Equipment|Weapon")
 	bool SetGripMode(EWeaponGripMode NewGripMode);
+	UFUNCTION(BlueprintPure, Category = "Equipment|Weapon")
+	bool CanSetGripMode(EWeaponGripMode NewGripMode) const;
 	virtual FVector GetWeaponSocketLocation_Implementation(FName SocketName, bool IsSubWeapon) const override;
 	virtual UNiagaraSystem* GetWeaponTrailSystem_Implementation(bool IsSubWeapon) const override;
 	virtual UMaterialInterface* GetWeaponTrailMaterial_Implementation(bool IsSubWeapon) const override;

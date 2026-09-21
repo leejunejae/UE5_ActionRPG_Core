@@ -101,7 +101,7 @@ void ACharacterPreviewActor::SyncEquipmentFrom(APlayerBase* SourcePlayer)
 	const FName OffHandKey = SourceEquipment->GetEquippedOffHandWeaponKey();
 	if (OffHandKey == NAME_None)
 	{
-		// 먼저 독립 보조무기 상태만 지운 뒤 주무기를 장착해야 기존 묶음 에셋의 SubMesh가 유지된다.
+		// 원본에 보조무기가 없으면 미리보기의 보조 슬롯도 비운다.
 		EquipmentComponent->UnequipOffHandWeapon();
 	}
 
@@ -110,10 +110,24 @@ void ACharacterPreviewActor::SyncEquipmentFrom(APlayerBase* SourcePlayer)
 	{
 		EquipmentComponent->EquipWeapon_Implementation(WeaponKey);
 	}
+	else
+	{
+		EquipmentComponent->UnequipWeapon();
+	}
 
 	if (OffHandKey != NAME_None)
 	{
 		EquipmentComponent->EquipOffHandWeapon(OffHandKey);
+	}
+
+	if (WeaponKey != NAME_None)
+	{
+		EquipmentComponent->SetGripMode(SourceEquipment->GetCurrentGripMode());
+		if (OffHandKey != NAME_None)
+		{
+			EquipmentComponent->SetOffHandPresentationState(
+				SourceEquipment->GetOffHandPresentationState());
+		}
 	}
 
 	static const TArray<EArmorSlot> AllSlots = { EArmorSlot::Head, EArmorSlot::Chest, EArmorSlot::Hands, EArmorSlot::Legs };

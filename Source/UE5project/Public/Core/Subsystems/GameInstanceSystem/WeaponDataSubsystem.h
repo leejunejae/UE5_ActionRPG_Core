@@ -20,6 +20,9 @@ private:
 	UPROPERTY(EditDefaultsOnly)
 		TObjectPtr<UDataTable> WeaponList = nullptr;
 
+	UPROPERTY(EditDefaultsOnly)
+	TObjectPtr<UDataTable> OffHandWeaponList = nullptr;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UWeaponAudioProfileSet> DefaultWeaponAudioProfiles = nullptr;
 
@@ -31,9 +34,10 @@ public:
 	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 
 	const FWeaponSetsInfo* GetWeaponInfo(const FName& WeaponName) const;
+	const FOffHandWeaponSetsInfo* GetOffHandWeaponInfo(const FName& WeaponName) const;
 
 	TSoftObjectPtr<UWeaponAudioProfile> ResolveWeaponAudioProfile(
-		const class UWeaponDataAsset* WeaponData) const;
+		const class UWeaponEquipmentDataAsset* WeaponData) const;
 
 	class USoundAttenuation* GetWeaponSoundAttenuation() const
 	{
@@ -42,4 +46,7 @@ public:
 
 	UFUNCTION(BlueprintCallable)
 		bool GetWeaponInfoBlueprint(const FName& WeaponName, FWeaponSetsInfo& OutWeaponInfo) const;
+
+	UFUNCTION(BlueprintCallable)
+	bool GetOffHandWeaponInfoBlueprint(const FName& WeaponName, FOffHandWeaponSetsInfo& OutWeaponInfo) const;
 };

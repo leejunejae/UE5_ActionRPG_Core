@@ -39,6 +39,9 @@ FPlayerAnimSet ResolveAnimSetOverride(const FPlayerAnimSet& CommonAnimSet, const
 	APPLY_SOFT_OVERRIDE(SpawnMontage)
 #undef APPLY_SOFT_OVERRIDE
 
+	// 가드 애니메이션을 덮어쓴 스타일만 가드 장비 소스도 함께 덮어쓴다.
+	if (!Override->Guard.IsNull()) Resolved.GuardSource = Override->GuardSource;
+
 	if (!Override->CriticalExecutions.IsEmpty()) Resolved.CriticalExecutions = Override->CriticalExecutions;
 
 #define APPLY_BLEND_OVERRIDE(Field) if (Override->DodgeExitBlendSettings.Field >= 0.0f) { Resolved.DodgeExitBlendSettings.Field = Override->DodgeExitBlendSettings.Field; }
@@ -66,37 +69,9 @@ FPlayerAnimSet ResolveAnimSetOverride(const FPlayerAnimSet& CommonAnimSet, const
 }
 }
 
-const FPlayerAnimSet* UPlayerAnimSetDataAsset::FindPlayerAnimSet(const EWeaponType& WeaponType, bool bLogNotFound) const
-{
-	const FPlayerAnimSet* Found = AnimList.Find(WeaponType);
-	if (Found)
-	{
-		return Found;
-	}
-
-	if (bLogNotFound)
-	{
-		UE_LOG(LogTemp, Error, TEXT("Not SkillInfo"))
-	}
-
-	return nullptr;
-}
-
-FPlayerAnimSet UPlayerAnimSetDataAsset::ResolvePlayerAnimSet(const EWeaponType& WeaponType) const
-{
-	return ResolveAnimSetOverride(CommonAnimSet, AnimList.Find(WeaponType));
-}
-
-const FPlayerAnimSet* UPlayerAnimSetDataAsset::FindPlayerAnimSet(FGameplayTag CombatStyle, bool bLogNotFound) const
-{
-	if (const FPlayerAnimSet* Found = CombatStyleAnimList.Find(CombatStyle)) return Found;
-	return FindPlayerAnimSet(GetLegacyWeaponTypeForCombatStyle(CombatStyle), bLogNotFound);
-}
-
 FPlayerAnimSet UPlayerAnimSetDataAsset::ResolvePlayerAnimSet(FGameplayTag CombatStyle) const
 {
 	const FPlayerAnimSet* Override = CombatStyleAnimList.Find(CombatStyle);
-	if (!Override) Override = AnimList.Find(GetLegacyWeaponTypeForCombatStyle(CombatStyle));
 	return ResolveAnimSetOverride(CommonAnimSet, Override);
 }
 
@@ -128,4 +103,15 @@ FGameplayTag UPlayerAnimSetDataAsset::ResolveCombatStyle(
 	}
 
 	return FGameplayTag();
+}
+
+const FPlayerCombatStyleTransition* UPlayerAnimSetDataAsset::FindCombatStyleTransition(
+	FGameplayTag FromStyle, FGameplayTag ToStyle) const
+{
+	return CombatStyleTransitions.FindByPredicate(
+		[FromStyle, ToStyle](const FPlayerCombatStyleTransition& Transition)
+		{
+			return Transition.FromStyle.MatchesTagExact(FromStyle) &&
+				Transition.ToStyle.MatchesTagExact(ToStyle);
+		});
 }

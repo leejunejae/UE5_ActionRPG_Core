@@ -32,11 +32,31 @@ bool UInventoryComponent::GrantItem(FName ItemKey, int32 Quantity)
 
 	if (UWeaponDataSubsystem* WeaponSubsystem = GetWeaponSubsystem())
 	{
-		if (WeaponSubsystem->GetWeaponInfo(ItemKey))
+		const bool bIsMainHandWeapon = WeaponSubsystem->GetWeaponInfo(ItemKey) != nullptr;
+		const bool bIsOffHandWeapon = WeaponSubsystem->GetOffHandWeaponInfo(ItemKey) != nullptr;
+		if (bIsMainHandWeapon && bIsOffHandWeapon)
+		{
+			UE_LOG(Log_Equip_Weapon, Error,
+				TEXT("GrantItem rejected duplicate weapon row key '%s': the key exists in both main-hand and off-hand tables."),
+				*ItemKey.ToString());
+			return false;
+		}
+
+		if (bIsMainHandWeapon)
 		{
 			for (int32 i = 0; i < Quantity; ++i)
 			{
 				OwnedWeapons.Add(FOwnedEquipmentEntry{ FGuid::NewGuid(), ItemKey });
+			}
+			OnInventoryChanged.Broadcast();
+			return true;
+		}
+
+		if (bIsOffHandWeapon)
+		{
+			for (int32 i = 0; i < Quantity; ++i)
+			{
+				OwnedOffHandWeapons.Add(FOwnedEquipmentEntry{ FGuid::NewGuid(), ItemKey });
 			}
 			OnInventoryChanged.Broadcast();
 			return true;
@@ -73,6 +93,7 @@ bool UInventoryComponent::GrantItem(FName ItemKey, int32 Quantity)
 bool UInventoryComponent::RemoveEquipmentInstance(FGuid InstanceId)
 {
 	int32 Removed = OwnedWeapons.RemoveAll([InstanceId](const FOwnedEquipmentEntry& E) { return E.InstanceId == InstanceId; });
+	Removed += OwnedOffHandWeapons.RemoveAll([InstanceId](const FOwnedEquipmentEntry& E) { return E.InstanceId == InstanceId; });
 	Removed += OwnedArmors.RemoveAll([InstanceId](const FOwnedEquipmentEntry& E) { return E.InstanceId == InstanceId; });
 
 	if (Removed > 0) OnInventoryChanged.Broadcast();
@@ -119,4 +140,12 @@ TArray<FName> UInventoryComponent::GetOwnedArmorKeysForSlot(EArmorSlot Slot) con
 	}
 
 	return Result;
+}
+
+TArray<FName> UInventoryComponent::GetOwnedOffHandWeaponKeys() const
+{
+	TArray<FName> Keys;
+	Keys.Reserve(OwnedOffHandWeapons.Num());
+	for (const FOwnedEquipmentEntry& Entry : OwnedOffHandWeapons) Keys.Add(Entry.ItemKey);
+	return Keys;
 }

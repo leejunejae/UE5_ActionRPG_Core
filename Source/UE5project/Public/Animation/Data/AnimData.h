@@ -122,6 +122,14 @@ public:
 };
 
 
+/** 현재 CombatStyle의 가드 성능을 가져올 장비 슬롯. */
+UENUM(BlueprintType)
+enum class EGuardSourceType : uint8
+{
+    MainHand UMETA(DisplayName = "Main Hand"),
+    OffHand UMETA(DisplayName = "Off Hand"),
+};
+
 USTRUCT(Atomic, BlueprintType)
 struct FPlayerAnimSet
 {
@@ -166,8 +174,12 @@ public:
         TSoftObjectPtr<UAnimSequence> HitAir_End;
     UPROPERTY(EditAnywhere, BlueprintReadOnly)
         TSoftObjectPtr<UAnimSequence> GetUp;
-    UPROPERTY(EditAnywhere, BlueprintReadOnly)
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Guard")
         TSoftObjectPtr<UAnimSequence> Guard;
+
+    /** Guard가 설정된 CombatStyle에서 가드 수치를 제공할 장비 슬롯. */
+    UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Guard")
+        EGuardSourceType GuardSource = EGuardSourceType::MainHand;
 
     // 공통 회피를 기본으로 사용하고 무기별로 필요한 경우에만 덮어쓴다.
     UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Action|Dodge")

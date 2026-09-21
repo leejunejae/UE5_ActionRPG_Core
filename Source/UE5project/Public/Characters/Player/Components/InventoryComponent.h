@@ -48,6 +48,7 @@ public:
 	FORCEINLINE const TMap<FName, int32>& GetStackableItems() const { return StackableItems; }
 
 	TArray<FName> GetOwnedWeaponKeys() const;
+	TArray<FName> GetOwnedOffHandWeaponKeys() const;
 	TArray<FName> GetOwnedArmorKeysForSlot(EArmorSlot Slot) const;
 
 	FOnInventoryChanged OnInventoryChanged;
@@ -55,6 +56,9 @@ public:
 private:
 	UPROPERTY(EditDefaultsOnly, Category = "Inventory")
 	TArray<FOwnedEquipmentEntry> OwnedWeapons;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Inventory")
+	TArray<FOwnedEquipmentEntry> OwnedOffHandWeapons;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Inventory")
 	TArray<FOwnedEquipmentEntry> OwnedArmors;

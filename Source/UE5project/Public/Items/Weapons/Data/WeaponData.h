@@ -10,17 +10,7 @@
 #include "WeaponData.generated.h"
 
 class UWeaponDataAsset;
-
-UENUM(BlueprintType)
-enum class EWeaponType : uint8
-{
-	None UMETA(DisplayName = "None"),
-	SwordAndShield UMETA(DisplayName = "SwordAndShield"),
-	LongSword UMETA(DisplayName = "LongSword"),
-	GreatSword UMETA(DisplayName = "GreatSword"),
-	SpearAndShield UMETA(DisplayName = "SpearAndShield"),
-	Knuckles UMETA(DisplayName = "Knuckles"),
-};
+class UOffHandWeaponDataAsset;
 
 /** 물리적인 무기 계열. 장착 조합이나 사용 애니메이션을 나타내지 않는다. */
 UENUM(BlueprintType)
@@ -60,12 +50,12 @@ enum class EWeaponGripMode : uint8
 	TwoHanded UMETA(DisplayName = "Two Handed"),
 };
 
+/** 장착 상태를 유지한 무기가 현재 손에 있는지 몸에 보관되어 있는지 나타낸다. */
 UENUM(BlueprintType)
-enum class EEquipmentHandSlot : uint8
+enum class EWeaponPresentationState : uint8
 {
-	MainHand UMETA(DisplayName = "Main Hand"),
-	OffHand UMETA(DisplayName = "Off Hand"),
-	EitherHand UMETA(DisplayName = "Either Hand"),
+	Drawn UMETA(DisplayName = "Drawn"),
+	Holstered UMETA(DisplayName = "Holstered"),
 };
 
 UENUM(BlueprintType)
@@ -74,11 +64,6 @@ enum class EWeaponTraceShape : uint8
 	Capsule UMETA(DisplayName = "Capsule"),
 	Box UMETA(DisplayName = "Box"),
 };
-
-/** 기존 EWeaponType 기반 콘텐츠를 새 CombatStyle 경로에서 읽기 위한 이행 함수. */
-UE5PROJECT_API EWeaponType GetLegacyWeaponTypeForCombatStyle(FGameplayTag CombatStyle);
-UE5PROJECT_API FGameplayTag GetLegacyCombatStyleForWeaponType(EWeaponType WeaponType);
-UE5PROJECT_API EWeaponCategory GetWeaponCategoryFromLegacyType(EWeaponType WeaponType);
 
 /* ============================================================
  *  특성 보정 등급
@@ -209,42 +194,39 @@ struct FWeaponRequirementBreakdown
 	FWeaponRequirementRow Affinity;
 };
 
-USTRUCT(Atomic, BlueprintType)
-struct FWeaponSetsInfo : public FTableRowBase
+USTRUCT(BlueprintType)
+struct FWeaponStatsRow : public FTableRowBase
 {
 	GENERATED_BODY()
 
 public:
-	UPROPERTY(EditAnywhere, BlueprintReadOnly)
-		TSoftObjectPtr<UWeaponDataAsset> WeaponDefenition;
-
 		// 공격력
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
-		float AttackPower; 
+		float AttackPower = 0.0f;
 
 		// 강인도 공격력
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
-		float PoisePower; 
+		float PoisePower = 0.0f;
 
 		// 자세 공격력
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
-		float StancePower;
+		float StancePower = 0.0f;
 
 		// 스태미나 소모값
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
-		float StaminaCost; 
+		float StaminaCost = 0.0f;
 
 		// 공격 시 추가되는 강인도 보너스
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
-		float PoiseBonus; 
+		float PoiseBonus = 0.0f;
 
 		// 가드시 경감률(가드시 데미지 감소율)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "100.0"))
-		float GuardNegation; 
+		float GuardNegation = 0.0f;
 
 		// 가드 강도(값만큼 퍼센트로 들어온 스태미나 소모율 감소)
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0", ClampMax = "100.0"))
-		float GuardBoost; 
+		float GuardBoost = 0.0f;
 
 		// 무게
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, meta = (ClampMin = "0.0"))
@@ -257,9 +239,6 @@ public:
 		// 무기 보정치(능력치에 따라 무기 보정)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 		FWeaponScaling Scaling;
-
-public:
-	FWeaponSetsInfo(){}
 
 	/**
 	 * 세 특성 보정값 각각에 등급 배율을 곱한 뒤 가장 높은 값을 반환
@@ -274,9 +253,29 @@ public:
 	}
 };
 
+/** 주무기 데이터 테이블 행. */
+USTRUCT(Atomic, BlueprintType)
+struct FWeaponSetsInfo : public FWeaponStatsRow
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	TSoftObjectPtr<UWeaponDataAsset> WeaponDefenition;
+};
+
+/** 보조무기 데이터 테이블 행. 모든 보조무기는 주무기와 동일한 공격 스탯을 갖는다. */
+USTRUCT(Atomic, BlueprintType)
+struct FOffHandWeaponSetsInfo : public FWeaponStatsRow
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly)
+	TSoftObjectPtr<UOffHandWeaponDataAsset> WeaponDefinition;
+};
+
 
 static FWeaponRequirementBreakdown CalculateWeaponRequirementBreakdown(
-	const FWeaponSetsInfo* Weapon,
+	const FWeaponStatsRow* Weapon,
 	const FCharacterAttributes& CurrentAttrs,
 	float StrengthBonus, float DexterityBonus, float AffinityBonus)
 {
